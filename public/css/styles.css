@@ -3,10 +3,10 @@
    big readable type, plain colors, generous spacing, one clear action per screen. */
 
 :root {
-  --navy: #14324f;
+  --navy: #0B2A5B;
   --blue: #1f6feb;
   --blue-dark: #1858c4;
-  --green: #1a8c4a;
+  --green: #1E7B4F;
   --amber: #b45309;
   --red: #c0362c;
   --ink: #1c2430;
@@ -33,13 +33,14 @@ body {
 
 /* ---------- header ---------- */
 .site-header {
-  background: var(--navy);
-  color: #fff;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
   padding: 14px 0;
 }
-.site-header .wrap { display: flex; align-items: center; justify-content: space-between; max-width: 1040px; }
-.brand { color: #fff; text-decoration: none; font-weight: 800; font-size: 22px; }
-.brand span { color: #9fc1ff; }
+.site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; max-width: 1040px; }
+.brand { display: inline-flex; line-height: 0; }
+.brand img { height: 40px; width: auto; max-width: 100%; }
+@media (max-width: 420px) { .brand img { height: 32px; } }
 .header-cta {
   color: #fff; background: var(--blue); text-decoration: none;
   padding: 10px 22px; border-radius: 8px; font-weight: 700; font-size: 17px;
@@ -220,3 +221,6 @@ body {
 }
 .unsub-form input:focus { outline: none; border-color: var(--blue); }
 .unsub-form .btn { justify-self: start; }
+
+/* Stack the score card on phones so the headline gets full width. */
+@media (max-width: 520px) { .score-card { flex-direction: column; text-align: center; } }
