@@ -22,15 +22,12 @@ export default {
       return handleGetReport(id, env);
     }
 
-    // Pretty-URL rewrites. Use the clean-URL asset paths (/report, /success)
-    // rather than the .html files: the asset server 307-redirects *.html to
-    // its clean URL, and following that redirect inside a worker subrequest
-    // throws (error 1101) on the /report/* route.
+    // Pretty-URL rewrites. Serve the clean-URL asset paths directly.
     if (url.pathname.startsWith('/report/') && url.pathname.length > '/report/'.length) {
-      return env.ASSETS.fetch(new Request(new URL('/report', url), request));
+      return env.ASSETS.fetch(new URL('/report', url).toString());
     }
     if (url.pathname === '/success') {
-      return env.ASSETS.fetch(new Request(new URL('/success', url), request));
+      return env.ASSETS.fetch(new URL('/success', url).toString());
     }
 
     // Static assets (landing, report, success pages).
