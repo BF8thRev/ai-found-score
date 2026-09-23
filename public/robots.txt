@@ -3,3 +3,5 @@ Disallow: /report/
 Disallow: /success
 Disallow: /unsubscribe
 Disallow: /api/
+
+Sitemap: https://aifoundscore.com/sitemap.xml

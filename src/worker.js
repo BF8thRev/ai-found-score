@@ -5,13 +5,23 @@
 //   POST /api/stripe-webhook -> Stripe webhook, verified signature, writes payment
 //   everything else          -> static assets (public/) via env.ASSETS
 
-import { recordPayment, recordUnsubscribe, getReport } from './lib/db.js';
+import { recordPayment, recordUnsubscribe, recordReportRequest, getReport } from './lib/db.js';
 import { verifyStripeSignature } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    // One canonical host: www -> apex, keeping path and query.
+    if (url.hostname.startsWith('www.')) {
+      url.hostname = url.hostname.slice(4);
+      return Response.redirect(url.toString(), 301);
+    }
+
+    if (url.pathname === '/api/request' && request.method === 'POST') {
+      return handleReportRequest(request, url, env);
+    }
 
     if (url.pathname === '/api/stripe-webhook' && request.method === 'POST') {
       return handleStripeWebhook(request, env);
@@ -47,6 +57,55 @@ async function handleGetReport(id, env) {
   return Response.json(report, {
     headers: { 'Cache-Control': 'public, max-age=300' },
   });
+}
+
+// Free-report request from the landing page form. Accepts JSON (fetch) or a
+// plain form post (no-JS fallback). Writes one row to report_requests.
+async function handleReportRequest(request, url, env) {
+  const ct = request.headers.get('Content-Type') || '';
+  const isJson = ct.includes('application/json');
+  let data = {};
+  try {
+    if (isJson) data = await request.json();
+    else {
+      const form = await request.formData();
+      data = Object.fromEntries(form.entries());
+    }
+  } catch {
+    return isJson
+      ? Response.json({ ok: false, error: 'Bad request' }, { status: 400 })
+      : Response.redirect(new URL('/?request=error#request', url).toString(), 303);
+  }
+
+  const clean = (v, max) => String(v ?? '').trim().slice(0, max);
+  const req = {
+    businessName: clean(data.business_name, 120),
+    town: clean(data.town, 80),
+    email: clean(data.email, 160).toLowerCase(),
+    trade: clean(data.trade, 40) || null,
+    website: clean(data.website, 160) || null,
+    userAgent: request.headers.get('User-Agent') || null,
+  };
+  // Honeypot: real people never fill the hidden field.
+  if (clean(data.company_url, 10)) {
+    return isJson ? Response.json({ ok: true }) : Response.redirect(new URL('/?request=ok#request', url).toString(), 303);
+  }
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(req.email);
+  if (!req.businessName || !req.town || !emailOk) {
+    return isJson
+      ? Response.json({ ok: false, error: 'Please fill in business name, town, and a valid email.' }, { status: 422 })
+      : Response.redirect(new URL('/?request=error#request', url).toString(), 303);
+  }
+
+  try {
+    await recordReportRequest(env, req);
+  } catch (e) {
+    console.error('[request] write failed', e);
+    return isJson
+      ? Response.json({ ok: false, error: 'Could not save your request.' }, { status: 500 })
+      : Response.redirect(new URL('/?request=error#request', url).toString(), 303);
+  }
+  return isJson ? Response.json({ ok: true }) : Response.redirect(new URL('/?request=ok#request', url).toString(), 303);
 }
 
 // One-click unsubscribe. Three ways in, all write the same suppression row:

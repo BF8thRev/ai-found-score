@@ -27,7 +27,42 @@ export const TABLES = {
   EMAIL_EVENTS: 'email_events',
   PAYMENTS: 'payments',
   UNSUBSCRIBES: 'unsubscribes',
+  REPORT_REQUESTS: 'report_requests',
 };
+
+/**
+ * Write one row for a free-report request from the landing page.
+ *
+ * Table (create in Supabase; anon needs INSERT only):
+ *   report_requests: id uuid default gen_random_uuid() pk, business_name text,
+ *                    town text, email text, trade text, website text,
+ *                    user_agent text, requested_at timestamptz, status text
+ *
+ * @param {object} env - Worker env (SUPABASE_URL, SUPABASE_ANON_KEY)
+ * @param {object} r - {businessName, town, email, trade, website, userAgent}
+ */
+export async function recordReportRequest(env, r) {
+  const row = {
+    business_name: r.businessName,
+    town: r.town,
+    email: r.email,
+    trade: r.trade ?? null,
+    website: r.website ?? null,
+    user_agent: r.userAgent ?? null,
+    requested_at: new Date().toISOString(),
+    status: 'new',
+  };
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${TABLES.REPORT_REQUESTS}`, {
+    method: 'POST',
+    headers: { ...supaHeaders(env), Prefer: 'return=minimal' },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase report_requests insert failed: ${res.status} ${text}`);
+  }
+  return { row };
+}
 
 // Wired to the live schema.
 const READY = true;

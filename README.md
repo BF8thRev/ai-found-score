@@ -12,7 +12,9 @@ One Cloudflare Worker serving the static site plus two API routes. Single deploy
 | `/success` | Post-payment page ("payment received, report on its way") |
 | `/about`, `/privacy`, `/contact` | Static info pages. Footer on every page carries the mailing address (120 Terminal Drive, Plainview, NY 11803) |
 | `/unsubscribe` | One-click unsubscribe. `GET ?t=<token>` from email links, `POST` with `List-Unsubscribe=One-Click` (RFC 8058) from mail clients, or the on-page email form. Writes to the `unsubscribes` table |
-| `/robots.txt` | Disallows `/report/`, `/success`, `/unsubscribe`, `/api/` |
+| `/robots.txt` | Disallows `/report/`, `/success`, `/unsubscribe`, `/api/`; points at `/sitemap.xml` |
+| `POST /api/request` | Landing-page form: writes a `report_requests` row (JSON or form post) |
+| `www.` | 301 to the bare domain, path and query preserved |
 | `GET /api/report/[id]` | Report JSON — mock data now, Supabase read later |
 | `POST /api/stripe-webhook` | Stripe webhook: verifies signature, writes payment to Supabase (stubbed until wired) |
 
@@ -35,6 +37,28 @@ create policy "worker insert" on public.unsubscribes for insert to anon with che
 ```
 
 Until the table and `SUPABASE_ANON_KEY` exist, unsubscribe requests show the error page (which tells the visitor to email instead) and log the failure in the Worker.
+
+## Report-request table
+
+The landing page form posts to `POST /api/request`, which inserts into `report_requests`. Create it once:
+
+```sql
+create table public.report_requests (
+  id uuid primary key default gen_random_uuid(),
+  business_name text not null,
+  town text not null,
+  email text not null,
+  trade text,
+  website text,
+  user_agent text,
+  requested_at timestamptz not null default now(),
+  status text not null default 'new'
+);
+alter table public.report_requests enable row level security;
+create policy "worker insert" on public.report_requests for insert to anon with check (true);
+```
+
+Until the table and `SUPABASE_ANON_KEY` exist, the form shows an error with the email fallback.
 
 ## Local dev
 
@@ -77,8 +101,8 @@ cd ai-found-score-site
 # 1. Create an empty repo on github.com (e.g. ai-found-score-site) — do NOT add a README/license there
 # 2. Then:
 git remote add origin https://github.com/<your-username>/ai-found-score-site.git
-git branch -M main
-git push -u origin main
+git branch -M master
+git push -u origin master
 ```
 
 ### Connect Cloudflare for auto-deploys
@@ -89,7 +113,7 @@ git push -u origin main
 4. Build command: leave empty (no build step). Deploy command: `npx wrangler deploy`.
 5. Root directory: the repo root (this folder is the repo root).
 6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above (`SUPABASE_ANON_KEY`, `STRIPE_WEBHOOK_SECRET`) and the plain var `SUPABASE_URL`. Secrets set here are available to every deployment.
-7. Save — Cloudflare deploys on every push to `main` from now on.
+7. Save — Cloudflare deploys on every push to `master` from now on.
 
 Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` first).
 
