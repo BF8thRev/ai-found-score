@@ -88,11 +88,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       <div class="cta-band">
         <h2>Want us to fix it for you?</h2>
-        <p>Pick a plan — we handle the listings, you get the customers. One-time payment, no subscription.</p>
+        <p>We handle the listings, you get the customers. One-time payment, no subscription.</p>
         <p>
-          <a class="btn" data-tier="before_after" href="#">Fix my listings — $59</a>
+          <a class="btn" data-tier="listing_fix" href="#">Fix my listings — $199</a>
         </p>
-        <p class="fine">Prefer to do it yourself? <a data-tier="snapshot" href="#">Get the step-by-step Snapshot — $29</a></p>
+        <p class="fine">Prefer to do it yourself? <a data-tier="snapshot" href="#">Get the step-by-step Snapshot — $29</a> · <a data-tier="before_after" href="#">Before &amp; After — $59</a> · <a data-tier="full_year" href="#">Full Year — $69</a></p>
       </div>
     </div>`;
 });
