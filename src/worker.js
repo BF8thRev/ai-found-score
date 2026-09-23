@@ -75,6 +75,7 @@ async function handleStripeWebhook(request, env) {
   const payment = {
     businessId: session.metadata?.business_id ?? null,
     reportId: session.metadata?.report_id ?? null,
+    arm: session.metadata?.arm ?? null,
     tier: session.metadata?.tier ?? 'unknown',
     amountCents: session.amount_total ?? null,
     currency: session.currency ?? 'usd',
