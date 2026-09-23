@@ -45,13 +45,38 @@ STRIPE_WEBHOOK_SECRET=
 
 ## Deploy to Cloudflare
 
-1. `npx wrangler login` (needs the Cloudflare account — not set up yet)
-2. `npx wrangler secret put SUPABASE_ANON_KEY`
-3. `npx wrangler secret put STRIPE_WEBHOOK_SECRET`
-4. `npm run deploy`
-5. In the Cloudflare dashboard, add a custom domain (e.g. `aifoundscore.com`) to the Worker.
-6. In Stripe dashboard → Developers → Webhooks, create an endpoint pointing at `https://<your-domain>/api/stripe-webhook`, subscribe to `checkout.session.completed`, and copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
-7. Replace the `#` placeholders in `public/js/config.js` with the real Stripe Payment Links and redeploy.
+Two ways: manual (`npm run deploy`) or auto-deploy from GitHub (recommended — every push goes live).
+
+### Push to GitHub
+
+The project is already a git repo with an initial commit. Nothing has been pushed.
+
+```bash
+cd ai-found-score-site
+# 1. Create an empty repo on github.com (e.g. ai-found-score-site) — do NOT add a README/license there
+# 2. Then:
+git remote add origin https://github.com/<your-username>/ai-found-score-site.git
+git branch -M main
+git push -u origin main
+```
+
+### Connect Cloudflare for auto-deploys
+
+1. In the Cloudflare dashboard, go to **Workers & Pages** → **Create** → **Connect to Git**.
+2. Authorize the GitHub account and select the repo.
+3. Project name: `ai-found-score`. Framework preset: **None**.
+4. Build command: leave empty (no build step). Deploy command: `npx wrangler deploy`.
+5. Root directory: the repo root (this folder is the repo root).
+6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above (`SUPABASE_ANON_KEY`, `STRIPE_WEBHOOK_SECRET`) and the plain var `SUPABASE_URL`. Secrets set here are available to every deployment.
+7. Save — Cloudflare deploys on every push to `main` from now on.
+
+Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` first).
+
+### After the first deploy
+
+1. In the Cloudflare dashboard, add a custom domain (e.g. `aifoundscore.com`) to the Worker.
+2. In Stripe dashboard → Developers → Webhooks, create an endpoint pointing at `https://<your-domain>/api/stripe-webhook`, subscribe to `checkout.session.completed`, and copy the signing secret into the `STRIPE_WEBHOOK_SECRET` secret.
+3. Replace the `#` placeholders in `public/js/config.js` with the real Stripe Payment Links and push (or redeploy).
 
 ## Wiring checklist (the three things filled in later)
 
