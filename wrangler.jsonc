@@ -1,1 +1,1 @@
-{"assets":{"directory":"./public","run_worker_first":["/api/*"]},"compatibility_date":"2026-09-01","dev":{"port":8787},"main":"src/worker.js","name":"ai-found-score","vars":{}}
+{"assets":{"directory":"./public","binding":"ASSETS","run_worker_first":["/api/*","/unsubscribe"]},"compatibility_date":"2026-09-01","dev":{"port":8787},"main":"src/worker.js","name":"ai-found-score","vars":{}}

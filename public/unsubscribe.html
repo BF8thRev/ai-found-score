@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>Your AI Found Score</title>
-  <meta name="description" content="Your free AI Found Score: what AI assistants say about your business and whether your listings agree.">
+  <title>Unsubscribe — AI Found Score</title>
+  <meta name="description" content="Stop emails from AI Found Score.">
   <link rel="stylesheet" href="/css/styles.css">
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
   <!-- Google Tag Manager -->
@@ -20,13 +20,38 @@
 <header class="site-header">
   <div class="wrap">
     <a class="brand" href="/">AI Found <span>Score</span></a>
-    <a class="header-cta" href="/">Home</a>
+    <a class="header-cta" href="/report/sample-001">Get my free report</a>
   </div>
 </header>
 
-<main id="report-root">
-  <div class="wrap"><p style="padding:60px 0">Loading your report…</p></div>
-</main>
+<section class="section">
+  <div class="wrap page" id="unsub-root">
+    <div data-state="done" hidden>
+      <h1>You're unsubscribed.</h1>
+      <p>No more emails from AI Found Score. Nothing else to do.</p>
+    </div>
+    <div data-state="form" hidden>
+      <h1>Unsubscribe</h1>
+      <p>Enter the email address we wrote to. We stop the same day.</p>
+      <form method="post" action="/unsubscribe" class="unsub-form">
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" required autocomplete="email" placeholder="you@yourbusiness.com">
+        <button class="btn" type="submit">Unsubscribe</button>
+      </form>
+    </div>
+    <div data-state="error" hidden>
+      <h1>Something went wrong.</h1>
+      <p>Email <a href="mailto:hello@aifoundscore.com?subject=Unsubscribe">hello@aifoundscore.com</a> with the subject "Unsubscribe" and we'll handle it by hand.</p>
+    </div>
+  </div>
+</section>
+<script>
+  (function () {
+    var q = new URLSearchParams(window.location.search);
+    var state = q.get('status') === 'ok' ? 'done' : q.get('status') === 'error' ? 'error' : 'form';
+    document.querySelector('#unsub-root [data-state="' + state + '"]').hidden = false;
+  })();
+</script>
 
 <footer class="site-footer">
   <div class="wrap">
@@ -40,6 +65,5 @@
 
 <script src="/js/config.js"></script>
 <script src="/js/analytics.js"></script>
-<script src="/js/report.js"></script>
 </body>
 </html>

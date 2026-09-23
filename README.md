@@ -10,10 +10,31 @@ One Cloudflare Worker serving the static site plus two API routes. Single deploy
 | `/report/sample-001` | Sample report page (fictional plumbing business, mock data) |
 | `/report/[id]` | Report page for any id — reads from `GET /api/report/[id]` |
 | `/success` | Post-payment page ("payment received, report on its way") |
+| `/about`, `/privacy`, `/contact` | Static info pages. Footer on every page carries the mailing address (120 Terminal Drive, Plainview, NY 11803) |
+| `/unsubscribe` | One-click unsubscribe. `GET ?t=<token>` from email links, `POST` with `List-Unsubscribe=One-Click` (RFC 8058) from mail clients, or the on-page email form. Writes to the `unsubscribes` table |
+| `/robots.txt` | Disallows `/report/`, `/success`, `/unsubscribe`, `/api/` |
 | `GET /api/report/[id]` | Report JSON — mock data now, Supabase read later |
 | `POST /api/stripe-webhook` | Stripe webhook: verifies signature, writes payment to Supabase (stubbed until wired) |
 
 `public/js/config.js` holds `STRIPE_LINKS` — the one file where real Stripe Payment Links get dropped in later.
+
+## Unsubscribe suppression table
+
+`/unsubscribe` inserts into a Supabase table that does not exist in the original schema. Create it once (SQL editor), and the sender must check it before every send:
+
+```sql
+create table public.unsubscribes (
+  id uuid primary key default gen_random_uuid(),
+  report_token text,
+  email text,
+  user_agent text,
+  unsubscribed_at timestamptz not null default now()
+);
+alter table public.unsubscribes enable row level security;
+create policy "worker insert" on public.unsubscribes for insert to anon with check (true);
+```
+
+Until the table and `SUPABASE_ANON_KEY` exist, unsubscribe requests show the error page (which tells the visitor to email instead) and log the failure in the Worker.
 
 ## Local dev
 

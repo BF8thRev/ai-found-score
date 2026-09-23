@@ -206,3 +206,17 @@ body {
 }
 .success-hero h1 { font-size: 38px; color: var(--navy); margin: 0 0 14px; }
 .success-hero p { font-size: 21px; color: var(--muted); max-width: 560px; margin: 0 auto 30px; }
+
+/* ---------- simple text pages (about, privacy, contact, unsubscribe) ---------- */
+.page h1 { font-size: 36px; color: var(--navy); margin: 0 0 14px; }
+.page h2 { font-size: 24px; color: var(--navy); margin: 30px 0 8px; }
+.page ul { padding-left: 22px; }
+.page li { margin-bottom: 8px; }
+.footer-links a { margin: 0 2px; }
+.unsub-form { display: grid; gap: 12px; max-width: 420px; margin-top: 18px; }
+.unsub-form label { font-weight: 700; color: var(--navy); }
+.unsub-form input {
+  font: inherit; padding: 12px 14px; border: 2px solid var(--line); border-radius: 8px;
+}
+.unsub-form input:focus { outline: none; border-color: var(--blue); }
+.unsub-form .btn { justify-self: start; }

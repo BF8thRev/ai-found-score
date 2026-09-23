@@ -26,6 +26,7 @@ export const TABLES = {
   PAGE_VISITS: 'page_visits',
   EMAIL_EVENTS: 'email_events',
   PAYMENTS: 'payments',
+  UNSUBSCRIBES: 'unsubscribes',
 };
 
 // Wired to the live schema.
@@ -83,6 +84,39 @@ export async function recordPayment(env, payment) {
   return { stubbed: false, row: inserted };
 }
 
+/**
+ * Write one row to the unsubscribes suppression table. The sender must
+ * check this table (by email and by report_token) before every send.
+ *
+ * Table (create in Supabase; anon needs INSERT only):
+ *   unsubscribes: id uuid default gen_random_uuid() pk, report_token text,
+ *                 email text, user_agent text, unsubscribed_at timestamptz
+ *
+ * @param {object} env - Worker env (SUPABASE_URL, SUPABASE_ANON_KEY)
+ * @param {object} u - {token, email, userAgent}
+ * @returns {Promise<object>}
+ */
+export async function recordUnsubscribe(env, u) {
+  const row = {
+    report_token: u.token ?? null,
+    email: u.email ?? null,
+    user_agent: u.userAgent ?? null,
+    unsubscribed_at: new Date().toISOString(),
+  };
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${TABLES.UNSUBSCRIBES}`, {
+    method: 'POST',
+    headers: { ...supaHeaders(env), Prefer: 'return=minimal' },
+    body: JSON.stringify(row),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase unsubscribes insert failed: ${res.status} ${text}`);
+  }
+  return { row };
+}
+
 const PLATFORMS = ['Google', 'Apple', 'Bing', 'Yelp', 'Facebook'];
 
 /** Collect the set of platforms with a recorded listing mismatch. */
@@ -119,15 +153,15 @@ function shapeRealReport(reportToken, rows, business) {
 
   let score = 100 - unnamed.length * 20 - mismatches.size * 10;
   score = Math.max(5, Math.min(100, score));
-  const scoreLabel = score >= 80 ? 'Looking good' : score >= 50 ? 'Needs attention' : 'At risk';
+  const scoreLabel = score >= 80 ? 'Looking good' : score >= 50 ? 'Needs attention' : 'Needs work';
 
   const aiResults = rows.map((r) => ({
     assistant: r.ai_source || 'AI assistant',
     named: !!r.named_by_ai,
     quote: '',
     note: r.named_by_ai
-      ? `${r.ai_source || 'This assistant'} mentioned ${business.name} by name.`
-      : `${r.ai_source || 'This assistant'} did not mention ${business.name}.`,
+      ? `${r.ai_source || 'This assistant'} named ${business.name}.`
+      : `${r.ai_source || 'This assistant'} didn’t name ${business.name}.`,
   }));
 
   const listings = PLATFORMS.map((platform) => {
@@ -135,14 +169,14 @@ function shapeRealReport(reportToken, rows, business) {
       return {
         platform,
         status: 'mismatch',
-        details: mismatches.get(platform) || `Our scan found a mismatch on ${platform}.`,
+        details: mismatches.get(platform) || `Your ${platform} listing doesn’t match your other listings.`,
         fields: { name: business.name, phone: business.phone || '', hours: '' },
       };
     }
     return {
       platform,
       status: 'match',
-      details: 'No mismatch recorded in the latest scan.',
+      details: 'Matches your other listings.',
       fields: { name: business.name, phone: business.phone || '', hours: '' },
     };
   });
@@ -151,22 +185,22 @@ function shapeRealReport(reportToken, rows, business) {
   if (unnamed.length > 0) {
     issues.push({
       severity: 'high',
-      title: 'AI assistants are not recommending you',
-      description: `${unnamed.length} of ${rows.length} AI assistants checked did not mention ${business.name} by name. When customers ask an AI for a ${business.trade || 'local business'}, your name is not coming up.`,
+      title: `${unnamed.length} of ${rows.length} AI assistants didn’t name you`,
+      description: `Asked for a ${business.trade || 'local business'} in your area, ${unnamed.length} of ${rows.length} assistants named other businesses.`,
     });
   }
   for (const [platform, details] of mismatches) {
     issues.push({
       severity: 'medium',
       title: `Listing mismatch on ${platform}`,
-      description: details || `Your ${platform} listing disagrees with your other listings.`,
+      description: details || `Your ${platform} listing doesn’t match your other listings.`,
     });
   }
   if (issues.length === 0) {
     issues.push({
       severity: 'low',
-      title: 'Nothing major found',
-      description: 'The latest scan did not find AI visibility or listing problems. Nice work — check back periodically.',
+      title: 'No problems found',
+      description: 'The latest scan found no listing mismatches and no missed AI mentions.',
     });
   }
 
@@ -190,16 +224,15 @@ function shapeRealReport(reportToken, rows, business) {
     score,
     scoreLabel,
     scoreExplanation:
-      `Based on ${rows.length} AI assistant check${rows.length === 1 ? '' : 's'} and a ` +
-      `5-platform listing scan from ${String(generatedAt).slice(0, 10)}. ` +
-      `${named.length} of ${rows.length} assistants mentioned you by name; ` +
-      `${mismatches.size} listing${mismatches.size === 1 ? '' : 's'} need${mismatches.size === 1 ? 's' : ''} fixing.`,
+      `${named.length} of ${rows.length} AI assistants named you. ` +
+      `${mismatches.size} of ${PLATFORMS.length} listings need${mismatches.size === 1 ? 's' : ''} a fix. ` +
+      `Scanned ${String(generatedAt).slice(0, 10)}.`,
     aiResults,
     listings,
     issues,
     summary:
-      `${business.name} was mentioned by ${named.length} of ${rows.length} AI assistants checked, ` +
-      `with ${mismatches.size} listing mismatch${mismatches.size === 1 ? '' : 'es'} across Google, Apple, Bing, Yelp, and Facebook.`,
+      `${named.length} of ${rows.length} AI assistants named ${business.name}. ` +
+      `${mismatches.size} of ${PLATFORMS.length} listings across Google, Apple, Bing, Yelp, and Facebook need${mismatches.size === 1 ? 's' : ''} a fix.`,
   };
 }
 

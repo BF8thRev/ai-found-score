@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       el.addEventListener('click', (e) => {
         e.preventDefault();
-        alert('Online checkout is being set up — please check back soon.');
+        alert('Checkout opens soon. Email hello@aifoundscore.com and we’ll hold your spot.');
       });
     }
   });

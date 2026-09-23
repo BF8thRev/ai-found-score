@@ -20,96 +20,96 @@ export const MOCK_REPORTS = {
     score: 62,
     scoreLabel: 'Needs attention',
     scoreExplanation:
-      'Your score is based on two things: whether AI assistants mention your business when local customers ask, and whether your name, phone, and hours agree across the five big listing sites. Higher is better — 80 or above means customers can find you easily.',
+      'Two inputs: whether AI assistants name you when locals ask, and whether your name, phone, and hours match across five listing sites. 80 or above is strong.',
     aiResults: [
       {
         assistant: 'ChatGPT',
         named: false,
         quote:
           '“Here are a few well-reviewed plumbers near Massapequa: Roto-Rooter of Massapequa, Parkside Plumbing, and All Island Plumbing.”',
-        note: 'Harborview was not mentioned. The assistants named three competitors instead.',
+        note: 'Named three other companies. Not Harborview.',
       },
       {
         assistant: 'Google Gemini',
         named: true,
         quote:
           '“Harborview Plumbing & Heating on Merrick Road is one option — customers mention fast emergency response.”',
-        note: 'Mentioned by name, with the street but not the full address.',
+        note: 'Named you, with the street but not the full address.',
       },
       {
         assistant: 'Claude',
         named: false,
         quote:
           '“I don’t have real-time business listings, but established options in the Massapequa area include …”',
-        note: 'Gave only general names. Harborview was not mentioned.',
+        note: 'Gave general names only. Not Harborview.',
       },
       {
         assistant: 'Microsoft Copilot',
         named: false,
         quote:
           '“Top-rated plumbers near you: Benjamin Franklin Plumbing, Mr. Rooter, and Parkside Plumbing.”',
-        note: 'Harborview was not mentioned.',
+        note: 'Named three other companies. Not Harborview.',
       },
     ],
     listings: [
       {
         platform: 'Google',
         status: 'match',
-        details: 'Name, phone, address, hours, and website all agree with your business.',
+        details: 'Name, phone, address, hours, and website all match.',
         fields: { name: 'Harborview Plumbing & Heating', phone: '(516) 555-0148', hours: 'Mon–Fri 8am–6pm, Sat 9am–2pm' },
       },
       {
         platform: 'Apple',
         status: 'match',
-        details: 'Name, phone, and address all agree with your business.',
+        details: 'Name, phone, and address all match.',
         fields: { name: 'Harborview Plumbing & Heating', phone: '(516) 555-0148', hours: 'Mon–Fri 8am–6pm' },
       },
       {
         platform: 'Bing',
         status: 'mismatch',
-        details: 'The phone number on Bing is an old one: (516) 555-0119. Customers calling it reach a disconnected line.',
+        details: 'Bing shows (516) 555-0119. That line is disconnected. Your other listings show (516) 555-0148.',
         fields: { name: 'Harborview Plumbing & Heating', phone: '(516) 555-0119', hours: 'Not listed' },
       },
       {
         platform: 'Yelp',
         status: 'match',
-        details: 'Name, phone, and address all agree with your business.',
+        details: 'Name, phone, and address all match.',
         fields: { name: 'Harborview Plumbing & Heating', phone: '(516) 555-0148', hours: 'Mon–Fri 8am–6pm, Sat 9am–2pm' },
       },
       {
         platform: 'Facebook',
         status: 'mismatch',
-        details: 'The hours on Facebook are outdated — it still shows Sunday hours from before you changed them in 2024.',
+        details: 'Facebook shows Sunday hours. Google and Yelp show Mon–Sat only.',
         fields: { name: 'Harborview Plumbing', phone: '(516) 555-0148', hours: 'Mon–Sun 8am–8pm' },
       },
     ],
     issues: [
       {
         severity: 'high',
-        title: 'AI assistants are not recommending you',
+        title: 'Three of four AI assistants didn’t name you',
         description:
-          'Three out of four AI assistants did not mention Harborview when asked for a plumber near Massapequa. They recommended competitors instead. When customers ask an AI for a plumber, your name is not coming up.',
+          'Asked for a plumber near Massapequa, ChatGPT, Claude, and Copilot named other companies. Gemini named you.',
       },
       {
         severity: 'high',
-        title: 'Bing shows an old, disconnected phone number',
+        title: 'Bing lists a disconnected number',
         description:
-          'Bing lists (516) 555-0119. That number is disconnected, so any customer who finds you on Bing and calls is lost.',
+          'Bing shows (516) 555-0119. That line is disconnected. Every other listing shows (516) 555-0148.',
       },
       {
         severity: 'medium',
         title: 'Facebook shows old Sunday hours',
         description:
-          'Your Facebook page still says you are open Sundays. You stopped Sunday hours in 2024. Customers who show up on a Sunday will find you closed.',
+          'Facebook says Mon–Sun 8am–8pm. Google and Yelp say Mon–Fri 8am–6pm, Sat 9am–2pm.',
       },
       {
         severity: 'low',
-        title: 'Business name is slightly different on Facebook',
+        title: 'Name differs on Facebook',
         description:
-          'Facebook says “Harborview Plumbing” instead of “Harborview Plumbing & Heating”. Small differences like this make it harder for search engines to trust that all these listings are the same business.',
+          'Facebook says “Harborview Plumbing.” Everywhere else says “Harborview Plumbing & Heating.” Matching names help platforms link your listings.',
       },
     ],
     summary:
-      'Harborview Plumbing & Heating is easy to find on Google, Apple, and Yelp — but Bing is sending callers to a dead number, Facebook hours are two years out of date, and three out of four AI assistants recommend your competitors instead of you. Fixing the Bing number and the Facebook hours takes about 20 minutes and costs nothing. Getting AI assistants to mention you takes more work — that is what the paid plans are for.',
+      'Google, Apple, and Yelp are correct. Bing shows a disconnected number. Facebook hours are out of date. One of four AI assistants named you. The Bing and Facebook fixes take about 20 minutes and cost nothing. Getting named by AI takes more work. That is what the paid plans cover.',
   },
 };

@@ -5,7 +5,7 @@
 //   POST /api/stripe-webhook -> Stripe webhook, verified signature, writes payment
 //   everything else          -> static assets (public/) via env.ASSETS
 
-import { recordPayment, getReport } from './lib/db.js';
+import { recordPayment, recordUnsubscribe, getReport } from './lib/db.js';
 import { verifyStripeSignature } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 
@@ -15,6 +15,10 @@ export default {
 
     if (url.pathname === '/api/stripe-webhook' && request.method === 'POST') {
       return handleStripeWebhook(request, env);
+    }
+
+    if (url.pathname === '/unsubscribe' && (request.method === 'GET' || request.method === 'POST')) {
+      return handleUnsubscribe(request, url, env);
     }
 
     if (url.pathname.startsWith('/api/report/') && request.method === 'GET') {
@@ -43,6 +47,50 @@ async function handleGetReport(id, env) {
   return Response.json(report, {
     headers: { 'Cache-Control': 'public, max-age=300' },
   });
+}
+
+// One-click unsubscribe. Three ways in, all write the same suppression row:
+//   GET  /unsubscribe?t=<report token>          link in the email footer
+//   POST /unsubscribe?t=<token>  List-Unsubscribe=One-Click   RFC 8058, from the mail client
+//   POST /unsubscribe  email=<address>            the form on the page, for people without a link
+// No token and no email -> just serve the page (which shows the form).
+async function handleUnsubscribe(request, url, env) {
+  const token = (url.searchParams.get('t') || '').trim() || null;
+  let email = null;
+  let oneClick = false;
+
+  if (request.method === 'POST') {
+    const ct = request.headers.get('Content-Type') || '';
+    if (ct.includes('application/x-www-form-urlencoded') || ct.includes('multipart/form-data')) {
+      const form = await request.formData();
+      oneClick = form.get('List-Unsubscribe') === 'One-Click';
+      email = String(form.get('email') || '').trim().toLowerCase() || null;
+    }
+  }
+
+  const servePage = (status) => {
+    const page = new URL('/unsubscribe', url);
+    if (status) page.searchParams.set('status', status);
+    return status
+      ? Response.redirect(page.toString(), 303)
+      : env.ASSETS.fetch(page.toString());
+  };
+
+  if (!token && !email) return servePage(null);
+
+  try {
+    await recordUnsubscribe(env, {
+      token,
+      email,
+      userAgent: request.headers.get('User-Agent') || null,
+    });
+  } catch (e) {
+    console.error('[unsubscribe] write failed', e);
+    // 500 so a mail client retries a one-click POST; humans get the error page.
+    return oneClick ? new Response('Unsubscribe failed', { status: 500 }) : servePage('error');
+  }
+
+  return oneClick ? new Response('Unsubscribed', { status: 200 }) : servePage('ok');
 }
 
 async function handleStripeWebhook(request, env) {
