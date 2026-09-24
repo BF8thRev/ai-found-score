@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Unsubscribe — AI Found Score</title>
-  <meta name="description" content="Stop mail and emails from AI Found Score.">
+  <title>Refund Policy — AI Found Score</title>
+  <meta name="description" content="How refunds work for AI Found Score plans.">
+  <link rel="canonical" href="https://aifoundscore.com/refunds">
   <link rel="icon" type="image/svg+xml" href="/img/mark.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,56 +35,30 @@
 </header>
 
 <section class="section">
-  <div class="wrap page" id="unsub-root">
-    <div data-state="done" hidden>
-      <h1>You're unsubscribed.</h1>
-      <p>No more mail or email from AI Found Score. Nothing else to do.</p>
-    </div>
-    <div data-state="form" hidden>
-      <h1>Stop hearing from us</h1>
-      <div data-form="mail">
-        <h2>Got a postcard?</h2>
-        <p>Enter the code printed on it. We stop all mail and email to your business.</p>
-        <form method="post" action="/stop" class="unsub-form">
-          <label for="code">Code from the card</label>
-          <input id="code" name="code" type="text" required autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="K7M2QX">
-          <button class="btn" type="submit">Stop mail</button>
-        </form>
-      </div>
-      <div data-form="email">
-        <h2>Got an email?</h2>
-        <p>Enter the email address we wrote to. We stop the same day.</p>
-        <form method="post" action="/unsubscribe" class="unsub-form">
-          <label for="email">Email address</label>
-          <input id="email" name="email" type="email" required autocomplete="email" placeholder="you@yourbusiness.com">
-          <button class="btn" type="submit">Unsubscribe</button>
-        </form>
-      </div>
-    </div>
-    <div data-state="notfound" hidden>
-      <h1>We couldn't find that code.</h1>
-      <p>Check the code on the card and <a href="/stop">try again</a>, or email <a href="mailto:hello@aifoundscore.com?subject=Stop%20mail">hello@aifoundscore.com</a> with your business name and address and we'll stop it by hand.</p>
-    </div>
-    <div data-state="error" hidden>
-      <h1>Something went wrong.</h1>
-      <p>Email <a href="mailto:hello@aifoundscore.com?subject=Unsubscribe">hello@aifoundscore.com</a> with the subject "Unsubscribe" and we'll handle it by hand.</p>
-    </div>
+  <div class="wrap page">
+    <h1>Refund Policy</h1>
+    <p class="fine">Updated September 24, 2026</p>
+    <p>The report is free. If you pay for a plan and it doesn't work out, here's how refunds work. AI Found Score is operated by Fields Holding, doing business as GetAiFound Score.</p>
+
+    <h2>Snapshot ($29)</h2>
+    <p>If your report has an error we can't correct, email us within 7 days of purchase and we refund you in full.</p>
+
+    <h2>Before &amp; After ($59), Full Year ($69), Listing Cleanup ($199)</h2>
+    <ul>
+      <li><strong>Before we start work:</strong> full refund, for any reason.</li>
+      <li><strong>After we start:</strong> we refund the part of the work we haven't done. For Full Year, that includes the monthly re-checks still to come.</li>
+      <li><strong>If a fix we made is wrong or doesn't hold:</strong> tell us within 30 days and we redo it at no charge. If we can't fix it, we refund that plan.</li>
+    </ul>
+    <p>Some listing sites take days or weeks to accept changes, and a few require you to verify ownership. Waiting on a listing site isn't grounds for a refund on its own, but we'll keep you posted.</p>
+
+    <h2>How to ask</h2>
+    <p>Email <a href="mailto:hello@aifoundscore.com?subject=Refund%20request">hello@aifoundscore.com</a> with your business name and the email you used at checkout. We reply within 2 business days.</p>
+    <p>Approved refunds go back to the card you paid with, through Stripe. Your bank usually shows them in 5 to 10 business days.</p>
+
+    <h2>Questions first</h2>
+    <p>If something looks wrong on a charge, email us before disputing it with your bank. It's faster for you, and we'll make it right.</p>
   </div>
 </section>
-<script>
-  (function () {
-    var q = new URLSearchParams(window.location.search);
-    var s = q.get('status');
-    var state = s === 'ok' ? 'done' : s === 'error' || s === 'notfound' ? s : 'form';
-    document.querySelector('#unsub-root [data-state="' + state + '"]').hidden = false;
-    // /stop is the address printed on postcards and leads with the code form;
-    // /unsubscribe (email footers) leads with the email form.
-    if (state === 'form' && window.location.pathname !== '/stop') {
-      var form = document.querySelector('#unsub-root [data-state="form"]');
-      form.appendChild(form.querySelector('[data-form="mail"]'));
-    }
-  })();
-</script>
 
 <footer class="site-footer">
   <div class="wrap">

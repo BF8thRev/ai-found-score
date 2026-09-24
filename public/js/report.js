@@ -110,12 +110,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         <p>We fix your listings on all five sites, re-scan, and show you the before and after.</p>
         <p><a class="btn" data-tier="before_after" href="#">Fix it for me — $59</a></p>
         <p class="fine"><a data-tier="full_year" href="#">Full Year $69</a> (plus monthly re-checks) · <a data-tier="listing_fix" href="#">Listing cleanup $199</a></p>
+        <p class="fine"><a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
       </div>` : `
       <div class="cta-band">
         <h2>See exactly what to fix</h2>
         <p>Every issue explained, with step-by-step fixes you can hand to anyone. One payment of $29. No subscription.</p>
         <p><a class="btn big" data-tier="snapshot" href="#">Unlock the full report — $29</a></p>
         <p class="fine">Rather we do it? <a data-tier="before_after" href="#">We fix it — $59</a> · <a data-tier="full_year" href="#">Full Year $69</a> · <a data-tier="listing_fix" href="#">Listing cleanup $199</a></p>
+        <p class="fine">Secure checkout by Stripe. One-time payment. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
       </div>`}
 
       ${report.sample ? '' : leadForm('bottom')}
