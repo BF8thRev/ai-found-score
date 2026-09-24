@@ -1,6 +1,6 @@
 // Site-wide config — the ONE file where later wiring happens.
 // Replace the "#" placeholders with real Stripe Payment Links when ready.
-// Each Payment Link: metadata tier=<key below>, and after-payment redirect
+// Each Payment Link: after-payment redirect
 // https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}
 
 const STRIPE_LINKS = {

@@ -102,8 +102,8 @@ Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` 
 ## Wiring checklist (the things filled in later)
 
 1. **Supabase.** Run `supabase/setup.sql`. Add `SUPABASE_ANON_KEY` as a Worker secret.
-2. **Stripe payment links.** Paste the four real links into `STRIPE_LINKS` in `public/js/config.js` (keys: `snapshot`, `before_after`, `full_year`, `listing_fix`). On each Payment Link in the Stripe dashboard: add metadata `tier=<key>`, and set the after-payment redirect to `https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}`. Business and arm are **not** put in link metadata (it is fixed per link); the report page appends `client_reference_id=<report token>` and the webhook looks the rest up. Report tokens must be letters, digits, `-` or `_` (Stripe's rule for `client_reference_id`).
-3. **Stripe webhook secret.** Create the webhook endpoint (see deploy step 2 above) and store the signing secret as `STRIPE_WEBHOOK_SECRET`.
+2. **Stripe payment links.** Paste the four real links into `STRIPE_LINKS` in `public/js/config.js` (keys: `snapshot`, `before_after`, `full_year`, `listing_fix`). On each Payment Link in the Stripe dashboard, set the after-payment redirect to `https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}`. No metadata is needed: the webhook takes the tier from the amount paid (`TIER_BY_CENTS` in `src/worker.js`; update it if prices change). Business and arm come from the report token: the report page appends `client_reference_id=<report token>` and the webhook looks the rest up. Report tokens must be letters, digits, `-` or `_` (Stripe's rule for `client_reference_id`).
+3. **Stripe webhook.** Endpoint `https://aifoundscore.com/api/stripe-webhook`, events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Store its signing secret (`whsec_...`) as the runtime secret `STRIPE_WEBHOOK_SECRET`. Only paid checkouts are recorded.
 4. **Postcards.** QR code and printed URL both point at `https://aifoundscore.com/r/<short_code>`; opt-out line: `aifoundscore.com/stop` + the same code.
 
 ## Notes

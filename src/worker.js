@@ -331,6 +331,10 @@ async function handleUnsubscribe(request, url, env) {
   return oneClick ? new Response('Unsubscribed', { status: 200 }) : servePage('ok');
 }
 
+// Tier from the amount paid, so Payment Links need no metadata. Keep in
+// step with the prices on the site.
+const TIER_BY_CENTS = { 2900: 'snapshot', 5900: 'before_after', 6900: 'full_year', 19900: 'listing_fix' };
+
 async function handleStripeWebhook(request, env) {
   const rawBody = await request.text();
   const signature = request.headers.get('Stripe-Signature');
@@ -352,15 +356,19 @@ async function handleStripeWebhook(request, env) {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // We only care about completed checkouts; ack everything else.
-  if (event.type !== 'checkout.session.completed') {
+  // A checkout counts once the money is in: card payments are 'paid' at
+  // checkout.session.completed; delayed methods (bank debits) complete as
+  // 'unpaid' and pay later via async_payment_succeeded. Ack everything else.
+  const session = event.data?.object;
+  const paidNow =
+    (event.type === 'checkout.session.completed' && session?.payment_status === 'paid') ||
+    event.type === 'checkout.session.async_payment_succeeded';
+  if (!paidNow) {
     return Response.json({ received: true });
   }
 
-  // Payment Links carry one fixed metadata set per link (only `tier` fits
-  // there). The report page appends ?client_reference_id=<report token>, and
-  // business + arm come from that token's report_links row.
-  const session = event.data.object;
+  // The report page appends ?client_reference_id=<report token> to the
+  // Payment Link; business + arm come from that token's report_links row.
   const reportToken = session.client_reference_id || session.metadata?.report_id || null;
 
   try {
@@ -369,7 +377,7 @@ async function handleStripeWebhook(request, env) {
       businessId: link?.business_id ?? session.metadata?.business_id ?? null,
       reportToken,
       arm: link?.arm ?? session.metadata?.arm ?? null,
-      tier: session.metadata?.tier ?? 'unknown',
+      tier: session.metadata?.tier ?? TIER_BY_CENTS[session.amount_total] ?? 'unknown',
       amountCents: session.amount_total ?? null,
       currency: session.currency ?? 'usd',
       stripeSessionId: session.id,
