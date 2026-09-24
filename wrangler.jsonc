@@ -1,1 +1,13 @@
-{"assets":{"directory":"./public","binding":"ASSETS","run_worker_first":true},"compatibility_date":"2026-09-01","dev":{"port":8787},"main":"src/worker.js","name":"ai-found-score","vars":{}}
+{
+  "name": "ai-found-score",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
+  "dev": { "port": 8787 },
+  // Plain vars live here: `wrangler deploy` replaces dashboard Text vars with
+  // this block. Secrets (SUPABASE_ANON_KEY, STRIPE_WEBHOOK_SECRET) stay in the
+  // dashboard and survive deploys.
+  "vars": {
+    "SUPABASE_URL": "https://bahmemiydzpotfrxmlzw.supabase.co"
+  }
+}

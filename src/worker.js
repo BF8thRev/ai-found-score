@@ -27,6 +27,10 @@ export default {
       return Response.redirect(url.toString(), 301);
     }
 
+    if (url.pathname === '/api/health' && request.method === 'GET') {
+      return handleHealth(env);
+    }
+
     if (url.pathname.startsWith('/r/') && request.method === 'GET') {
       return handleShortCode(url, env);
     }
@@ -69,6 +73,26 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+
+// Config check without exposing values: yes/no for each setting plus one
+// real read (a short code that can't exist).
+async function handleHealth(env) {
+  const out = {
+    supabaseUrl: !!env.SUPABASE_URL,
+    supabaseKey: !!env.SUPABASE_ANON_KEY,
+    stripeWebhookSecret: !!env.STRIPE_WEBHOOK_SECRET,
+    database: 'not checked',
+  };
+  if (out.supabaseUrl && out.supabaseKey) {
+    try {
+      await getReportLink(env, { code: 'HEALTH' });
+      out.database = 'ok';
+    } catch (e) {
+      out.database = String(e.message || e).slice(0, 200);
+    }
+  }
+  return Response.json(out, { headers: { 'Cache-Control': 'no-store' } });
+}
 
 // Printed codes use an alphabet with no look-alikes; people still type
 // lowercase, spaces and dashes, so normalize before the lookup.

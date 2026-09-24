@@ -52,7 +52,7 @@ npm run dev        # serves at http://localhost:8787
 
 | Var | Used by | Status |
 |---|---|---|
-| `SUPABASE_URL` | `src/lib/db.js` | Set to `https://bahmemiydzpotfrxmlzw.supabase.co` at deploy |
+| `SUPABASE_URL` | `src/lib/db.js` | In `wrangler.jsonc` `vars` (not secret). Don't set it in the dashboard: `wrangler deploy` replaces dashboard Text vars with the config file |
 | `SUPABASE_ANON_KEY` | `src/lib/db.js` | The project's **publishable** key (`sb_publishable_...`, Supabase → Project Settings → API Keys). Add as a Worker secret |
 | `STRIPE_WEBHOOK_SECRET` | `POST /api/stripe-webhook` | **Not yet available — add when the Stripe webhook is created** |
 
@@ -88,7 +88,7 @@ git push -u origin master
 3. Project name: `ai-found-score`. Framework preset: **None**.
 4. Build command: leave empty (no build step). Deploy command: `npx wrangler deploy`.
 5. Root directory: the repo root (this folder is the repo root).
-6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above (`SUPABASE_ANON_KEY`, `STRIPE_WEBHOOK_SECRET`) and the plain var `SUPABASE_URL`. Secrets set here are available to every deployment.
+6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above (`SUPABASE_ANON_KEY`, `STRIPE_WEBHOOK_SECRET`). `SUPABASE_URL` lives in `wrangler.jsonc`. Secrets set here are available to every deployment.
 7. Save — Cloudflare deploys on every push to `master` from now on.
 
 Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` first).
