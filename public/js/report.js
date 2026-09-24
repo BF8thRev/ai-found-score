@@ -34,6 +34,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Never show a buy button or link for a tier that isn't on sale (OFFERED_TIERS, config.js).
   root.querySelectorAll('[data-tier]').forEach((el) => { if (!tierOn(el.getAttribute('data-tier'))) el.remove(); });
+  // Sample and showcase reports are examples: a buy button there would charge a visitor for a report
+  // that isn't theirs (no token, or someone else's). Send them to the free-report form instead.
+  if (isDemoReport(report)) {
+    root.querySelectorAll('[data-tier]').forEach((el) => {
+      el.removeAttribute('data-tier');
+      el.setAttribute('href', '/#request');
+    });
+  }
   wireReportTools(root, report);
   window.wireCheckout?.(root, report.sample ? null : report.id);
   root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', (e) => submitLead(e, report.id)));
@@ -166,6 +174,12 @@ function unlockPanel() {
       <p><strong>The fix steps are in the full report.</strong> Every fix, step by step, with copy-paste text for your Google profile. If we can’t show you 3 things you can fix, you get your money back.</p>
       <a class="btn" data-tier="snapshot" href="#">Get the fix steps — $29</a>
     </div>`;
+}
+
+// Real reports linked from the public pages as examples ("See a real report"): never sold from.
+const SHOWCASE_TOKENS = ['mega-wash-and-dry'];
+function isDemoReport(report) {
+  return !!report.sample || SHOWCASE_TOKENS.includes(String(report.id || ''));
 }
 
 // Tiers on sale (public/js/config.js OFFERED_TIERS). Without config.js, nothing is for sale.

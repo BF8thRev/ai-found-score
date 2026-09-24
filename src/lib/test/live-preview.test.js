@@ -35,6 +35,12 @@ async function call(env, body, deps = {}) {
     fetchImpl: fixtureFetch(),
     readUsage: async () => [],
     saveUsage: async (e, rows) => { saved.push(...rows); return { ok: true }; },
+    // The reservation row is updated in place once the engine answers: mirror that here.
+    patchUsage: async (e, id, fields) => {
+      const row = saved.find((r) => r.id === id);
+      if (row) Object.assign(row, fields);
+      return { ok: true };
+    },
     limiter: { limit: async () => ({ success: true }) },
     ...deps,
   });
@@ -247,4 +253,46 @@ test('/api/request returns a preview token only after a passed Turnstile check',
   assert.equal(off.preview_token, undefined);
   const noEngine = await post({ ...ENV, GEMINI_API_KEY: '', OPENAI_API_KEY: '' }, form);
   assert.equal(noEngine.preview_token, undefined);
+});
+
+
+test('preview: concurrent requests reserve first; other reservations count against the cap', async () => {
+  // Another request already reserved (lower id) and used up the whole cap.
+  const other = { id: '00000000-0000-4000-8000-000000000000', cost_usd: 5, ok: true, answer_ref: 'live-preview:x:q1:y' };
+  const r = await call(ENV, await good(), {
+    uuid: () => 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    readUsage: (() => { let n = 0; return async () => (n++ === 0 ? [] : [other]); })(),
+  });
+  assert.equal(r.body.ok, false);
+  assert.equal(r.body.reason, 'cap');
+  assert.equal(r.saved.length, 1);
+  assert.equal(r.saved[0].cost_usd, 0);
+  assert.equal(r.saved[0].ok, false);
+});
+
+test('preview cap: every other row counts toward spend, whatever its id', async () => {
+  // Our id sorts first; the other rows (older, higher ids) must still count.
+  const hist = [
+    { id: 'ffffffff-ffff-4fff-8fff-fffffffffff1', created_at: '2026-01-01T00:00:01+00:00', cost_usd: 5, ok: true, answer_ref: 'live-preview:x:q1:y' },
+  ];
+  const r = await call(ENV, await good(), {
+    uuid: () => '00000000-0000-4000-8000-000000000000',
+    readUsage: (() => { let n = 0; return async () => (n++ === 0 ? [] : hist); })(),
+  });
+  assert.equal(r.body.reason, 'cap');
+  assert.equal(r.saved[0].ok, false);
+});
+
+test('rowsBefore: orders by created_at then id; a later-written row is never "before"', async () => {
+  const { rowsBefore } = await import('../live-preview.js');
+  const rows = [
+    { id: 'b', created_at: '2026-01-01T00:00:01+00:00' },
+    { id: 'z', created_at: '2026-01-01T00:00:00.5+00:00' },
+    { id: 'a', created_at: '2026-01-01T00:00:01+00:00' },
+    { id: 'c', created_at: '2026-01-01T00:00:02+00:00' },
+  ];
+  assert.deepEqual(rowsBefore(rows, 'b').map((r) => r.id).sort(), ['a', 'z']);
+  assert.deepEqual(rowsBefore(rows, 'z').map((r) => r.id), []);
+  // Own row missing: conservative, everything counts.
+  assert.equal(rowsBefore(rows, 'q').length, 4);
 });

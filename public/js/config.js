@@ -7,8 +7,8 @@ const STRIPE_LINKS = {
   // Keys are stable ids (analytics, webhook TIER_BY_CENTS); only the labels changed.
   snapshot: 'https://buy.stripe.com/28E00c7bth016jS8WN6Vq00',       // Fix steps — $29 one-time (unlocks the fix steps)
   before_after: 'https://buy.stripe.com/fZuaEQ8fx39b7nWf1b6Vq01',   // Fix it and re-check — $59 one-time
-  full_year: 'https://buy.stripe.com/3cI9AM53l25737G60F6Vq02',       // Full Year (off sale: not in OFFERED_TIERS) — $69 one-time
-  listing_fix: 'https://buy.stripe.com/7sY00c2Vd5hjeQodd36Vq03',     // Full listing (off sale: not in OFFERED_TIERS) build — $199 one-time
+  full_year: '#',       // Full Year (off sale; its Stripe link is kept out of the page source) — $69 one-time
+  listing_fix: '#',     // Full listing (off sale; its Stripe link is kept out of the page source) build — $199 one-time
 };
 
 // Tiers on sale right now. The report page never renders a button or link for a tier that
@@ -27,6 +27,12 @@ function wireCheckout(root, token) {
     if (el.dataset.wired) return;
     el.dataset.wired = '1';
     const tier = el.getAttribute('data-tier');
+    // Every plan is bought for one report. Without a report token (homepage, static pages, the
+    // sample) a payment would unlock nothing, so the button starts the free report instead.
+    if (!token) {
+      el.setAttribute('href', '/#request');
+      return;
+    }
     const base = STRIPE_LINKS[tier];
     if (base && base !== '#') {
       const u = new URL(base);

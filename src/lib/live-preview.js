@@ -213,7 +213,7 @@ export function capCheck(rows, { capUsd, requestId, ip, estimateUsd = 0 }) {
 
 export async function readTodayUsage(env, sinceIso, { fetchImpl = fetch } = {}) {
   const k = resolveKeys(env);
-  const q = `kind=eq.other&answer_ref=like.${REF_PREFIX}*&created_at=gte.${encodeURIComponent(sinceIso)}&select=cost_usd,answer_ref,ok&limit=5000`;
+  const q = `kind=eq.other&answer_ref=like.${REF_PREFIX}*&created_at=gte.${encodeURIComponent(sinceIso)}&select=id,created_at,cost_usd,answer_ref,ok&limit=5000`;
   const res = await fetchImpl(`${k.supabaseUrl}/rest/v1/scan_usage?${q}`, {
     headers: { apikey: k.supabaseServiceKey, Authorization: `Bearer ${k.supabaseServiceKey}` },
     signal: AbortSignal.timeout(8000),
@@ -225,6 +225,40 @@ export async function readTodayUsage(env, sinceIso, { fetchImpl = fetch } = {}) 
 // ---------------------------------------------------------------------------
 // handler
 // ---------------------------------------------------------------------------
+
+/** Update one scan_usage row (the preview's reservation) in place. Never throws. */
+export async function patchUsage(env, id, fields, { fetchImpl = fetch } = {}) {
+  try {
+    const k = resolveKeys(env);
+    const res = await fetchImpl(`${k.supabaseUrl}/rest/v1/scan_usage?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { apikey: k.supabaseServiceKey, Authorization: `Bearer ${k.supabaseServiceKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(fields),
+      signal: AbortSignal.timeout(8000),
+    });
+    return { ok: res.ok, error: res.ok ? null : `HTTP ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+/**
+ * Rows that were reserved before ours, for the per-request / per-IP limits. Concurrent previews
+ * each write a reservation first and then re-count. Order is (created_at, id): a row written after
+ * we had already re-read sorts after ours, so it can't be skipped by the later request. The id
+ * only breaks created_at ties. The DOLLAR cap does not use this: it counts every other row.
+ */
+export function rowsBefore(rows, ownId) {
+  const key = (r) => [String(r?.created_at || ''), String(r?.id || '')];
+  const own = (rows || []).find((r) => r?.id === ownId);
+  // Our own row not visible (should not happen): count every other row, i.e. stay conservative.
+  const [oc, oi] = [own ? String(own.created_at || '') : '~', String(ownId)];
+  return (rows || []).filter((r) => {
+    if (r?.id === ownId) return false;
+    const [c, i] = key(r);
+    return c < oc || (c === oc && i < oi);
+  });
+}
 
 const reply = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 const soft = (message, reason) => reply({ ok: false, reason, message });
@@ -293,6 +327,36 @@ export async function handleLivePreview(request, env, deps = {}) {
     if (stop) return soft(stop.message, stop.reason);
   }
 
+  // Reserve the estimated cost BEFORE spending, then re-count including every other reservation.
+  const estimateUsd = priceCall(engine, TYPICAL_CALL[engine]);
+  const answerRef = `${REF_PREFIX}:${requestId}:${question.id}:${code}`;
+  const reservationId = (deps.uuid || (() => crypto.randomUUID()))();
+  if (!dryRun) {
+    const reserved = await (deps.saveUsage || saveUsage)(env, [usageRow({
+      id: reservationId, kind: 'other', provider: engine, model: null, costUsd: estimateUsd,
+      ok: true, error: 'pending', answerRef,
+    })]).catch((e) => ({ ok: false, error: String(e?.message || e) }));
+    if (!reserved || reserved.ok === false) return soft(MSG.fallback, 'store');
+    let rows;
+    try {
+      rows = await (deps.readUsage || readTodayUsage)(env, startOfUtcDay(now));
+    } catch {
+      rows = null;
+    }
+    // Spend: every other row today, including other in-flight reservations (fails closed: two
+    // racing requests near the cap may both stop). Limits: only rows ordered before ours, so
+    // exactly one of two racing previews for the same request goes ahead.
+    const others = rows && rows.filter((r) => r?.id !== reservationId);
+    const stop = !rows
+      ? { reason: 'store', message: MSG.fallback }
+      : capCheck(others, { capUsd: dailyCapUsd(env), requestId: null, ip: null, estimateUsd })
+        || capCheck(rowsBefore(rows, reservationId), { capUsd: Infinity, requestId, ip: code, estimateUsd: 0 });
+    if (stop) {
+      await (deps.patchUsage || patchUsage)(env, reservationId, { cost_usd: 0, ok: false, error: `cancelled: ${stop.reason}` });
+      return soft(stop.message, stop.reason);
+    }
+  }
+
   const business = { name: tok.name, town: tok.town, state: tok.state, zip: tok.zip, trade: tok.trade };
   const timeoutMs = deps.timeoutMs ?? PREVIEW_TIMEOUT_MS;
   let result;
@@ -312,15 +376,12 @@ export async function handleLivePreview(request, env, deps = {}) {
   }
 
   if (!dryRun) {
-    const row = usageRow({
-      kind: 'other', provider: engine, model: result?.model || null, costUsd: result?.costUsd || 0,
+    // A timed-out call reports cost 0 but the provider may still bill it: keep the estimate.
+    const cost = result?.timedOut ? estimateUsd : (result?.costUsd || 0);
+    const write = (deps.patchUsage || patchUsage)(env, reservationId, {
+      provider: engine, model: result?.model || null, cost_usd: cost,
       ok: result?.ok === true, error: result?.ok ? null : String(result?.error || 'failed').slice(0, 500),
-      answerRef: `${REF_PREFIX}:${requestId}:${question.id}:${code}`,
-    });
-    const write = (deps.saveUsage || saveUsage)(env, [row]).then((s) => {
-      if (s && s.ok === false) console.error('[live-preview] usage write failed', String(s.error).slice(0, 200));
-    }).catch((e) => console.error('[live-preview] usage write failed', String(e?.message || e).slice(0, 200)));
-    // A timed-out call may still bill later; record what we know now either way.
+    }).then((r) => { if (r && r.ok === false) console.error('[live-preview] usage update failed', String(r.error).slice(0, 200)); });
     if (deps.waitUntil) deps.waitUntil(write); else await write;
   }
 

@@ -166,7 +166,8 @@ export function localBusinessJsonLd(d) {
   if (d.websiteUrl) o.url = d.websiteUrl;
   if (d.hours && alwaysOpen(d.hours)) o.openingHours = 'Mo-Su 00:00-23:59';
   if (d.price && d.price.length <= 100) o.priceRange = d.price;
-  return `<script type="application/ld+json">\n${JSON.stringify(o, null, 2)}\n</script>`;
+  // `<` as \u003c: a name or price containing "</script>" can't end the owner's script tag early.
+  return `<script type="application/ld+json">\n${JSON.stringify(o, null, 2).replace(/</g, '\\u003c')}\n</script>`;
 }
 
 const q = (s) => `"${s}"`;
