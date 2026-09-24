@@ -9,56 +9,32 @@ One Cloudflare Worker serving the static site plus two API routes. Single deploy
 | `/` | Landing page: what the free report is, the two questions, how it works, pricing, FAQ |
 | `/report/sample-001` | Sample report page (fictional plumbing business, mock data) |
 | `/report/[id]` | Report page for any id — reads from `GET /api/report/[id]` |
-| `/success` | Post-payment page ("payment received, report on its way") |
+| `/r/[code]` | Postcard short code (e.g. `/r/K7M2QX`, case/dash-insensitive) → 302 to that recipient's `/report/[token]`. Unknown code → friendly not-found page |
+| `/success` | Post-payment page. If checkout started on a report page, waits for the webhook and links back to the unlocked report |
 | `/about`, `/privacy`, `/contact` | Static info pages. Footer on every page carries the mailing address (120 Terminal Drive, Plainview, NY 11803) |
-| `/unsubscribe` | One-click unsubscribe. `GET ?t=<token>` from email links, `POST` with `List-Unsubscribe=One-Click` (RFC 8058) from mail clients, or the on-page email form. Writes to the `unsubscribes` table |
-| `/robots.txt` | Disallows `/report/`, `/success`, `/unsubscribe`, `/api/`; points at `/sitemap.xml` |
+| `/unsubscribe`, `/stop` | Opt-out. `GET ?t=<token>` from email links, `POST` with `List-Unsubscribe=One-Click` (RFC 8058) from mail clients, the on-page email form, or the postcard code (`/stop` form, or `GET /stop?c=CODE`). Writes to the `unsubscribes` table; a token row suppresses that business for mail and email |
+| `/robots.txt` | Disallows `/report/`, `/r/`, `/success`, `/unsubscribe`, `/stop`, `/api/`; points at `/sitemap.xml` |
 | `POST /api/request` | Landing-page form: writes a `report_requests` row (JSON or form post) |
 | `www.` | 301 to the bare domain, path and query preserved |
-| `GET /api/report/[id]` | Report JSON — mock data now, Supabase read later |
-| `POST /api/stripe-webhook` | Stripe webhook: verifies signature, writes payment to Supabase (stubbed until wired) |
+| `GET /api/report/[id]` | Report JSON. Until a payment exists for the token, returns `locked: true` with fix details stripped server-side (the page blurs stand-ins). `?preview=locked` shows the sample locked |
+| `POST /api/visit` | Report-page view beacon, sent after render. Arm looked up from the token; link-scanner user agents ignored. Writes `page_visits` |
+| `POST /api/lead` | "Email me this report". Writes `leads` (status `new`) with the arm from the token |
+| `POST /api/stripe-webhook` | Stripe webhook: verifies signature, reads `client_reference_id` (report token), looks up business + arm in `report_links`, writes `payments` |
 
 `public/js/config.js` holds `STRIPE_LINKS` — the one file where real Stripe Payment Links get dropped in later.
 
-## Unsubscribe suppression table
+## Supabase setup
 
-`/unsubscribe` inserts into a Supabase table that does not exist in the original schema. Create it once (SQL editor), and the sender must check it before every send:
+Run [`supabase/setup.sql`](supabase/setup.sql) once in the Supabase SQL editor (safe to re-run). It adds:
 
-```sql
-create table public.unsubscribes (
-  id uuid primary key default gen_random_uuid(),
-  report_token text,
-  email text,
-  user_agent text,
-  unsubscribed_at timestamptz not null default now()
-);
-alter table public.unsubscribes enable row level security;
-create policy "worker insert" on public.unsubscribes for insert to anon with check (true);
-```
+- `report_links` — one row per test recipient: `report_token`, printed `short_code` (auto-generated, no look-alike characters), `business_id`, `arm` (`mail` | `email_a` | `email_b`), `town`. **The randomize job writes this before any send**; the site never trusts `?arm=` from a URL.
+- `leads` — "Email me this report" captures. The sender picks up `status = 'new'` rows and emails the report link.
+- `page_visits.arm` and `payments.report_token` columns.
+- `report_unlocked(token)` — lets the Worker check for a payment without read access to `payments`.
+- `unsubscribes` and `report_requests` (if not already made).
+- `channel_funnel` view — recipients / visited / leads / paying / revenue per arm (distinct tokens). Readable only with the service key.
 
-Until the table and `SUPABASE_ANON_KEY` exist, unsubscribe requests show the error page (which tells the visitor to email instead) and log the failure in the Worker.
-
-## Report-request table
-
-The landing page form posts to `POST /api/request`, which inserts into `report_requests`. Create it once:
-
-```sql
-create table public.report_requests (
-  id uuid primary key default gen_random_uuid(),
-  business_name text not null,
-  town text not null,
-  email text not null,
-  trade text,
-  website text,
-  user_agent text,
-  requested_at timestamptz not null default now(),
-  status text not null default 'new'
-);
-alter table public.report_requests enable row level security;
-create policy "worker insert" on public.report_requests for insert to anon with check (true);
-```
-
-Until the table and `SUPABASE_ANON_KEY` exist, the form shows an error with the email fallback.
+The sender (email and Lob jobs) must check `unsubscribes` by email and by `report_token` before every send.
 
 ## Local dev
 
@@ -76,14 +52,14 @@ npm run dev        # serves at http://localhost:8787
 
 | Var | Used by | Status |
 |---|---|---|
-| `SUPABASE_URL` | `src/lib/db.js` | Set to `https://piaaovvnuejbawpudhbp.supabase.co` at deploy |
-| `SUPABASE_ANON_KEY` | `src/lib/db.js` | **Not yet available — add at deploy time** |
+| `SUPABASE_URL` | `src/lib/db.js` | Set to `https://bahmemiydzpotfrxmlzw.supabase.co` at deploy |
+| `SUPABASE_ANON_KEY` | `src/lib/db.js` | The project's **publishable** key (`sb_publishable_...`, Supabase → Project Settings → API Keys). Add as a Worker secret |
 | `STRIPE_WEBHOOK_SECRET` | `POST /api/stripe-webhook` | **Not yet available — add when the Stripe webhook is created** |
 
 For local dev, create `.dev.vars` (git-ignored):
 
 ```
-SUPABASE_URL=https://piaaovvnuejbawpudhbp.supabase.co
+SUPABASE_URL=https://bahmemiydzpotfrxmlzw.supabase.co
 SUPABASE_ANON_KEY=
 STRIPE_WEBHOOK_SECRET=
 ```
@@ -123,16 +99,17 @@ Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` 
 2. In Stripe dashboard → Developers → Webhooks, create an endpoint pointing at `https://<your-domain>/api/stripe-webhook`, subscribe to `checkout.session.completed`, and copy the signing secret into the `STRIPE_WEBHOOK_SECRET` secret.
 3. Replace the `#` placeholders in `public/js/config.js` with the real Stripe Payment Links and push (or redeploy).
 
-## Wiring checklist (the three things filled in later)
+## Wiring checklist (the things filled in later)
 
-1. **Supabase anon key + confirmed schema.** Add `SUPABASE_ANON_KEY` as a Worker secret. Open `src/lib/db.js`, confirm every table/column name in `TABLES`/`COLS` against the live schema, then set `READY = true`. Nothing else needs changing — the Worker calls only `recordPayment()` and `getReport()`.
-2. **Stripe payment links.** Paste the four real links into `STRIPE_LINKS` in `public/js/config.js` (keys: `snapshot`, `before_after`, `full_year`, `listing_fix`). Add `success_url=https://<domain>/success` to each Payment Link in the Stripe dashboard.
-3. **Stripe webhook secret.** Create the webhook endpoint (see deploy step 6) and store the signing secret as `STRIPE_WEBHOOK_SECRET`. Include `business_id`, `report_id`, and `tier` in each Payment Link’s metadata so the webhook can attribute the payment.
+1. **Supabase.** Run `supabase/setup.sql`. Add `SUPABASE_ANON_KEY` as a Worker secret.
+2. **Stripe payment links.** Paste the four real links into `STRIPE_LINKS` in `public/js/config.js` (keys: `snapshot`, `before_after`, `full_year`, `listing_fix`). On each Payment Link in the Stripe dashboard: add metadata `tier=<key>`, and set the after-payment redirect to `https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}`. Business and arm are **not** put in link metadata (it is fixed per link); the report page appends `client_reference_id=<report token>` and the webhook looks the rest up. Report tokens must be letters, digits, `-` or `_` (Stripe's rule for `client_reference_id`).
+3. **Stripe webhook secret.** Create the webhook endpoint (see deploy step 2 above) and store the signing secret as `STRIPE_WEBHOOK_SECRET`.
+4. **Postcards.** QR code and printed URL both point at `https://aifoundscore.com/r/<short_code>`; opt-out line: `aifoundscore.com/stop` + the same code.
 
 ## Notes
 
 - Report pages are data-driven: `public/js/report.js` renders whatever `GET /api/report/[id]` returns. The shape is documented in `DATA_MODEL.md`.
-- `GET /api/report/[id]` returns 404 JSON for unknown ids; the page shows a friendly "report not found" message.
+- `GET /api/report/[id]` returns 404 JSON for unknown ids; the page shows a friendly "report not found" message. Real reports are `Cache-Control: private, no-store` because they change the moment they're paid for.
 - The webhook returns 400 on bad signatures (Stripe won’t retry) and 500 on payment-write failures (Stripe will retry).
 - Cloudflare Web Analytics is a placeholder comment in each page’s `<head>` — paste the real beacon snippet when the token exists.
 - Contact email used in footers: `hello@aifoundscore.com` — confirm/create this mailbox before launch.

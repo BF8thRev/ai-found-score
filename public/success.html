@@ -38,10 +38,42 @@
   <div class="wrap">
     <div class="check">✓</div>
     <h1>Payment received.</h1>
-    <p>Your full report lands in your inbox within a day. If you bought a fix plan, we start on your listings now.</p>
-    <a class="btn-secondary" href="/">Home</a>
+    <p id="success-msg">Thanks. We’ll email your receipt and next steps. If you bought a fix plan, we start on your listings now.</p>
+    <a class="btn-secondary" id="success-link" href="/">Home</a>
   </div>
 </section>
+<script>
+  // Coming back from Stripe checkout started on a report page: wait for the
+  // webhook to land (usually a few seconds), then send them to the unlocked report.
+  (function () {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem('afs_checkout') || 'null'); } catch (e) {}
+    if (!saved || !saved.token) return;
+    var msg = document.getElementById('success-msg');
+    var link = document.getElementById('success-link');
+    var url = '/report/' + encodeURIComponent(saved.token);
+    msg.textContent = 'Unlocking your full report…';
+    link.href = url;
+    link.textContent = 'Open my report';
+    link.className = 'btn';
+    var tries = 0;
+    (function poll() {
+      fetch('/api/report/' + encodeURIComponent(saved.token), { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (rep) {
+          if (rep && !rep.locked) {
+            msg.textContent = 'Your full report is unlocked. Bookmark it; the link keeps working.';
+            try { localStorage.removeItem('afs_checkout'); } catch (e) {}
+          } else if (++tries < 15) {
+            setTimeout(poll, 2000);
+          } else {
+            msg.textContent = 'Your payment went through. The report can take a minute to unlock. Open it below, and reload if it still shows blurred.';
+          }
+        })
+        .catch(function () { if (++tries < 15) setTimeout(poll, 2000); });
+    })();
+  })();
+</script>
 
 <footer class="site-footer">
   <div class="wrap">

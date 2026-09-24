@@ -2,6 +2,8 @@ User-agent: *
 Disallow: /report/
 Disallow: /success
 Disallow: /unsubscribe
+Disallow: /stop
+Disallow: /r/
 Disallow: /api/
 
 Sitemap: https://aifoundscore.com/sitemap.xml

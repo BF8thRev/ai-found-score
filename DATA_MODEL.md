@@ -50,9 +50,12 @@
       "description": "..."         // plain English: what it is, why it costs customers
     }
   ],
-  "summary": "..."                  // the bottom line, 3–5 sentences
+  "summary": "...",                 // the bottom line, 3–5 sentences
+  "locked": true                   // set by the Worker until a payment exists for this token
 }
 ```
+
+When `locked` is true the Worker has already removed, server-side, `details`/`fields` from every `mismatch` listing and `description` from every issue (each gets `locked: true`). The page draws blurred stand-in text in their place. Nothing withheld is ever sent to the browser.
 
 Rules for real scan data:
 - Every string is customer-facing — plain English, no jargon. The scanner writes them, not the site.
@@ -84,12 +87,13 @@ Proposed mapping (column names are placeholders — confirm against the live sch
 
 ## Webhook → payments row
 
-On `checkout.session.completed`, the Worker builds:
+On `checkout.session.completed`, the Worker reads the report token from `session.client_reference_id` (appended to the Payment Link by the report page), looks it up in `report_links`, and builds:
 
 ```jsonc
 {
-  "businessId": "<from session.metadata.business_id>",
-  "reportId": "<from session.metadata.report_id>",
+  "businessId": "<report_links.business_id>",
+  "reportToken": "<session.client_reference_id>",
+  "arm": "<report_links.arm>",               // mail | email_a | email_b
   "tier": "<from session.metadata.tier>",   // snapshot | before_after | full_year | listing_fix
   "amountCents": 5900,
   "currency": "usd",
@@ -100,4 +104,4 @@ On `checkout.session.completed`, the Worker builds:
 }
 ```
 
-`recordPayment()` in `src/lib/db.js` maps these onto the `payments` table columns. The Stripe Payment Links must carry `business_id`, `report_id`, and `tier` in their metadata for attribution to work.
+`recordPayment()` in `src/lib/db.js` maps these onto the `payments` table columns. Each Stripe Payment Link carries only `tier` in its metadata; everything else comes from the token.

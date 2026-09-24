@@ -1,6 +1,6 @@
 // lib/db.js — Supabase data access for AI Found Score.
 //
-// Live schema (confirmed 2026-09-23 against project piaaovvnuejbawpudhbp):
+// Live schema (project bahmemiydzpotfrxmlzw "ai-found-score", created by supabase/setup.sql 2026-09-24):
 //   businesses:   id uuid, name text, trade text, county text, phone text,
 //                 website text, address text, google_place_id text,
 //                 created_at timestamptz
@@ -14,9 +14,13 @@
 //   payments:     id uuid, business_id uuid, arm text, tier text,
 //                 amount_cents int4, stripe_session_id text, paid_at timestamptz
 //
-// RLS is enabled on all five tables. The anon key used by this Worker may:
-//   SELECT businesses, scan_results
-//   INSERT page_visits, email_events, payments
+// Added by supabase/setup.sql: page_visits.arm, payments.report_token,
+// report_links, leads, unsubscribes, report_requests, report_unlocked().
+//
+// RLS is enabled on all tables. The anon key used by this Worker may:
+//   SELECT businesses, scan_results, report_links
+//   INSERT page_visits, email_events, payments, leads, unsubscribes, report_requests
+//   EXECUTE report_unlocked(token)
 // (see "worker read/insert" policies in Supabase). Env vars SUPABASE_URL and
 // SUPABASE_ANON_KEY are stored as Worker secrets, never in the repo.
 
@@ -28,7 +32,69 @@ export const TABLES = {
   PAYMENTS: 'payments',
   UNSUBSCRIBES: 'unsubscribes',
   REPORT_REQUESTS: 'report_requests',
+  REPORT_LINKS: 'report_links',
+  LEADS: 'leads',
 };
+
+/** Insert one row; throws with the Supabase error text on failure. */
+async function supaInsert(env, table, row) {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...supaHeaders(env), Prefer: 'return=minimal' },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase ${table} insert failed: ${res.status} ${text}`);
+  }
+}
+
+/**
+ * Look up a recipient's link row by report token or by printed short code.
+ * Returns {report_token, short_code, business_id, arm, town} or null.
+ */
+export async function getReportLink(env, { token, code }) {
+  const q = token
+    ? `report_token=eq.${encodeURIComponent(token)}`
+    : `short_code=eq.${encodeURIComponent(code)}`;
+  const [row] = await supaGet(env, TABLES.REPORT_LINKS, `${q}&limit=1`);
+  return row || null;
+}
+
+/** True once any payment exists for this report token. */
+export async function isReportUnlocked(env, token) {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/report_unlocked`, {
+    method: 'POST',
+    headers: supaHeaders(env),
+    body: JSON.stringify({ p_token: token }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase report_unlocked failed: ${res.status} ${text}`);
+  }
+  return (await res.json()) === true;
+}
+
+/** One report-page view (sent by the page after it renders, bots filtered). */
+export async function recordVisit(env, v) {
+  await supaInsert(env, TABLES.PAGE_VISITS, {
+    report_token: v.token,
+    arm: v.arm ?? null,
+    referrer: v.referrer ?? null,
+    user_agent: v.userAgent ?? null,
+    visited_at: new Date().toISOString(),
+  });
+}
+
+/** "Email me this report" capture. */
+export async function recordLead(env, l) {
+  await supaInsert(env, TABLES.LEADS, {
+    report_token: l.token,
+    email: l.email,
+    arm: l.arm ?? null,
+    user_agent: l.userAgent ?? null,
+  });
+}
 
 /**
  * Write one row for a free-report request from the landing page.
@@ -92,12 +158,13 @@ async function supaGet(env, table, query) {
  * Write one row to the payments table via the Supabase REST API.
  *
  * @param {object} env - Worker env (SUPABASE_URL, SUPABASE_ANON_KEY)
- * @param {object} payment - {businessId, arm, tier, amountCents, stripeSessionId}
+ * @param {object} payment - {businessId, reportToken, arm, tier, amountCents, stripeSessionId}
  * @returns {Promise<object>}
  */
 export async function recordPayment(env, payment) {
   const row = {
     business_id: payment.businessId ?? null,
+    report_token: payment.reportToken ?? null,
     arm: payment.arm ?? null,
     tier: payment.tier ?? 'unknown',
     amount_cents: payment.amountCents ?? null,
@@ -105,18 +172,10 @@ export async function recordPayment(env, payment) {
     paid_at: new Date().toISOString(),
   };
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${TABLES.PAYMENTS}`, {
-    method: 'POST',
-    headers: { ...supaHeaders(env), Prefer: 'return=representation' },
-    body: JSON.stringify(row),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Supabase payments insert failed: ${res.status} ${text}`);
-  }
-  const [inserted] = await res.json();
-  return { stubbed: false, row: inserted };
+  // return=minimal: anon has no SELECT on payments, so asking for the
+  // inserted row back would fail the insert under RLS.
+  await supaInsert(env, TABLES.PAYMENTS, row);
+  return { row };
 }
 
 /**

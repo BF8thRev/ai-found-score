@@ -305,3 +305,28 @@ img { max-width: 100%; }
 .unsub-form input { font: inherit; padding: 12px 14px; border: 2px solid var(--line); border-radius: 8px; }
 .unsub-form input:focus { outline: none; border-color: var(--blue); }
 .unsub-form .btn { justify-self: start; }
+
+/* ---------- report: locked details, unlock, lead capture ---------- */
+.locked-text { filter: blur(5px); user-select: none; color: var(--muted); margin: 6px 0 4px; }
+.locked-note { font-size: 14px; font-weight: 700; color: var(--navy); margin: 0; }
+.unlock-panel {
+  display: flex; gap: 20px; align-items: center; justify-content: space-between;
+  background: #EEF4FE; border: 1px solid #C9DBFA; border-radius: var(--radius); padding: 20px 24px; margin-top: 18px;
+}
+.unlock-panel p { margin: 0; }
+.unlock-panel .btn { flex: none; }
+@media (max-width: 520px) { .unlock-panel { flex-direction: column; align-items: stretch; text-align: center; } }
+.lead-form { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 22px; margin: 24px 0; background: #fff; }
+.lead-form label { display: block; font-weight: 700; color: var(--navy); margin-bottom: 10px; }
+.lead-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.lead-row[hidden] { display: none; }
+.lead-row input[type=email] { flex: 1 1 220px; min-width: 0; font: inherit; padding: 12px 14px; border: 2px solid var(--line); border-radius: 8px; }
+.lead-row input[type=email]:focus { outline: none; border-color: var(--blue); }
+.lead-row .btn-secondary { flex: 0 0 auto; }
+.lead-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; }
+.lead-status { margin: 8px 0 0; font-size: 15px; }
+.lead-status:empty { display: none; }
+.lead-status.ok { color: var(--green); font-weight: 600; }
+.lead-status.error { color: var(--red); }
+.page-msg { padding: 60px 0; max-width: var(--text); }
+.page-msg h1 { font-size: 32px; margin: 0 0 12px; }
