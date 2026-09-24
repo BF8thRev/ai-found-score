@@ -1,0 +1,66 @@
+{
+  "id": "msg_01PaUsE7vX2cN4bR8tQw1ZkD",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "I'll search for laundromats in North Babylon, NY."
+    },
+    {
+      "type": "server_tool_use",
+      "id": "srvtoolu_01Kq7vN3xZpB2mR8tYc4wLhD",
+      "name": "web_search",
+      "input": {
+        "query": "best laundromat North Babylon NY"
+      }
+    },
+    {
+      "type": "web_search_tool_result",
+      "tool_use_id": "srvtoolu_01Kq7vN3xZpB2mR8tYc4wLhD",
+      "content": [
+        {
+          "type": "web_search_result",
+          "url": "https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY",
+          "title": "THE BEST 10 Laundromats in NORTH BABYLON, NY - Yelp",
+          "encrypted_content": "EqsDCioIAxgCIiQ4ZDFlYjM2Ny1hMmM0LTRiNmQtOTdmYi0xZTQzZjI5YzBjNmQSDHRNcGx1cU5vZGVy%2C+NY",
+          "page_age": "September 12, 2026"
+        },
+        {
+          "type": "web_search_result",
+          "url": "https://www.yellowpages.com/north-babylon-ny/laundromats",
+          "title": "Laundromats in North Babylon, NY - YellowPages",
+          "encrypted_content": "EqsDCioIAxgCIiQ4ZDFlYjM2Ny1hMmM0LTRiNmQtOTdmYi0xZTQzZjI5YzBjNmQSDHRNcGx1cU5vZGVyromats",
+          "page_age": "August 30, 2026"
+        },
+        {
+          "type": "web_search_result",
+          "url": "https://sudsandbubbleslaundry.example.com/",
+          "title": "Suds & Bubbles Laundromat | North Babylon, NY",
+          "encrypted_content": "EqsDCioIAxgCIiQ4ZDFlYjM2Ny1hMmM0LTRiNmQtOTdmYi0xZTQzZjI5YzBjNmQSDHRNcGx1cU5vZGVye.comx"
+        },
+        {
+          "type": "web_search_result",
+          "url": "https://www.angi.com/companylist/us/ny/north-babylon/laundry-service.htm",
+          "title": "Top 10 Laundry Services in North Babylon, NY - Angi",
+          "encrypted_content": "EqsDCioIAxgCIiQ4ZDFlYjM2Ny1hMmM0LTRiNmQtOTdmYi0xZTQzZjI5YzBjNmQSDHRNcGx1cU5vZGVyce.htm",
+          "page_age": "July 2, 2026"
+        }
+      ]
+    }
+  ],
+  "stop_reason": "pause_turn",
+  "stop_sequence": null,
+  "stop_details": null,
+  "usage": {
+    "input_tokens": 9120,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 212,
+    "server_tool_use": {
+      "web_search_requests": 1
+    },
+    "service_tier": "standard"
+  }
+}

@@ -16,11 +16,13 @@
 //
 // Added by supabase/setup.sql: page_visits.arm, payments.report_token, payments.livemode,
 // report_links, leads, unsubscribes, report_requests, report_unlocked().
+// Added by supabase/scan_v2.sql: scan_results.report jsonb + scan_results.version int
+// (the v2 report document), and scan_raw (one row per API call; no anon access).
 //
 // RLS is enabled on all tables. The anon key used by this Worker may:
 //   SELECT businesses, scan_results, report_links
 //   INSERT page_visits, email_events, payments, leads, unsubscribes, report_requests
-//   EXECUTE report_unlocked(token)
+//   EXECUTE report_unlocked(token), attach_report_request_email(id, email)
 // (see "worker read/insert" policies in Supabase). Env vars SUPABASE_URL and
 // SUPABASE_ANON_KEY are stored as Worker secrets, never in the repo.
 
@@ -101,19 +103,28 @@ export async function recordLead(env, l) {
  *
  * Table (create in Supabase; anon needs INSERT only):
  *   report_requests: id uuid default gen_random_uuid() pk, business_name text,
- *                    town text, email text, trade text, website text,
- *                    user_agent text, requested_at timestamptz, status text
+ *                    town text, email text (nullable), trade text, website text,
+ *                    user_agent text, requested_at timestamptz, status text,
+ *                    zip text, phone text, email_added_at timestamptz
+ *   (email nullable + zip/phone/email_added_at: supabase/scan_v2.sql; state is not stored, the form is NY-only)
+ *
+ * The Worker picks the id (anon can't read the row back) and hands it to the
+ * page, which uses it to attach an email later via attachReportRequestEmail.
  *
  * @param {object} env - Worker env (SUPABASE_URL, SUPABASE_ANON_KEY)
- * @param {object} r - {businessName, town, email, trade, website, userAgent}
+ * @param {object} r - {id?, businessName, town, zip, email?, trade, website, phone, userAgent}
  */
 export async function recordReportRequest(env, r) {
   const row = {
+    ...(r.id ? { id: r.id } : {}),
     business_name: r.businessName,
     town: r.town,
-    email: r.email,
+    zip: r.zip ?? null,
+    email: r.email ?? null,
+    email_added_at: r.email ? new Date().toISOString() : null,
     trade: r.trade ?? null,
     website: r.website ?? null,
+    phone: r.phone ?? null,
     user_agent: r.userAgent ?? null,
     requested_at: new Date().toISOString(),
     status: 'new',
@@ -128,6 +139,26 @@ export async function recordReportRequest(env, r) {
     throw new Error(`Supabase report_requests insert failed: ${res.status} ${text}`);
   }
   return { row };
+}
+
+/**
+ * Attach an email to a report request saved earlier (the page's second step).
+ * Goes through the attach_report_request_email() RPC (security definer, see
+ * supabase/scan_v2.sql) so anon never needs UPDATE or SELECT on the table.
+ * The RPC only fills an empty email on a row from the last 24 hours.
+ * @returns {Promise<boolean>} true if a row was updated
+ */
+export async function attachReportRequestEmail(env, { id, email }) {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/attach_report_request_email`, {
+    method: 'POST',
+    headers: supaHeaders(env),
+    body: JSON.stringify({ p_id: id, p_email: email }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase attach_report_request_email failed: ${res.status} ${text}`);
+  }
+  return (await res.json()) === true;
 }
 
 // Wired to the live schema.
@@ -335,7 +366,9 @@ function shapeRealReport(reportToken, rows, business) {
 /**
  * Fetch a report by its public token. Sample reports (id starting with
  * "sample-") keep serving the bundled mock so the demo page always works.
- * Anything else is read live from scan_results + businesses.
+ * Anything else is read live from scan_results: a row with `version = 2`
+ * returns its stored `report` jsonb as-is (see DATA_MODEL.md, v2); older
+ * rows are shaped into the legacy v1 report from scan_results + businesses.
  *
  * @param {object} env - Worker env
  * @param {string} reportId - public report token
@@ -352,6 +385,14 @@ export async function getReport(env, reportId, mockReports) {
     `report_token=eq.${encodeURIComponent(reportId)}`
   );
   if (!rows.length) return null;
+
+  // v2: the scanner stores the finished report document on the row. The
+  // newest v2 row wins; the Worker validates it before serving.
+  const v2 = rows
+    .filter((r) => r.version === 2 && r.report && typeof r.report === 'object')
+    .sort((a, b) => String(b.scanned_at || b.created_at || '').localeCompare(String(a.scanned_at || a.created_at || '')))[0];
+  if (v2) return { ...v2.report, id: reportId, version: 2 };
+
   const businessId = rows[0].business_id;
   const [business] = await supaGet(
     env,

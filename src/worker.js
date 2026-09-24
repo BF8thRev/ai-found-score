@@ -5,17 +5,32 @@
 //   GET  /api/report/[id]     -> report JSON; fix details withheld until paid
 //   POST /api/visit           -> report-page view beacon (arm looked up from token)
 //   POST /api/lead            -> "Email me this report"
-//   POST /api/request         -> landing-page free-report request
+//   POST /api/request         -> landing-page free-report request (email optional; returns id)
+//                                or {request_id, email} to attach an email to that request
+//   GET  /api/questions       -> the 5 questions we'd ask for ?trade=&town=&zip=&state=
 //   POST /api/stripe-webhook  -> Stripe webhook, verified signature, writes payment
 //   GET|POST /unsubscribe, /stop -> email or postcard opt-out
+//   /admin, /admin/*          -> business dashboard (session cookie or Bearer ADMIN_TOKEN); src/admin/routes.js
+//   GET  /api/admin/ping      -> live key check per engine + extractor (cookie or Bearer ADMIN_TOKEN)
+//   POST /api/admin/scan      -> start a background scan (Cloudflare Workflow) -> { scanId, instanceId, statusUrl }
+//   GET  /api/admin/scan/:id  -> scan status + progress
 //   everything else           -> static assets (public/) via env.ASSETS
+//
+// Also exports ScanWorkflow (src/scan-workflow.js), bound as SCAN_WORKFLOW in wrangler.jsonc.
 
 import {
-  recordPayment, recordUnsubscribe, recordReportRequest, recordVisit, recordLead,
+  recordPayment, recordUnsubscribe, recordReportRequest, attachReportRequestEmail, recordVisit, recordLead,
   getReport, getReportLink, isReportUnlocked,
 } from './lib/db.js';
+import { buildQuestions, normalizeTrade } from '../scanner/questions.js';
 import { verifyStripeSignature } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
+import { validateReport } from '../shared/report-v2.js';
+import { resolveKeys, enginesConfigured } from '../scanner/config.js';
+import { handleAdminRequest, isAdminPath } from './admin/routes.js';
+
+// The background scan runner (Cloudflare Workflows entrypoint; binding SCAN_WORKFLOW).
+export { ScanWorkflow } from './scan-workflow.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -31,12 +46,20 @@ export default {
       return handleHealth(env);
     }
 
+    if (isAdminPath(url.pathname)) {
+      return handleAdminRequest(request, url, env);
+    }
+
     if (url.pathname.startsWith('/r/') && request.method === 'GET') {
       return handleShortCode(url, env);
     }
 
     if (url.pathname === '/api/request' && request.method === 'POST') {
       return handleReportRequest(request, url, env);
+    }
+
+    if (url.pathname === '/api/questions' && request.method === 'GET') {
+      return handleQuestions(url);
     }
 
     if (url.pathname === '/api/visit' && request.method === 'POST') {
@@ -57,7 +80,10 @@ export default {
     }
 
     if (url.pathname.startsWith('/api/report/') && request.method === 'GET') {
-      const id = decodeURIComponent(url.pathname.slice('/api/report/'.length));
+      let id;
+      try { id = decodeURIComponent(url.pathname.slice('/api/report/'.length)); } catch {
+        return Response.json({ error: 'Report not found' }, { status: 404 });
+      }
       return handleGetReport(id, url, env);
     }
 
@@ -83,6 +109,12 @@ async function handleHealth(env) {
     supabaseKeyType: keyType(env.SUPABASE_ANON_KEY),
     stripeWebhookSecret: !!env.STRIPE_WEBHOOK_SECRET,
     stripeWebhookSecretTest: !!env.STRIPE_WEBHOOK_SECRET_TEST,
+    // Scanner keys: present or not, never the values.
+    // `claude` uses ANTHROPIC_API_KEY; config.js wins once it reports it itself.
+    engineKeys: { claude: !!String(env.ANTHROPIC_API_KEY || '').trim(), ...enginesConfigured(env) },
+    anthropicApiKey: !!String(env.ANTHROPIC_API_KEY || '').trim(),
+    supabaseServiceKey: !!resolveKeys(env).supabaseServiceKey,
+    adminToken: !!String(env.ADMIN_TOKEN || '').trim(),
     database: 'not checked',
   };
   if (out.supabaseUrl && out.supabaseKey) {
@@ -113,7 +145,9 @@ function normalizeCode(raw) {
 }
 
 async function handleShortCode(url, env) {
-  const code = normalizeCode(decodeURIComponent(url.pathname.slice('/r/'.length)));
+  let raw = url.pathname.slice('/r/'.length);
+  try { raw = decodeURIComponent(raw); } catch { /* keep it raw; normalizeCode drops the junk */ }
+  const code = normalizeCode(raw);
   if (!code) return Response.redirect(new URL('/', url).toString(), 302);
   let link;
   try {
@@ -148,7 +182,21 @@ async function handleGetReport(id, url, env) {
   if (!report) {
     return Response.json({ error: 'Report not found' }, { status: 404 });
   }
-  return Response.json(unlocked ? report : lockReport(report), {
+  // Serve gate: a v2 report that fails the guardrails is never shown.
+  if (report.version === 2) {
+    const v = validateReport(report);
+    if (!v.ok) {
+      console.error('[report] v2 failed validation', id, JSON.stringify(v.errors.slice(0, 20)));
+      return Response.json({ error: 'Report not ready' }, {
+        status: 503,
+        headers: { 'Cache-Control': 'no-store', 'Retry-After': '3600' },
+      });
+    }
+  }
+  const body = unlocked
+    ? (report.version === 2 ? { ...report, locked: false } : report)
+    : lockReport(report);
+  return Response.json(body, {
     // Real reports change the moment they're paid for, so never cache them.
     headers: { 'Cache-Control': isSample ? 'public, max-age=300' : 'private, no-store' },
   });
@@ -158,7 +206,19 @@ async function handleGetReport(id, url, env) {
 // which listings are wrong, and the issue titles. What's wrong on each
 // listing and how to fix each issue are withheld server-side until paid,
 // so they are never in the page for anyone to un-blur.
+// v2 follows the same rule: sections 1-7 and 9-11 are the free report;
+// section 8's issue descriptions and steps are the paid part.
 function lockReport(r) {
+  if (r.version === 2) {
+    return {
+      ...r,
+      locked: true,
+      // Anything that isn't a clean match keeps only its platform and status.
+      listings: (r.listings || []).map((l) =>
+        l.status === 'match' ? l : { platform: l.platform, status: l.status, locked: true }),
+      issues: (r.issues || []).map((i) => ({ severity: i.severity, title: i.title, locked: true })),
+    };
+  }
   return {
     ...r,
     locked: true,
@@ -230,8 +290,40 @@ async function handleLead(request, env) {
   return Response.json({ ok: true });
 }
 
+// The assistants the free report asks (site copy: 5 questions x 5 = 25 searches).
+const REPORT_ASSISTANTS = ['ChatGPT', 'Claude', 'Gemini', 'Google AI Mode', 'Perplexity'];
+const TOWN_RE = /^[\p{L}\p{M}0-9 .,'’-]{1,60}$/u;
+
+// The exact questions the scanner would ask for this trade and town, built
+// from the scanner's own templates. Pure function of the query: no DB, no keys.
+function handleQuestions(url) {
+  const p = url.searchParams;
+  const trade = normalizeTrade(String(p.get('trade') || '').slice(0, 40));
+  const town = String(p.get('town') || '').trim().replace(/\s+/g, ' ').replace(/,\s*[A-Za-z]{2}$/, '');
+  const zip = String(p.get('zip') || '').trim();
+  const state = String(p.get('state') || 'NY').trim();
+  const bad = (error) => Response.json({ ok: false, error }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
+  if (!trade) return bad('Unknown trade.');
+  if (!TOWN_RE.test(town)) return bad('Please enter your town.');
+  if (zip && !/^\d{5}$/.test(zip)) return bad('ZIP must be 5 digits.');
+  if (!/^[A-Za-z]{2}$/.test(state)) return bad('State must be a 2-letter code.');
+  const questions = buildQuestions({ trade, town, zip, state }).map(({ id, intent, text }) => ({ id, intent, text }));
+  return Response.json({
+    ok: true,
+    trade,
+    questions,
+    assistants: REPORT_ASSISTANTS,
+    searches: questions.length * REPORT_ASSISTANTS.length,
+  }, { headers: { 'Cache-Control': 'public, max-age=300' } });
+}
+
 // Free-report request from the landing page form. Accepts JSON (fetch) or a
-// plain form post (no-JS fallback). Writes one row to report_requests.
+// plain form post (no-JS fallback). Email is optional: the page asks for it
+// only after the owner has seen the questions.
+//   {business_name, trade, town, zip, state?, website?, phone?, email?} -> new row, returns {ok, id}
+//   {request_id, email, ...same fields}                                  -> attaches the email to that row;
+//     if the attach can't be done (row missing, first save failed) and the business fields are present,
+//     saves a fresh row with the email instead, so the email is never lost.
 async function handleReportRequest(request, url, env) {
   const ct = request.headers.get('Content-Type') || '';
   const isJson = ct.includes('application/json');
@@ -248,35 +340,62 @@ async function handleReportRequest(request, url, env) {
       : Response.redirect(new URL('/?request=error#request', url).toString(), 303);
   }
 
+  if (!data || typeof data !== 'object') data = {};
   const clean = (v, max) => String(v ?? '').trim().slice(0, max);
+  const fail = (status, error) => (isJson
+    ? Response.json({ ok: false, error }, { status })
+    : Response.redirect(new URL('/?request=error#request', url).toString(), 303));
+  const okResponse = (id) => (isJson
+    ? Response.json({ ok: true, id: id ?? null })
+    : Response.redirect(new URL('/?request=ok#request', url).toString(), 303));
+
+  // Honeypot: real people never fill the hidden field.
+  if (clean(data.company_url, 10)) return okResponse(null);
+
+  const email = clean(data.email, 160).toLowerCase();
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+  if (email && !emailOk) return fail(422, 'Please enter a valid email.');
+
+  // Step 2: attach an email to the request saved in step 1.
+  const requestId = clean(data.request_id, 36).toLowerCase();
+  if (requestId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(requestId)) return fail(422, 'Bad request');
+    if (!emailOk) return fail(422, 'Please enter a valid email.');
+    try {
+      if (await attachReportRequestEmail(env, { id: requestId, email })) return okResponse(requestId);
+    } catch (e) {
+      console.error('[request] email attach failed', e);
+    }
+    // Couldn't attach: fall through and save a fresh row with the email, if we have the details.
+  }
+
+  const rawTrade = clean(data.trade, 40);
+  const zip = clean(data.zip, 10);
+  const state = clean(data.state, 2).toUpperCase() || 'NY';
   const req = {
+    id: crypto.randomUUID(),
     businessName: clean(data.business_name, 120),
-    town: clean(data.town, 80),
-    email: clean(data.email, 160).toLowerCase(),
-    trade: clean(data.trade, 40) || null,
+    town: clean(data.town, 60),
+    zip: zip || null,
+    state: /^[A-Z]{2}$/.test(state) ? state : 'NY',
+    email: emailOk ? email : null,
+    trade: normalizeTrade(rawTrade) || rawTrade || null,
     website: clean(data.website, 160) || null,
+    phone: clean(data.phone, 30) || null,
     userAgent: request.headers.get('User-Agent') || null,
   };
-  // Honeypot: real people never fill the hidden field.
-  if (clean(data.company_url, 10)) {
-    return isJson ? Response.json({ ok: true }) : Response.redirect(new URL('/?request=ok#request', url).toString(), 303);
+  if (!req.businessName || !req.town) {
+    return fail(422, requestId ? 'Could not save your email. Try again.' : 'Please fill in your business name and town.');
   }
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(req.email);
-  if (!req.businessName || !req.town || !emailOk) {
-    return isJson
-      ? Response.json({ ok: false, error: 'Please fill in business name, town, and a valid email.' }, { status: 422 })
-      : Response.redirect(new URL('/?request=error#request', url).toString(), 303);
-  }
+  if (zip && !/^\d{5}$/.test(zip)) return fail(422, 'Please enter a 5-digit ZIP.');
 
   try {
     await recordReportRequest(env, req);
   } catch (e) {
     console.error('[request] write failed', e);
-    return isJson
-      ? Response.json({ ok: false, error: 'Could not save your request.' }, { status: 500 })
-      : Response.redirect(new URL('/?request=error#request', url).toString(), 303);
+    return fail(500, 'Could not save your request.');
   }
-  return isJson ? Response.json({ ok: true }) : Response.redirect(new URL('/?request=ok#request', url).toString(), 303);
+  return okResponse(req.id);
 }
 
 // One-click unsubscribe. Every way in writes the same suppression row:
@@ -407,3 +526,5 @@ async function handleStripeWebhook(request, env) {
 
   return Response.json({ received: true });
 }
+
+// Admin routes (/admin, /api/admin/*) live in src/admin/: routes.js (auth, pages), api.js (scan API).

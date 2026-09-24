@@ -1,0 +1,31 @@
+{
+  "id": "3c5e9a1b-7d2f-4b8e-a6c0-9f1e2d3b4a5c",
+  "model": "sonar",
+  "created": 1790283675,
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "Suds & Bubbles Laundromat and Clean Spin Laundry Center are the laundromats most often recommended in North Babylon, NY [1][2]."
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 9,
+    "completion_tokens": 31,
+    "total_tokens": 40,
+    "search_context_size": "low",
+    "cost": { "input_tokens_cost": 0.0, "output_tokens_cost": 0.0, "request_cost": 0.005, "total_cost": 0.005 }
+  },
+  "citations": [
+    "https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY",
+    "https://www.yellowpages.com/north-babylon-ny/laundromats"
+  ],
+  "search_results": [
+    { "title": "THE BEST 10 Laundromats in NORTH BABYLON, NY - Yelp", "url": "https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY", "date": "2026-08-30" },
+    { "title": "Laundromats in North Babylon, NY - YellowPages", "url": "https://www.yellowpages.com/north-babylon-ny/laundromats", "date": null }
+  ]
+}

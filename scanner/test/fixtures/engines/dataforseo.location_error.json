@@ -1,0 +1,22 @@
+{
+  "version": "0.1.20260915",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.0412 sec.",
+  "cost": 0,
+  "tasks_count": 1,
+  "tasks_error": 1,
+  "tasks": [
+    {
+      "id": "09241701-1535-0613-0000-1a2b3c4d5e6f",
+      "status_code": 40501,
+      "status_message": "Invalid Field: 'location_name'.",
+      "time": "0 sec.",
+      "cost": 0,
+      "result_count": 0,
+      "path": ["v3", "serp", "google", "ai_mode", "live", "advanced"],
+      "data": { "api": "serp", "function": "live", "se": "google", "se_type": "ai_mode", "keyword": "24 hour laundromat near Deer Park NY", "location_name": "Nowhere Hamlet,New York,United States", "language_code": "en", "device": "mobile" },
+      "result": null
+    }
+  ]
+}

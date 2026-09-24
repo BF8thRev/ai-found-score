@@ -1,0 +1,84 @@
+{
+  "id": "resp_68d4a1f2c9b88190a3e1f0c2d5b7e6a40b1c2d3e4f5a6b7c",
+  "object": "response",
+  "created_at": 1790283660,
+  "status": "completed",
+  "error": null,
+  "incomplete_details": null,
+  "model": "gpt-5-mini-2025-08-07",
+  "output": [
+    {
+      "id": "rs_68d4a1f3a1c48190b2d4e6f8a0c2e4f6",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "ws_68d4a1f4b2d58190c3e5f7a9b1d3f5a7",
+      "type": "web_search_call",
+      "status": "completed",
+      "action": {
+        "type": "search",
+        "query": "best laundromat North Babylon NY",
+        "queries": ["best laundromat North Babylon NY"],
+        "sources": [
+          { "type": "url", "url": "https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY" },
+          { "type": "url", "url": "https://www.yellowpages.com/north-babylon-ny/laundromats" },
+          { "type": "url", "url": "https://sudsandbubbleslaundry.example.com/" }
+        ]
+      }
+    },
+    {
+      "id": "msg_68d4a1f9c3e68190d4f6a8b0c2e4a6b8",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Here are a few well-reviewed laundromats in and around North Babylon, NY:\n\n1. **Suds & Bubbles Laundromat** – Clean, bright store with large-capacity washers and wash-and-fold service. ([yelp.com](https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY&utm_source=openai))\n2. **Clean Spin Laundry Center** – Open late, card-operated machines and free Wi-Fi. ([yellowpages.com](https://www.yellowpages.com/north-babylon-ny/laundromats?utm_source=openai))\n3. **Bayview Wash House** – Offers pickup and delivery. ([sudsandbubbleslaundry.example.com](https://sudsandbubbleslaundry.example.com/?utm_source=openai))\n\nHours and prices change, so call ahead before you go.",
+          "annotations": [
+            {
+              "type": "url_citation",
+              "start_index": 190,
+              "end_index": 299,
+              "title": "THE BEST 10 Laundromats in NORTH BABYLON, NY - Yelp",
+              "url": "https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY&utm_source=openai"
+            },
+            {
+              "type": "url_citation",
+              "start_index": 381,
+              "end_index": 474,
+              "title": "Laundromats in North Babylon, NY - YellowPages",
+              "url": "https://www.yellowpages.com/north-babylon-ny/laundromats?utm_source=openai"
+            },
+            {
+              "type": "url_citation",
+              "start_index": 530,
+              "end_index": 620,
+              "title": "Suds & Bubbles Laundromat",
+              "url": "https://sudsandbubbleslaundry.example.com/?utm_source=openai"
+            }
+          ],
+          "logprobs": []
+        }
+      ]
+    }
+  ],
+  "parallel_tool_calls": true,
+  "reasoning": { "effort": "low", "summary": null },
+  "store": false,
+  "tools": [
+    {
+      "type": "web_search",
+      "search_context_size": "medium",
+      "user_location": { "type": "approximate", "city": "North Babylon", "country": "US", "region": "New York", "timezone": null }
+    }
+  ],
+  "usage": {
+    "input_tokens": 11842,
+    "input_tokens_details": { "cached_tokens": 0 },
+    "output_tokens": 1316,
+    "output_tokens_details": { "reasoning_tokens": 896 },
+    "total_tokens": 13158
+  }
+}

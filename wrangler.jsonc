@@ -4,6 +4,12 @@
   "compatibility_date": "2026-09-01",
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
   "dev": { "port": 8787 },
+  // Background scans (src/scan-workflow.js). One instance per scan; POST /api/admin/scan creates it.
+  // Needs Workers Paid in production: a scan makes ~60-110 subrequests and needs more than the
+  // Free plan's 10 ms CPU per step.
+  "workflows": [
+    { "name": "scan-workflow", "binding": "SCAN_WORKFLOW", "class_name": "ScanWorkflow" }
+  ],
   // Plain vars live here: `wrangler deploy` replaces dashboard Text vars with
   // this block. Secrets (SUPABASE_ANON_KEY, STRIPE_WEBHOOK_SECRET) stay in the
   // dashboard and survive deploys.

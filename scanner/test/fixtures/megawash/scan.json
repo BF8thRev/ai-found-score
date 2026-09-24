@@ -1,0 +1,227 @@
+{
+  "_note": "RECONSTRUCTED FROM DEMO EXCERPTS. The Mega Wash & Dry demo report (claude.ai/artifact/UQLqZGMkQ9oXp2h4fX66hM) quotes only excerpts. Each answer text here is the demo's quoted excerpt plus the businesses the demo says were also named / listed first, in the stated order, appended as \"Also named:\" / \"Named:\" / \"Map results:\" lines. Citations are the demo's cited URLs; where the demo gives only a site name, the URL path is a plausible reconstruction (Yelp search URL). One Hour Laundry's own site (shown as a Google source) is omitted because the demo gives no domain. Not raw engine output.",
+  "id": "megawash-demo-2026-09-24",
+  "reportId": "megawash-demo",
+  "generatedAt": "2026-09-24T17:10:00-04:00",
+  "questions": [
+    {
+      "id": "q1",
+      "intent": "best",
+      "text": "What's the best laundromat in North Babylon, NY?"
+    },
+    {
+      "id": "q2",
+      "intent": "urgent",
+      "text": "24 hour laundromat near Deer Park NY"
+    },
+    {
+      "id": "q3",
+      "intent": "job",
+      "text": "Who does laundry pickup and delivery in North Babylon NY?"
+    },
+    {
+      "id": "q4",
+      "intent": "trust",
+      "text": "Laundromat with big washers for comforters near Deer Park, NY"
+    },
+    {
+      "id": "q5",
+      "intent": "price",
+      "text": "Cheapest wash and fold near North Babylon NY"
+    }
+  ],
+  "engines": [
+    "perplexity",
+    "google_ai_mode"
+  ],
+  "method": {
+    "window": "5:01–5:10pm ET",
+    "engines": {
+      "perplexity": {
+        "api": "perplexity-web (demo, logged out)",
+        "model": null,
+        "loggedIn": false
+      },
+      "google_ai_mode": {
+        "api": "google-ai-mode-web (demo, signed in)",
+        "model": null,
+        "loggedIn": true
+      }
+    }
+  },
+  "calls": [
+    {
+      "engine": "perplexity",
+      "questionId": "q1",
+      "run": 1,
+      "ok": true,
+      "text": "Park Avenue Laundromat at 761 Deer Park Ave, North Babylon, NY 11703, and Island Laundromat at 1137 Deer Park Ave Ste 4, North Babylon, NY 11703 are commonly listed options in the area",
+      "citations": [
+        {
+          "url": "https://www.yellowpages.com/babylon-ny/laundromats",
+          "domain": "yellowpages.com"
+        }
+      ],
+      "askedAt": "2026-09-24T17:01:10-04:00",
+      "model": "perplexity-web",
+      "error": null
+    },
+    {
+      "engine": "perplexity",
+      "questionId": "q2",
+      "run": 1,
+      "ok": true,
+      "text": "Mega Wash & Dry in Deer Park (North Babylon border) is advertised as a 24-hour laundromat near Deer Park.",
+      "citations": [
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        },
+        {
+          "url": "https://www.superpages.com/deer-park-ny/laundromats",
+          "domain": "superpages.com"
+        }
+      ],
+      "askedAt": "2026-09-24T17:01:40-04:00",
+      "model": "perplexity-web",
+      "error": null
+    },
+    {
+      "engine": "perplexity",
+      "questionId": "q3",
+      "run": 1,
+      "ok": true,
+      "text": "The most local-looking option is Mega Wash & Dry at 1502 Deer Park Ave, which says it serves North Babylon from the Deer Park border and offers wash/dry/fold pickup and return delivery.\n\nAlso named: Luvwash by Laundry Nanny, WashUp Laundry.",
+      "citations": [
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        },
+        {
+          "url": "https://laundrynanny.com/",
+          "domain": "laundrynanny.com"
+        },
+        {
+          "url": "https://spinsudz.com/",
+          "domain": "spinsudz.com"
+        },
+        {
+          "url": "https://poplin.co/",
+          "domain": "poplin.co"
+        },
+        {
+          "url": "https://www.hamperapp.com/",
+          "domain": "hamperapp.com"
+        },
+        {
+          "url": "https://namilaundry.com/",
+          "domain": "namilaundry.com"
+        }
+      ],
+      "askedAt": "2026-09-24T17:02:05-04:00",
+      "model": "perplexity-web",
+      "error": null
+    },
+    {
+      "engine": "perplexity",
+      "questionId": "q4",
+      "run": 1,
+      "ok": true,
+      "text": "For a comforter, I'd start with Laundry Express or Mega Wash & Dry—both are very close to Deer Park, and Laundry Express specifically has plentiful newer machines according to recent customer reviews.\n\nMap results: Straight Path Laundromat, Colonial Springs Laundromat, One Hour Laundry, 730 Grand Laundromat Deer Park, Clean One City.",
+      "citations": [],
+      "askedAt": "2026-09-24T17:02:30-04:00",
+      "model": "perplexity-web",
+      "error": null
+    },
+    {
+      "engine": "perplexity",
+      "questionId": "q5",
+      "run": 1,
+      "ok": true,
+      "text": "The cheapest wash-and-fold option near North Babylon isn't clear from publicly listed prices—most nearby laundromats do not publish a per-pound drop-off rate.\n\nNamed: One Hour Laundry, The Best Around Laundromat, Check Your Pockets Laundromat, Wash N Go Laundromat, Azartin Laundry Care.",
+      "citations": [],
+      "askedAt": "2026-09-24T17:02:55-04:00",
+      "model": "perplexity-web",
+      "error": null
+    },
+    {
+      "engine": "google_ai_mode",
+      "questionId": "q1",
+      "run": 1,
+      "ok": true,
+      "text": "the top overall pick is One Hour Laundry due to its unique high-tech sanitizing system and stellar community reviews. However, if you need a spot that never closes, Mega Wash & Dry is a massive, amenity-packed 24/7 alternative right on the border.\n\nAlso named: Park Avenue Laundry, The Best Around Laundromat.",
+      "citations": [
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        },
+        {
+          "url": "https://www.yelp.com/search?find_desc=Laundromat&find_loc=North+Babylon%2C+NY",
+          "domain": "yelp.com"
+        }
+      ],
+      "askedAt": "2026-09-24T17:05:20-04:00",
+      "model": "google-ai-mode-web",
+      "error": null
+    },
+    {
+      "engine": "google_ai_mode",
+      "questionId": "q2",
+      "run": 1,
+      "ok": true,
+      "text": "The closest and top-rated 24-hour option right near Deer Park is Mega Wash & Dry, located at 1502 Deer Park Ave, North Babylon, NY 11703\n\nAlso named: 24/7 Laundromat (247 Bay Shore Rd), Laundro Lux.",
+      "citations": [
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        }
+      ],
+      "askedAt": "2026-09-24T17:06:30-04:00",
+      "model": "google-ai-mode-web",
+      "error": null
+    },
+    {
+      "engine": "google_ai_mode",
+      "questionId": "q3",
+      "run": 1,
+      "ok": true,
+      "text": "One Hour Laundry: generally $1.50 per pound with a 20 lb. minimum plus a pickup/delivery fee.\n\nMega Wash & Dry: Their delivery service is charged at $2.25/lb with a 20 lb. minimum.\n\nAlso named: Poplin, The Best Around Laundromat.",
+      "citations": [
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        }
+      ],
+      "askedAt": "2026-09-24T17:07:45-04:00",
+      "model": "google-ai-mode-web",
+      "error": null
+    },
+    {
+      "engine": "google_ai_mode",
+      "questionId": "q4",
+      "run": 1,
+      "ok": true,
+      "text": "Mega Wash & Dry: It is arguably your best bet for massive bedding because it features high-speed washers ranging all the way up to 80 lb machines built specifically for comforters.\n\nAlso named: 24/7 Laundromat (Deer Park).",
+      "citations": [
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        }
+      ],
+      "askedAt": "2026-09-24T17:08:50-04:00",
+      "model": "google-ai-mode-web",
+      "error": null
+    },
+    {
+      "engine": "google_ai_mode",
+      "questionId": "q5",
+      "run": 1,
+      "ok": true,
+      "text": "One Hour Laundry and Mega Wash & Dry offer the most affordable and highly-rated drop-off wash and fold services right in the North Babylon, NY area.",
+      "citations": [],
+      "askedAt": "2026-09-24T17:09:55-04:00",
+      "model": "google-ai-mode-web",
+      "error": null
+    }
+  ]
+}

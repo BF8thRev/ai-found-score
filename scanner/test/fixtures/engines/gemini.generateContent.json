@@ -1,0 +1,63 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "If you're looking for a laundromat in North Babylon, NY, a few names come up often:\n\n*   **Suds & Bubbles Laundromat** is known for its clean store and large washers that fit comforters.\n*   **Clean Spin Laundry Center** is open late and offers wash-and-fold.\n*   **Bayview Wash House** offers pickup and delivery in the area.\n\nIt is a good idea to check recent reviews and call ahead to confirm hours."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0,
+      "groundingMetadata": {
+        "searchEntryPoint": {
+          "renderedContent": "<style>.container{}</style><div class=\"container\"><a class=\"chip\" href=\"https://www.google.com/search?q=best+laundromat+North+Babylon+NY\">best laundromat North Babylon NY</a></div>"
+        },
+        "groundingChunks": [
+          {
+            "web": {
+              "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHbX1aYp0n3fQ7Xk2cVt9",
+              "title": "yelp.com"
+            }
+          },
+          {
+            "web": {
+              "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGm4Lr8Qe2Wd5Hn6Ja1Pz",
+              "title": "yellowpages.com"
+            }
+          },
+          {
+            "web": {
+              "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFk7Tx3Vb9Nc2Mq8Ls4Rd",
+              "title": "sudsandbubbleslaundry.example.com",
+              "domain": "sudsandbubbleslaundry.example.com"
+            }
+          }
+        ],
+        "groundingSupports": [
+          {
+            "segment": { "startIndex": 86, "endIndex": 186, "text": "*   **Suds & Bubbles Laundromat** is known for its clean store and large washers that fit comforters." },
+            "groundingChunkIndices": [0, 2]
+          },
+          {
+            "segment": { "startIndex": 187, "endIndex": 259, "text": "*   **Clean Spin Laundry Center** is open late and offers wash-and-fold." },
+            "groundingChunkIndices": [1]
+          }
+        ],
+        "webSearchQueries": ["best laundromat North Babylon NY"]
+      }
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 12,
+    "candidatesTokenCount": 118,
+    "totalTokenCount": 1402,
+    "toolUsePromptTokenCount": 212,
+    "thoughtsTokenCount": 1060,
+    "promptTokensDetails": [{ "modality": "TEXT", "tokenCount": 12 }]
+  },
+  "modelVersion": "gemini-3.8-flash",
+  "responseId": "q2HUaOa1FpSk1MkP3J7q8Ao"
+}

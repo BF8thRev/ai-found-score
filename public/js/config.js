@@ -4,10 +4,11 @@
 // https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}
 
 const STRIPE_LINKS = {
-  snapshot: '#',       // Snapshot — $29 one-time (unlocks the report)
-  before_after: '#',   // Before & After — $59 one-time
+  // Keys are stable ids (analytics, webhook TIER_BY_CENTS); only the labels changed.
+  snapshot: '#',       // Fix steps — $29 one-time (unlocks the fix steps)
+  before_after: '#',   // Fix it and re-check — $59 one-time
   full_year: '#',       // Full Year — $69 one-time
-  listing_fix: '#',     // Listing-fix upsell — $199 one-time
+  listing_fix: '#',     // Full listing build — $199 one-time
 };
 
 // Attach buy links to every [data-tier] element under root. On a report

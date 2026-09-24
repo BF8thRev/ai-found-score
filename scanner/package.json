@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Marks scanner/ as ES modules for node --test and the CLI. No dependencies."
+}

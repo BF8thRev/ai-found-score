@@ -1,0 +1,235 @@
+{
+  "_note": "Recorded extraction proposals for scan.json (keyed engine:questionId:run), so the test runs offline. Hand-written to mirror what the extraction model returns, including two deliberate faults the code must catch: a wrong pos for \"WashUp Laundry\" (perplexity:q3) and a hallucinated \"Suds City Laundromat\" (perplexity:q5). RECONSTRUCTED FROM DEMO EXCERPTS.",
+  "proposals": {
+    "perplexity:q1:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "Park Avenue Laundromat",
+          "pos": 0
+        },
+        {
+          "name": "Island Laundromat",
+          "pos": 74
+        }
+      ],
+      "ownerFacts": []
+    },
+    "perplexity:q2:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 0
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "hours",
+          "quote": "advertised as a 24-hour laundromat"
+        }
+      ]
+    },
+    "perplexity:q3:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 33
+        },
+        {
+          "name": "Luvwash by Laundry Nanny",
+          "pos": 199
+        },
+        {
+          "name": "WashUp Laundry",
+          "pos": 232
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "address",
+          "quote": "1502 Deer Park Ave"
+        }
+      ]
+    },
+    "perplexity:q4:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "Laundry Express",
+          "pos": 32
+        },
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 51
+        },
+        {
+          "name": "Straight Path Laundromat",
+          "pos": 215
+        },
+        {
+          "name": "Colonial Springs Laundromat",
+          "pos": 241
+        },
+        {
+          "name": "One Hour Laundry",
+          "pos": 270
+        },
+        {
+          "name": "730 Grand Laundromat Deer Park",
+          "pos": 288
+        },
+        {
+          "name": "Clean One City",
+          "pos": 320
+        }
+      ],
+      "ownerFacts": []
+    },
+    "perplexity:q5:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "One Hour Laundry",
+          "pos": 167
+        },
+        {
+          "name": "The Best Around Laundromat",
+          "pos": 185
+        },
+        {
+          "name": "Check Your Pockets Laundromat",
+          "pos": 213
+        },
+        {
+          "name": "Wash N Go Laundromat",
+          "pos": 244
+        },
+        {
+          "name": "Azartin Laundry Care",
+          "pos": 266
+        },
+        {
+          "name": "Suds City Laundromat",
+          "pos": 40
+        }
+      ],
+      "ownerFacts": []
+    },
+    "google_ai_mode:q1:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "One Hour Laundry",
+          "pos": 24
+        },
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 165
+        },
+        {
+          "name": "Park Avenue Laundry",
+          "pos": 261
+        },
+        {
+          "name": "The Best Around Laundromat",
+          "pos": 282
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "hours",
+          "quote": "amenity-packed 24/7 alternative"
+        }
+      ]
+    },
+    "google_ai_mode:q2:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 65
+        },
+        {
+          "name": "24/7 Laundromat",
+          "pos": 150
+        },
+        {
+          "name": "Laundro Lux",
+          "pos": 186
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "hours",
+          "quote": "top-rated 24-hour option"
+        },
+        {
+          "field": "address",
+          "quote": "1502 Deer Park Ave, North Babylon, NY 11703"
+        }
+      ]
+    },
+    "google_ai_mode:q3:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "One Hour Laundry",
+          "pos": 0
+        },
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 95
+        },
+        {
+          "name": "Poplin",
+          "pos": 194
+        },
+        {
+          "name": "The Best Around Laundromat",
+          "pos": 202
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "price",
+          "quote": "$2.25/lb with a 20 lb. minimum"
+        }
+      ]
+    },
+    "google_ai_mode:q4:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 0
+        },
+        {
+          "name": "24/7 Laundromat",
+          "pos": 194
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "services",
+          "quote": "washers ranging all the way up to 80 lb machines"
+        }
+      ]
+    },
+    "google_ai_mode:q5:1": {
+      "model": "recorded",
+      "businesses": [
+        {
+          "name": "One Hour Laundry",
+          "pos": 0
+        },
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 21
+        }
+      ],
+      "ownerFacts": []
+    }
+  }
+}

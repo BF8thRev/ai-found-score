@@ -1,0 +1,106 @@
+{
+  "version": "0.1.20260915",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "7.4213 sec.",
+  "cost": 0.004,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "09241701-1535-0613-0000-7c2f5a8e3b1d",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "7.3108 sec.",
+      "cost": 0.004,
+      "result_count": 1,
+      "path": ["v3", "serp", "google", "ai_mode", "live", "advanced"],
+      "data": {
+        "api": "serp",
+        "function": "live",
+        "se": "google",
+        "se_type": "ai_mode",
+        "keyword": "What's the best laundromat in North Babylon, NY?",
+        "location_name": "North Babylon,New York,United States",
+        "language_code": "en",
+        "device": "mobile",
+        "os": "android"
+      },
+      "result": [
+        {
+          "keyword": "What's the best laundromat in North Babylon, NY?",
+          "type": "ai_mode",
+          "se_domain": "google.com",
+          "location_code": 1023191,
+          "language_code": "en",
+          "check_url": "https://www.google.com/search?q=What%27s+the+best+laundromat+in+North+Babylon%2C+NY%3F&udm=50&hl=en&gl=US",
+          "datetime": "2026-09-24 21:01:12 +00:00",
+          "spell": null,
+          "refinement_chips": null,
+          "item_types": ["ai_overview"],
+          "se_results_count": 0,
+          "items_count": 1,
+          "items": [
+            {
+              "type": "ai_overview",
+              "rank_group": 1,
+              "rank_absolute": 1,
+              "page": 1,
+              "position": "left",
+              "xpath": "/html[1]/body[1]/div[3]/div[1]",
+              "markdown": "Top-rated laundromats in North Babylon, NY include **Suds & Bubbles Laundromat**, **Clean Spin Laundry Center**, and **Bayview Wash House**.\n\n*   **Suds & Bubbles Laundromat**: Large washers for comforters and a wash-and-fold service.\n*   **Clean Spin Laundry Center**: Open late seven days a week.\n*   **Bayview Wash House**: Pickup and delivery available.",
+              "items": [
+                {
+                  "type": "ai_overview_element",
+                  "position": "left",
+                  "title": null,
+                  "text": "Top-rated laundromats in North Babylon, NY include Suds & Bubbles Laundromat, Clean Spin Laundry Center, and Bayview Wash House.",
+                  "markdown": "Top-rated laundromats in North Babylon, NY include **Suds & Bubbles Laundromat**, **Clean Spin Laundry Center**, and **Bayview Wash House**.",
+                  "links": null,
+                  "images": null,
+                  "references": [
+                    {
+                      "type": "ai_overview_reference",
+                      "source": "Yelp",
+                      "domain": "www.yelp.com",
+                      "url": "https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY",
+                      "title": "THE BEST 10 Laundromats in NORTH BABYLON, NY - Yelp",
+                      "text": "Top 10 Best Laundromats in North Babylon, NY..."
+                    }
+                  ]
+                }
+              ],
+              "references": [
+                {
+                  "type": "ai_overview_reference",
+                  "source": "Yelp",
+                  "domain": "www.yelp.com",
+                  "url": "https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY",
+                  "title": "THE BEST 10 Laundromats in NORTH BABYLON, NY - Yelp",
+                  "text": "Top 10 Best Laundromats in North Babylon, NY..."
+                },
+                {
+                  "type": "ai_overview_reference",
+                  "source": "YellowPages",
+                  "domain": "www.yellowpages.com",
+                  "url": "https://www.yellowpages.com/north-babylon-ny/laundromats",
+                  "title": "Laundromats in North Babylon, NY - YellowPages",
+                  "text": "Laundromats in North Babylon on YP.com..."
+                },
+                {
+                  "type": "ai_overview_reference",
+                  "source": "Suds & Bubbles Laundromat",
+                  "domain": "sudsandbubbleslaundry.example.com",
+                  "url": "https://sudsandbubbleslaundry.example.com/services",
+                  "title": "Services - Suds & Bubbles Laundromat",
+                  "text": "Wash and fold, comforters..."
+                }
+              ],
+              "rectangle": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

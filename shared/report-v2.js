@@ -1,0 +1,382 @@
+// Report JSON v2 — shared, pure helpers.
+//
+// Used by the scanner (publish gate), the Worker (serve gate) and tests.
+// Runtime-agnostic ES module: no imports, no Node built-ins, no globals.
+// See docs/BUILD_PLAN.md ("Report data model v2", "Guardrails enforced in code")
+// and docs/CONTRACT_V2.md ("Shared report module").
+
+export const ENGINE_ORDER = ['chatgpt', 'google_ai_mode', 'perplexity', 'gemini', 'claude'];
+
+export const ENGINE_NAMES = {
+  chatgpt: 'ChatGPT',
+  gemini: 'Gemini',
+  google_ai_mode: 'Google AI Mode',
+  perplexity: 'Perplexity',
+  claude: 'Claude',
+};
+
+export const BANNED_WORDS = ['disconnected', 'minutes', 'guarantee placement', 'more customers', 'rank'];
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Whole-word, case-insensitive. A letter/digit on either side blocks a match, so
+// "rank" never hits "Frank" or "cranky". Simple inflections of single words are
+// caught too ("ranks", "ranked", "ranking").
+const BANNED_RES = BANNED_WORDS.map((w) => {
+  const body = w.trim().split(/\s+/).map(escapeRe).join('\\s+');
+  const suffix = /\s/.test(w.trim()) ? '' : '(?:s|ed|ing|ings)?';
+  return { word: w, re: new RegExp(`(?<![\\p{L}\\p{N}])${body}${suffix}(?![\\p{L}\\p{N}])`, 'giu') };
+});
+
+/** lintText(str) → [{ word, match, index }] for every banned-word hit (URLs inside str are skipped). */
+export function lintText(str) {
+  if (typeof str !== 'string' || !str) return [];
+  // URLs are data, not copy: blank them out (same length, so indexes still line up).
+  str = str.replace(/\bhttps?:\/\/[^\s"'<>)]+/gi, (u) => ' '.repeat(u.length));
+  const hits = [];
+  for (const { word, re } of BANNED_RES) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(str))) hits.push({ word, match: m[0], index: m.index });
+  }
+  return hits.sort((a, b) => a.index - b.index);
+}
+
+// Parts of the report that are verbatim data (AI output, names found in it,
+// URLs, values read from pages), not our copy. They are skipped by the lint.
+const LINT_SKIP_TOP = new Set(['answers', 'entities', 'business', 'baseline', 'id', 'generatedAt']);
+const LINT_SKIP_KEYS = new Set([
+  'text', 'url', 'urls', 'domain', 'aiSays', 'sourceSays', 'name', 'aliases', 'topListed',
+  'fields', 'answerId', 'answerIds', 'citedIn', 'entityId', 'questionId', 'id', 'askedAt',
+  'model', 'api', 'error', 'checkError', 'rule', 'kind', 'status', 'severity', 'field', 'intent', 'engine', 'ownerMatch', 'sourceFrom',
+]);
+
+function lintWalk(value, path, out, data = []) {
+  if (typeof value === 'string') {
+    for (const h of lintText(maskData(value, data))) out.push({ path, ...h, match: value.substr(h.index, h.match.length) });
+  } else if (Array.isArray(value)) {
+    value.forEach((v, i) => lintWalk(v, `${path}[${i}]`, out, data));
+  } else if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      if (LINT_SKIP_KEYS.has(k)) continue;
+      lintWalk(v, path ? `${path}.${k}` : k, out, data);
+    }
+  }
+}
+
+// Verbatim data that our templates interpolate into copy (issue descriptions quote what
+// AI said and name competitors). Blanked out before linting so an AI quote like
+// "within 30 minutes" can't block a report, while the template words around it are still linted.
+function dataStrings(report) {
+  const out = new Set();
+  const add = (v) => { if (typeof v === 'string' && v.trim().length >= 2) out.add(v); };
+  for (const f of report.aiFacts || []) { add(f && f.aiSays); add(f && f.sourceSays); }
+  for (const e of report.entities || []) { add(e && e.name); (e && e.aliases || []).forEach(add); }
+  for (const a of report.answers || []) for (const b of (a && a.businessesNamed) || []) add(b && b.name);
+  for (const s of report.sources || []) add(s && s.topListed);
+  for (const l of report.listings || []) for (const v of Object.values((l && l.fields) || {})) add(v);
+  // Longest first, so a name that contains a shorter one is masked whole.
+  return [...out].sort((a, b) => b.length - a.length);
+}
+
+function maskData(str, data) {
+  for (const d of data) if (str.includes(d)) str = str.split(d).join(' '.repeat(d.length));
+  return str;
+}
+
+/** lintReport(report) → [{ path, word, match, index }] over our own copy only. */
+export function lintReport(report) {
+  const out = [];
+  if (!report || typeof report !== 'object') return out;
+  const data = dataStrings(report);
+  for (const [k, v] of Object.entries(report)) {
+    if (LINT_SKIP_TOP.has(k)) continue;
+    // Questions are our copy: lint their text even though "text" is skipped elsewhere.
+    if (k === 'questions' && Array.isArray(v)) {
+      v.forEach((q, i) => { for (const h of lintText(q && q.text)) out.push({ path: `questions[${i}].text`, ...h }); });
+      continue;
+    }
+    lintWalk(v, k, out, data);
+  }
+  return out;
+}
+
+/** computeTotals(report) → { answers, namedYou, firstYou } recomputed from report.answers. */
+export function computeTotals(report) {
+  const answers = Array.isArray(report && report.answers) ? report.answers : [];
+  let namedYou = 0;
+  let firstYou = 0;
+  for (const a of answers) {
+    if (a && a.namedYou === true) namedYou++;
+    if (a && a.namedYou === true && a.namedYouFirst === true) firstYou++;
+  }
+  return { answers: answers.length, namedYou, firstYou };
+}
+
+const engineRank = (e) => {
+  const i = ENGINE_ORDER.indexOf(e);
+  return i === -1 ? ENGINE_ORDER.length : i;
+};
+
+function questionOrder(report) {
+  const m = new Map();
+  (report.questions || []).forEach((q, i) => m.set(q.id, i));
+  return (qid) => (m.has(qid) ? m.get(qid) : 1e6);
+}
+
+/** Distinct non-owner businesses named in one answer. */
+export function othersNamed(answer) {
+  const seen = new Set();
+  for (const b of answer.businessesNamed || []) {
+    if (b.isYou || b.ownerMatch === 'unsure') continue;
+    seen.add(b.entityId || `name:${b.name}`);
+  }
+  return seen.size;
+}
+
+/**
+ * pickHeadline(report) → { answerId, rule } | null
+ *   most_others_named_not_you: the answer that names the most other businesses
+ *     and not the owner. Ties: engine order chatgpt, google_ai_mode, perplexity,
+ *     gemini; then question order; then run.
+ *   best_named_you: every answer names the owner, so lead with the best one:
+ *     named first beats named, then most others named, then the same tie-breaks.
+ * Answers with an `unsure` owner match are never used as "didn't name you".
+ */
+export function pickHeadline(report) {
+  const answers = (report && report.answers) || [];
+  if (!answers.length) return null;
+  const qOrd = questionOrder(report);
+  const tie = (a, b) =>
+    engineRank(a.engine) - engineRank(b.engine) ||
+    qOrd(a.questionId) - qOrd(b.questionId) ||
+    (a.run || 0) - (b.run || 0);
+
+  const notYou = answers.filter((a) => !a.namedYou && a.ownerMatch !== 'unsure');
+  if (notYou.length) {
+    const best = [...notYou].sort((a, b) => othersNamed(b) - othersNamed(a) || tie(a, b))[0];
+    return { answerId: best.id, rule: 'most_others_named_not_you' };
+  }
+  const named = answers.filter((a) => a.namedYou);
+  const pool = named.length ? named : answers;
+  const best = [...pool].sort(
+    (a, b) =>
+      (b.namedYouFirst ? 1 : 0) - (a.namedYouFirst ? 1 : 0) || othersNamed(b) - othersNamed(a) || tie(a, b),
+  )[0];
+  return { answerId: best.id, rule: 'best_named_you' };
+}
+
+/**
+ * lostIntents(report) → intents (question order) the owner lost.
+ * An intent is lost when the owner was named in half or fewer of that intent's
+ * answers (named × 2 <= counted). Answers with an `unsure` owner match are left out of
+ * both sides (never counted as a miss or a win). An intent with no counted answers is
+ * neither lost nor won.
+ */
+export function intentResults(report) {
+  const answers = (report && report.answers) || [];
+  const questions = (report && report.questions) || [];
+  const intentOf = (a) => a.intent || (questions.find((q) => q.id === a.questionId) || {}).intent;
+  const ordered = questions.length ? questions.map((q) => q.intent) : answers.map(intentOf);
+  const out = [];
+  for (const intent of ordered) {
+    if (!intent || out.some((x) => x.intent === intent)) continue;
+    const counted = answers.filter((a) => intentOf(a) === intent && a.ownerMatch !== 'unsure');
+    const named = counted.filter((a) => a.namedYou === true).length;
+    out.push({ intent, answers: counted.length, named, lost: counted.length > 0 && named * 2 <= counted.length });
+  }
+  return out;
+}
+
+export function lostIntents(report) {
+  return intentResults(report).filter((x) => x.lost).map((x) => x.intent);
+}
+
+/**
+ * edgeState(report) → { state, flags, failedEngines }
+ *   state: 'zero' | 'all_named' | 'nobody_twice' | 'no_fixes' | 'normal' (the one that leads the page)
+ *   flags: every condition that holds, since several can hold at once
+ *          (e.g. zero + nobody_twice: lead with zero and also hide section 3).
+ */
+export function edgeState(report) {
+  const t = computeTotals(report);
+  const entities = (report && report.entities) || [];
+  const listings = (report && report.listings) || [];
+  const sources = (report && report.sources) || [];
+  const flags = {
+    zero: t.answers > 0 && t.namedYou === 0,
+    all_named: t.answers > 0 && t.namedYou === t.answers,
+    nobody_twice: !entities.some((e) => (e.named || 0) >= 2),
+    no_fixes:
+      !listings.some((l) => l && l.status === 'mismatch') && !sources.some((s) => s && s.youListed === false),
+  };
+  const state = ['zero', 'all_named', 'nobody_twice', 'no_fixes'].find((k) => flags[k]) || 'normal';
+  const failedEngines = [...(((report && report.method) || {}).enginesFailed || [])];
+  return { state, flags, failedEngines };
+}
+
+/**
+ * validateReport(report) → { ok, errors: string[] }
+ * The publish/serve gate. Each error names the exact field and what is wrong.
+ */
+export function validateReport(report) {
+  const errors = [];
+  const err = (m) => errors.push(m);
+  if (!report || typeof report !== 'object') return { ok: false, errors: ['report is not an object'] };
+  if (report.version !== 2) err(`version must be 2 (got ${JSON.stringify(report.version)})`);
+
+  const answers = Array.isArray(report.answers) ? report.answers : null;
+  if (!answers) err('answers must be an array');
+  else if (!answers.length) err('answers is empty: no engine returned a usable answer, so there is nothing to publish');
+  const byId = new Map();
+  const qIds = new Set((report.questions || []).map((q) => q.id));
+  if (!Array.isArray(report.questions)) err('questions must be an array');
+
+  (answers || []).forEach((a, i) => {
+    const at = `answers[${i}]${a && a.id ? ` (${a.id})` : ''}`;
+    if (!a || typeof a !== 'object') return err(`${at} is not an object`);
+    if (!a.id) err(`${at} has no id`);
+    else if (byId.has(a.id)) err(`${at} duplicate answer id "${a.id}"`);
+    else byId.set(a.id, a);
+    if (typeof a.text !== 'string') err(`${at}.text must be a string`);
+    if (!Number.isInteger(a.run) || a.run < 1) err(`${at}.run must be a positive integer (got ${JSON.stringify(a.run)})`);
+    if (!qIds.has(a.questionId)) err(`${at}.questionId "${a.questionId}" is not in questions`);
+    const text = typeof a.text === 'string' ? a.text : '';
+    let youCount = 0;
+    let earliest = null;
+    (a.businessesNamed || []).forEach((b, j) => {
+      const bt = `${at}.businessesNamed[${j}] "${b && b.name}"`;
+      if (!b || typeof b.name !== 'string' || !b.name) return err(`${bt} has no name`);
+      if (!Number.isInteger(b.pos) || b.pos < 0) return err(`${bt}.pos must be a non-negative integer (got ${b.pos})`);
+      const slice = text.slice(b.pos, b.pos + b.name.length);
+      if (slice !== b.name) err(`${bt} is not in the answer text at pos ${b.pos} (text there: ${JSON.stringify(slice)})`);
+      if (b.isYou) youCount++;
+      if (b.ownerMatch !== 'unsure' && (!earliest || b.pos < earliest.pos)) earliest = b;
+    });
+    if (a.namedYou && youCount === 0) err(`${at}.namedYou is true but no businessesNamed entry is the owner`);
+    if (!a.namedYou && youCount > 0) err(`${at}.namedYou is false but a businessesNamed entry is the owner`);
+    if (a.namedYouFirst && !a.namedYou) err(`${at}.namedYouFirst is true but namedYou is false`);
+    if (a.namedYouFirst && earliest && !earliest.isYou)
+      err(`${at}.namedYouFirst is true but the earliest business named is "${earliest.name}"`);
+    if (a.namedYou && !a.namedYouFirst && earliest && earliest.isYou)
+      err(`${at}.namedYouFirst is false but the owner is the earliest business named`);
+    (a.citations || []).forEach((c, j) => {
+      if (!c || typeof c.url !== 'string' || !c.domain) err(`${at}.citations[${j}] needs url and domain`);
+    });
+  });
+
+  // Every number traces to data.
+  const t = computeTotals(report);
+  const st = report.totals || {};
+  if (!report.totals) err('totals missing');
+  for (const k of ['answers', 'namedYou', 'firstYou']) {
+    if (st[k] !== t[k]) err(`totals.${k} is ${JSON.stringify(st[k])} but the answers show ${t[k]}`);
+  }
+
+  // The before/after strip prints these numbers: they must be plain counts.
+  if (report.baseline != null) {
+    const bt = report.baseline.totals;
+    if (!bt || typeof bt !== 'object') err('baseline.totals missing (baseline must be null or { generatedAt, totals })');
+    else for (const k of ['answers', 'namedYou', 'firstYou']) {
+      if (!Number.isInteger(bt[k]) || bt[k] < 0) err(`baseline.totals.${k} must be a non-negative integer (got ${JSON.stringify(bt[k])})`);
+    }
+  }
+
+  // Every competitor name has proof.
+  const entityIds = new Set();
+  (report.entities || []).forEach((e, i) => {
+    const et = `entities[${i}] "${e && e.name}"`;
+    if (!e || !e.id) return err(`${et} has no id`);
+    entityIds.add(e.id);
+    const names = [e.name, ...(e.aliases || [])].filter(Boolean);
+    const ids = Array.isArray(e.answerIds) ? e.answerIds : [];
+    const proving = [];
+    for (const aid of ids) {
+      const a = byId.get(aid);
+      if (!a) { err(`${et}.answerIds has "${aid}", which is not an answer`); continue; }
+      const hit = names.some((n) => (a.text || '').includes(n));
+      if (!hit) err(`${et}: answer ${aid} does not contain "${names.join('" or "')}" as written`);
+      else proving.push(aid);
+    }
+    // Recount from answers.businessesNamed.
+    const namedIn = [];
+    let firstIn = 0;
+    for (const a of answers || []) {
+      const mine = (a.businessesNamed || []).filter((b) => b.entityId === e.id);
+      if (!mine.length) continue;
+      namedIn.push(a.id);
+      const firstB = (a.businessesNamed || [])
+        .filter((b) => b.ownerMatch !== 'unsure')
+        .reduce((m, b) => (!m || b.pos < m.pos ? b : m), null);
+      if (firstB && firstB.entityId === e.id) firstIn++;
+    }
+    if (e.named !== namedIn.length) err(`${et}.named is ${e.named} but ${namedIn.length} answers name it`);
+    if (e.first !== firstIn) err(`${et}.first is ${e.first} but it is named first in ${firstIn} answers`);
+    if (ids.length !== e.named) err(`${et}.named is ${e.named} but ${ids.length} answerIds are attached`);
+    const missing = namedIn.filter((x) => !ids.includes(x));
+    if (missing.length) err(`${et}.answerIds is missing ${missing.join(', ')}`);
+    if ((e.named || 0) >= 2 && proving.length < 2)
+      err(`${et} is shown (named ${e.named}) but only ${proving.length} stored answer(s) prove it; 2 are required`);
+  });
+  // The owner is one entity (isYou) and every mention of it says isYou; competitors never do.
+  const entityById = new Map((report.entities || []).filter((e) => e && e.id).map((e) => [e.id, e]));
+  const ownerEntities = (report.entities || []).filter((e) => e && e.isYou);
+  if (ownerEntities.length > 1) err(`entities has ${ownerEntities.length} owner (isYou) entities; at most 1 is allowed`);
+  (answers || []).forEach((a) => {
+    (a.businessesNamed || []).forEach((b) => {
+      if (b.entityId && !entityIds.has(b.entityId))
+        err(`answer ${a.id}: businessesNamed "${b.name}" points to unknown entity "${b.entityId}"`);
+      const e = b.entityId && entityById.get(b.entityId);
+      if (e && !!e.isYou !== !!b.isYou)
+        err(`answer ${a.id}: businessesNamed "${b.name}" isYou=${!!b.isYou} but entity ${e.id} "${e.name}" isYou=${!!e.isYou}`);
+      if (b.isYou && b.ownerMatch === 'unsure') err(`answer ${a.id}: businessesNamed "${b.name}" is both isYou and unsure`);
+    });
+  });
+
+  // Every quote is exact.
+  (report.aiFacts || []).forEach((f, i) => {
+    const ft = `aiFacts[${i}] (${f && f.field})`;
+    const a = f && byId.get(f.answerId);
+    if (!a) return err(`${ft}.answerId "${f && f.answerId}" is not an answer`);
+    if (typeof f.aiSays !== 'string' || !f.aiSays) return err(`${ft}.aiSays is empty`);
+    if (!(a.text || '').includes(f.aiSays)) err(`${ft}.aiSays ${JSON.stringify(f.aiSays)} is not a literal quote from answer ${a.id}`);
+    if (!['match', 'differs', 'not stated'].includes(f.status)) err(`${ft}.status "${f.status}" is not match | differs | not stated`);
+  });
+
+  (report.sources || []).forEach((s, i) => {
+    if (s.youPosition != null && (!Number.isInteger(s.youPosition) || s.youPosition < 1))
+      err(`sources[${i}].youPosition must be null or a positive integer (got ${JSON.stringify(s.youPosition)})`);
+    for (const aid of s.citedIn || []) if (!byId.has(aid)) err(`sources[${i}].citedIn has "${aid}", which is not an answer`);
+  });
+
+  if (report.headline) {
+    if (!byId.has(report.headline.answerId)) err(`headline.answerId "${report.headline.answerId}" is not an answer`);
+    const expect = pickHeadline(report);
+    if (expect && (expect.answerId !== report.headline.answerId || expect.rule !== report.headline.rule))
+      err(`headline is ${report.headline.answerId}/${report.headline.rule} but the rule picks ${expect.answerId}/${expect.rule}`);
+  } else if ((answers || []).length) err('headline missing');
+
+  // Method always shown.
+  const m = report.method;
+  if (!m || typeof m !== 'object') err('method missing');
+  else {
+    if (!m.engines || !Object.keys(m.engines).length) err('method.engines missing');
+    if (!m.window) err('method.window missing');
+    if (!Number.isInteger(m.runs) || m.runs < 1) err('method.runs must be a positive integer');
+    if (!Array.isArray(m.enginesFailed)) err('method.enginesFailed must be an array');
+    // A failed extraction leaves an answer looking like "didn't name you": never publish it.
+    for (const f of Array.isArray(m.extractionFailed) ? m.extractionFailed : []) {
+      const a = byId.get(f && f.answerId);
+      err(`answer ${f && f.answerId}${a ? ` (${a.engine} ${a.questionId})` : ''}: extraction failed (${(f && f.error) || 'unknown error'}); its counts can't be trusted`);
+    }
+    for (const a of answers || []) {
+      if (m.engines && !m.engines[a.engine]) err(`answer ${a.id} engine "${a.engine}" is not in method.engines`);
+      if ((m.enginesFailed || []).includes(a.engine)) err(`answer ${a.id} is from failed engine "${a.engine}"`);
+    }
+  }
+
+  // No invented claims.
+  for (const h of lintReport(report)) err(`banned word "${h.word}" in ${h.path}: ${JSON.stringify(h.match)}`);
+
+  return { ok: errors.length === 0, errors };
+}

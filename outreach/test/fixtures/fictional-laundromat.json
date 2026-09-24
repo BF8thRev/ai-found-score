@@ -1,0 +1,807 @@
+{
+  "id": "fx7k2m",
+  "version": 2,
+  "sample": true,
+  "generatedAt": "2026-09-22T17:30:00-04:00",
+  "business": {
+    "name": "Bluebird Wash & Fold",
+    "trade": "laundromat",
+    "address": "100 Example Ave",
+    "town": "Seaford",
+    "state": "NY",
+    "zip": "11783",
+    "phone": "(516) 555-0100",
+    "website": "bluebirdwashfold.example"
+  },
+  "questions": [
+    {
+      "id": "q1",
+      "intent": "best",
+      "text": "What's the best laundromat in Seaford, NY?"
+    },
+    {
+      "id": "q2",
+      "intent": "urgent",
+      "text": "24 hour laundromat near Seaford NY"
+    },
+    {
+      "id": "q3",
+      "intent": "job",
+      "text": "Who does laundry pickup and delivery in Seaford NY?"
+    },
+    {
+      "id": "q4",
+      "intent": "trust",
+      "text": "Laundromat with big washers for comforters near Seaford, NY"
+    },
+    {
+      "id": "q5",
+      "intent": "price",
+      "text": "Cheapest wash and fold near Seaford NY"
+    }
+  ],
+  "answers": [
+    {
+      "id": "a1",
+      "questionId": "q1",
+      "intent": "best",
+      "engine": "chatgpt",
+      "run": 1,
+      "askedAt": "2026-09-22T21:01:00.000Z",
+      "text": "Here are some options people mention: Harbor Lane Laundromat, Maple Street Suds, Corner Spin Laundry, Tidewater Wash House. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 38,
+          "entityId": "e2"
+        },
+        {
+          "name": "Maple Street Suds",
+          "pos": 62,
+          "entityId": "e3"
+        },
+        {
+          "name": "Corner Spin Laundry",
+          "pos": 81,
+          "entityId": "e4"
+        },
+        {
+          "name": "Tidewater Wash House",
+          "pos": 102,
+          "entityId": "e5"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a2",
+      "questionId": "q1",
+      "intent": "best",
+      "engine": "gemini",
+      "run": 1,
+      "askedAt": "2026-09-22T21:02:00.000Z",
+      "text": "Here are some options people mention: Bluebird Wash & Fold, Harbor Lane Laundromat. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Bluebird Wash & Fold",
+          "pos": 38,
+          "entityId": "e1",
+          "isYou": true
+        },
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 60,
+          "entityId": "e2"
+        }
+      ],
+      "namedYou": true,
+      "namedYouFirst": true,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a3",
+      "questionId": "q1",
+      "intent": "best",
+      "engine": "google_ai_mode",
+      "run": 1,
+      "askedAt": "2026-09-22T21:03:00.000Z",
+      "text": "Here are some options people mention: Harbor Lane Laundromat, Bluebird Wash & Fold, Maple Street Suds. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 38,
+          "entityId": "e2"
+        },
+        {
+          "name": "Bluebird Wash & Fold",
+          "pos": 62,
+          "entityId": "e1",
+          "isYou": true
+        },
+        {
+          "name": "Maple Street Suds",
+          "pos": 84,
+          "entityId": "e3"
+        }
+      ],
+      "namedYou": true,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a4",
+      "questionId": "q1",
+      "intent": "best",
+      "engine": "perplexity",
+      "run": 1,
+      "askedAt": "2026-09-22T21:04:00.000Z",
+      "text": "Here are some options people mention: Maple Street Suds, Harbor Lane Laundromat. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Maple Street Suds",
+          "pos": 38,
+          "entityId": "e3"
+        },
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 57,
+          "entityId": "e2"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a5",
+      "questionId": "q2",
+      "intent": "urgent",
+      "engine": "chatgpt",
+      "run": 1,
+      "askedAt": "2026-09-22T21:05:00.000Z",
+      "text": "Here are some options people mention: Harbor Lane Laundromat, Clearwater Coin Laundry. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 38,
+          "entityId": "e2"
+        },
+        {
+          "name": "Clearwater Coin Laundry",
+          "pos": 62,
+          "entityId": "e6"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a6",
+      "questionId": "q2",
+      "intent": "urgent",
+      "engine": "gemini",
+      "run": 1,
+      "askedAt": "2026-09-22T21:06:00.000Z",
+      "text": "Here are some options people mention: Bluebird Wash & Fold. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Bluebird Wash & Fold",
+          "pos": 38,
+          "entityId": "e1",
+          "isYou": true
+        }
+      ],
+      "namedYou": true,
+      "namedYouFirst": true,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a7",
+      "questionId": "q2",
+      "intent": "urgent",
+      "engine": "google_ai_mode",
+      "run": 1,
+      "askedAt": "2026-09-22T21:07:00.000Z",
+      "text": "Here are some options people mention: Clearwater Coin Laundry, Harbor Lane Laundromat, Corner Spin Laundry. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Clearwater Coin Laundry",
+          "pos": 38,
+          "entityId": "e6"
+        },
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 63,
+          "entityId": "e2"
+        },
+        {
+          "name": "Corner Spin Laundry",
+          "pos": 87,
+          "entityId": "e4"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a8",
+      "questionId": "q2",
+      "intent": "urgent",
+      "engine": "perplexity",
+      "run": 1,
+      "askedAt": "2026-09-22T21:08:00.000Z",
+      "text": "Most laundromats in the area post their hours online. Check a map app for places open late near you.",
+      "businessesNamed": [],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a9",
+      "questionId": "q3",
+      "intent": "job",
+      "engine": "chatgpt",
+      "run": 1,
+      "askedAt": "2026-09-22T21:09:00.000Z",
+      "text": "Here are some options people mention: Bluebird Wash & Fold, Maple Street Suds. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Bluebird Wash & Fold",
+          "pos": 38,
+          "entityId": "e1",
+          "isYou": true
+        },
+        {
+          "name": "Maple Street Suds",
+          "pos": 60,
+          "entityId": "e3"
+        }
+      ],
+      "namedYou": true,
+      "namedYouFirst": true,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a10",
+      "questionId": "q3",
+      "intent": "job",
+      "engine": "gemini",
+      "run": 1,
+      "askedAt": "2026-09-22T21:10:00.000Z",
+      "text": "Here are some options people mention: Maple Street Suds, Harbor Lane Laundromat. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Maple Street Suds",
+          "pos": 38,
+          "entityId": "e3"
+        },
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 57,
+          "entityId": "e2"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a11",
+      "questionId": "q3",
+      "intent": "job",
+      "engine": "google_ai_mode",
+      "run": 1,
+      "askedAt": "2026-09-22T21:11:00.000Z",
+      "text": "Here are some options people mention: Harbor Lane Laundromat, Bluebird Wash & Fold. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 38,
+          "entityId": "e2"
+        },
+        {
+          "name": "Bluebird Wash & Fold",
+          "pos": 62,
+          "entityId": "e1",
+          "isYou": true
+        }
+      ],
+      "namedYou": true,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a12",
+      "questionId": "q3",
+      "intent": "job",
+      "engine": "perplexity",
+      "run": 1,
+      "askedAt": "2026-09-22T21:12:00.000Z",
+      "text": "Here are some options people mention: Tidewater Wash House, Maple Street Suds. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Tidewater Wash House",
+          "pos": 38,
+          "entityId": "e5"
+        },
+        {
+          "name": "Maple Street Suds",
+          "pos": 60,
+          "entityId": "e3"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a13",
+      "questionId": "q4",
+      "intent": "trust",
+      "engine": "chatgpt",
+      "run": 1,
+      "askedAt": "2026-09-22T21:13:00.000Z",
+      "text": "Here are some options people mention: Corner Spin Laundry, Harbor Lane Laundromat. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Corner Spin Laundry",
+          "pos": 38,
+          "entityId": "e4"
+        },
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 59,
+          "entityId": "e2"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a14",
+      "questionId": "q4",
+      "intent": "trust",
+      "engine": "gemini",
+      "run": 1,
+      "askedAt": "2026-09-22T21:14:00.000Z",
+      "text": "Here are some options people mention: Bluebird Wash & Fold, Corner Spin Laundry. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Bluebird Wash & Fold",
+          "pos": 38,
+          "entityId": "e1",
+          "isYou": true
+        },
+        {
+          "name": "Corner Spin Laundry",
+          "pos": 60,
+          "entityId": "e4"
+        }
+      ],
+      "namedYou": true,
+      "namedYouFirst": true,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a15",
+      "questionId": "q4",
+      "intent": "trust",
+      "engine": "google_ai_mode",
+      "run": 1,
+      "askedAt": "2026-09-22T21:15:00.000Z",
+      "text": "Here are some options people mention: Harbor Lane Laundromat, Maple Street Suds, Bluebird Wash & Fold. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 38,
+          "entityId": "e2"
+        },
+        {
+          "name": "Maple Street Suds",
+          "pos": 62,
+          "entityId": "e3"
+        },
+        {
+          "name": "Bluebird Wash & Fold",
+          "pos": 81,
+          "entityId": "e1",
+          "isYou": true
+        }
+      ],
+      "namedYou": true,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a16",
+      "questionId": "q4",
+      "intent": "trust",
+      "engine": "perplexity",
+      "run": 1,
+      "askedAt": "2026-09-22T21:16:00.000Z",
+      "text": "Here are some options people mention: Harbor Lane Laundromat. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Harbor Lane Laundromat",
+          "pos": 38,
+          "entityId": "e2"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a17",
+      "questionId": "q5",
+      "intent": "price",
+      "engine": "chatgpt",
+      "run": 1,
+      "askedAt": "2026-09-22T21:17:00.000Z",
+      "text": "Here are some options people mention: Tidewater Wash House, Maple Street Suds. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Tidewater Wash House",
+          "pos": 38,
+          "entityId": "e5"
+        },
+        {
+          "name": "Maple Street Suds",
+          "pos": 60,
+          "entityId": "e3"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a18",
+      "questionId": "q5",
+      "intent": "price",
+      "engine": "gemini",
+      "run": 1,
+      "askedAt": "2026-09-22T21:18:00.000Z",
+      "text": "Here are some options people mention: Maple Street Suds. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Maple Street Suds",
+          "pos": 38,
+          "entityId": "e3"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a19",
+      "questionId": "q5",
+      "intent": "price",
+      "engine": "google_ai_mode",
+      "run": 1,
+      "askedAt": "2026-09-22T21:19:00.000Z",
+      "text": "Here are some options people mention: Bluebird Wash & Fold, Tidewater Wash House. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Bluebird Wash & Fold",
+          "pos": 38,
+          "entityId": "e1",
+          "isYou": true
+        },
+        {
+          "name": "Tidewater Wash House",
+          "pos": 60,
+          "entityId": "e5"
+        }
+      ],
+      "namedYou": true,
+      "namedYouFirst": true,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    },
+    {
+      "id": "a20",
+      "questionId": "q5",
+      "intent": "price",
+      "engine": "perplexity",
+      "run": 1,
+      "askedAt": "2026-09-22T21:20:00.000Z",
+      "text": "Here are some options people mention: Maple Street Suds, Clearwater Coin Laundry. Call ahead to confirm hours.",
+      "businessesNamed": [
+        {
+          "name": "Maple Street Suds",
+          "pos": 38,
+          "entityId": "e3"
+        },
+        {
+          "name": "Clearwater Coin Laundry",
+          "pos": 57,
+          "entityId": "e6"
+        }
+      ],
+      "namedYou": false,
+      "namedYouFirst": false,
+      "citations": [
+        {
+          "domain": "example-directory.test",
+          "url": "https://example-directory.test/seaford-ny/laundromats"
+        }
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "id": "e1",
+      "name": "Bluebird Wash & Fold",
+      "isYou": true,
+      "aliases": [],
+      "phone": null,
+      "named": 8,
+      "first": 5,
+      "answerIds": [
+        "a2",
+        "a3",
+        "a6",
+        "a9",
+        "a11",
+        "a14",
+        "a15",
+        "a19"
+      ]
+    },
+    {
+      "id": "e2",
+      "name": "Harbor Lane Laundromat",
+      "aliases": [],
+      "phone": null,
+      "named": 11,
+      "first": 6,
+      "answerIds": [
+        "a1",
+        "a2",
+        "a3",
+        "a4",
+        "a5",
+        "a7",
+        "a10",
+        "a11",
+        "a13",
+        "a15",
+        "a16"
+      ]
+    },
+    {
+      "id": "e3",
+      "name": "Maple Street Suds",
+      "aliases": [],
+      "phone": null,
+      "named": 10,
+      "first": 4,
+      "answerIds": [
+        "a1",
+        "a3",
+        "a4",
+        "a9",
+        "a10",
+        "a12",
+        "a15",
+        "a17",
+        "a18",
+        "a20"
+      ]
+    },
+    {
+      "id": "e4",
+      "name": "Corner Spin Laundry",
+      "aliases": [],
+      "phone": null,
+      "named": 4,
+      "first": 1,
+      "answerIds": [
+        "a1",
+        "a7",
+        "a13",
+        "a14"
+      ]
+    },
+    {
+      "id": "e5",
+      "name": "Tidewater Wash House",
+      "aliases": [],
+      "phone": null,
+      "named": 4,
+      "first": 2,
+      "answerIds": [
+        "a1",
+        "a12",
+        "a17",
+        "a19"
+      ]
+    },
+    {
+      "id": "e6",
+      "name": "Clearwater Coin Laundry",
+      "aliases": [],
+      "phone": null,
+      "named": 3,
+      "first": 1,
+      "answerIds": [
+        "a5",
+        "a7",
+        "a20"
+      ]
+    }
+  ],
+  "totals": {
+    "answers": 20,
+    "namedYou": 8,
+    "firstYou": 5
+  },
+  "headline": {
+    "answerId": "a1",
+    "rule": "most_others_named_not_you"
+  },
+  "sources": [
+    {
+      "domain": "example-directory.test",
+      "url": "https://example-directory.test/seaford-ny/laundromats",
+      "citedIn": [
+        "a1",
+        "a2",
+        "a3",
+        "a4",
+        "a5",
+        "a6",
+        "a7",
+        "a8",
+        "a9",
+        "a10",
+        "a11",
+        "a12",
+        "a13",
+        "a14",
+        "a15",
+        "a16",
+        "a17",
+        "a18",
+        "a19",
+        "a20"
+      ],
+      "youListed": false,
+      "youPosition": null,
+      "topListed": "Harbor Lane Laundromat"
+    }
+  ],
+  "aiFacts": [],
+  "listings": [],
+  "issues": [],
+  "method": {
+    "engines": {
+      "chatgpt": {
+        "api": "responses+web_search",
+        "model": "fixture",
+        "loggedIn": false
+      },
+      "gemini": {
+        "api": "grounding",
+        "model": "fixture",
+        "loggedIn": false
+      },
+      "google_ai_mode": {
+        "api": "dataforseo",
+        "model": "fixture",
+        "loggedIn": false
+      },
+      "perplexity": {
+        "api": "sonar",
+        "model": "fixture",
+        "loggedIn": false
+      }
+    },
+    "enginesFailed": [],
+    "window": "5:01–5:20pm ET",
+    "runs": 1
+  },
+  "baseline": null,
+  "locked": true
+}

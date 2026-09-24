@@ -1,1 +1,18 @@
-{"description":"AI Found Score — free automated report on AI-assistant visibility and listing consistency for local businesses.","devDependencies":{"wrangler":"^4.137.0"},"name":"ai-found-score","private":true,"scripts":{"check":"node --check src/worker.js && node --check src/lib/db.js && node --check src/lib/stripe.js && node --check src/mock/sample-reports.js && node --check public/js/config.js && node --check public/js/report.js && echo 'syntax OK'","deploy":"wrangler deploy","dev":"wrangler dev"},"version":"0.1.0"}
+{
+  "description": "AI Found Score — free automated report on AI-assistant visibility and listing consistency for local businesses.",
+  "devDependencies": {
+    "wrangler": "^4.137.0"
+  },
+  "name": "ai-found-score",
+  "private": true,
+  "scripts": {
+    "check": "node --check src/worker.js && node --check src/lib/db.js && node --check src/lib/stripe.js && node --check src/scan-workflow.js && node --check src/admin/routes.js && node --check src/admin/api.js && node --check src/admin/page.js && node --check src/admin/data.js && node --check src/admin/metrics.js && node --check src/admin/session.js && node --check src/admin/scan-core.js && node --check src/admin/redact.js && node --check src/admin/dry-run.js && node --check src/mock/sample-reports.js && node --check src/mock/sample-v1.js && node --check src/mock/sample-v2.js && node --check src/mock/build-sample.js && node --check src/mock/lint-samples.js && node --check public/js/config.js && node --check public/js/report.js && node --check public/js/analytics.js && node --check shared/report-v2.js && node --check outreach/templates.js && node --check outreach/suppression.js && node --check outreach/send.js && node --check outreach/cli.js && node src/mock/lint-samples.js",
+    "test": "node --test \"scanner/test/*.test.js\" \"scanner/extract/test/*.test.js\" \"outreach/test/*.test.js\" \"src/admin/test/*.test.js\" && node src/mock/lint-samples.js",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "version": "0.1.0",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0"
+  }
+}

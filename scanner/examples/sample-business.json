@@ -1,0 +1,11 @@
+{
+  "name": "Suds & Bubbles Laundromat",
+  "trade": "laundromat",
+  "address": "100 Example Ave",
+  "town": "North Babylon",
+  "nearbyTown": "Deer Park",
+  "state": "NY",
+  "zip": "11703",
+  "phone": "(631) 555-0142",
+  "website": "https://sudsandbubbleslaundry.example.com"
+}

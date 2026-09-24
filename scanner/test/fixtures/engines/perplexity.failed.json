@@ -1,0 +1,10 @@
+{
+  "id": "resp_0b1d6f4a-8c2e-4a7b-9e3d-5f1a2c8b7d64",
+  "object": "response",
+  "created_at": 1790283670,
+  "status": "failed",
+  "model": "openai/gpt-6-luna",
+  "output": [],
+  "usage": null,
+  "error": { "type": "upstream_error", "code": "model_unavailable", "message": "Upstream model temporarily unavailable" }
+}

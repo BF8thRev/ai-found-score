@@ -1,0 +1,17 @@
+{
+  "_note": "From the demo report header and its \"What AI says about you\" section (facts the demo says are on megawashanddry.com). No phone is given in the demo, so none is set.",
+  "name": "Mega Wash & Dry",
+  "trade": "laundromat",
+  "address": "1502 Deer Park Ave",
+  "town": "North Babylon",
+  "state": "NY",
+  "zip": "11703",
+  "phone": null,
+  "website": "megawashanddry.com",
+  "facts": {
+    "hours": "Open 24/7",
+    "price": "$2.25/lb, 20 lb minimum",
+    "address": "1502 Deer Park Ave, North Babylon, NY 11703",
+    "services": "wash/dry/fold pickup and delivery, 200+ Speed Queen machines, up to 80 lb washers, free drying"
+  }
+}

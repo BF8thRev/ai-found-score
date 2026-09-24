@@ -1,0 +1,72 @@
+{
+  "id": "resp_7f3c2a9e-51b4-4d0e-9c8a-2b6f1e4d7a90",
+  "object": "response",
+  "created_at": 1790283665,
+  "status": "completed",
+  "model": "openai/gpt-6-luna",
+  "output": [
+    {
+      "type": "search_results",
+      "queries": ["best laundromat North Babylon NY"],
+      "results": [
+        {
+          "id": 1,
+          "url": "https://www.yelp.com/search?cflt=laundromat&find_loc=North+Babylon%2C+NY",
+          "title": "THE BEST 10 Laundromats in NORTH BABYLON, NY - Yelp",
+          "snippet": "Top 10 Best Laundromats in North Babylon, NY - Suds & Bubbles Laundromat, Clean Spin Laundry Center...",
+          "source": "web",
+          "date": "2026-08-30",
+          "last_updated": "2026-09-20"
+        },
+        {
+          "id": 2,
+          "url": "https://www.yellowpages.com/north-babylon-ny/laundromats",
+          "title": "Laundromats in North Babylon, NY - YellowPages",
+          "snippet": "Laundromats in North Babylon on YP.com. See reviews, photos, directions, phone numbers...",
+          "source": "web",
+          "date": null,
+          "last_updated": "2026-09-01"
+        },
+        {
+          "id": 3,
+          "url": "https://www.angi.com/companylist/us/ny/north-babylon/laundry-service.htm",
+          "title": "Top Laundry Services in North Babylon, NY - Angi",
+          "snippet": "Find laundry services near North Babylon...",
+          "source": "web",
+          "date": null,
+          "last_updated": null
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "id": "msg_2c1f9b7e",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "The laundromats that come up most for North Babylon, NY are **Suds & Bubbles Laundromat**, which reviewers praise for clean machines and big washers [1], and **Clean Spin Laundry Center**, which stays open late [2]. **Bayview Wash House** is another option if you want pickup and delivery [1][2].",
+          "annotations": []
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 4211,
+    "output_tokens": 164,
+    "total_tokens": 4375,
+    "input_tokens_details": { "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0 },
+    "tool_calls_details": { "web_search": { "invocation": 1 } },
+    "cost": {
+      "currency": "USD",
+      "input_cost": 0.000421,
+      "output_cost": 0.000082,
+      "total_cost": 0.001503,
+      "cache_creation_cost": 0.0,
+      "cache_read_cost": 0.0,
+      "tool_calls_cost": 0.001
+    }
+  },
+  "error": null
+}
