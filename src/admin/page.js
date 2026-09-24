@@ -134,9 +134,15 @@ function runSection(d, { watch = [], engineIds, flash }) {
   const defaults = engineIds.filter((e) => ACTIVE_ENGINES.includes(e));
   const est = estimateScanCost({ engines: defaults, questions: 5, runs: 1 });
   const trades = Object.keys(TRADES);
-  return `<section id="run">
+  return `<section id="keys">
+  <h2>Check engine keys</h2>
+  <p class="sub">One tiny live call per engine plus the Claude extractor (a few cents). Shows which keys work.</p>
+  <button type="button" id="ping-btn">Check keys</button>
+  <ul id="ping-out" class="plain"></ul>
+</section>
+<section id="run">
   <h2>Run a scan</h2>
-  <p class="sub">Runs in the background (about 7–18 minutes for a full scan). The report is saved only if it passes every guardrail.</p>
+  <p class="sub">Runs in the background (about 7–18 minutes for a full scan) and needs the Workers Paid plan. On the Free plan, run full scans from the PC with <code>npm run scan -- --business biz.json</code>; results appear here the same way. The report is saved only if it passes every guardrail.</p>
   ${flash}
   ${ids.map((id) => `<div class="watch" data-watch="${esc(id)}">
     <div class="row"><b>${esc(nameOf[id] || 'Scan')}</b><span class="small">${esc(id)}</span></div>
@@ -347,6 +353,25 @@ export const ADMIN_JS = `(() => {
       .catch((e) => { set(el, 'hint', 'Status unavailable (' + e.message + '), retrying'); setTimeout(() => poll(el), 15000); });
   }
   document.querySelectorAll('[data-watch]').forEach(poll);
+
+  const pingBtn = document.getElementById('ping-btn');
+  const pingOut = document.getElementById('ping-out');
+  if (pingBtn && pingOut) {
+    pingBtn.addEventListener('click', () => {
+      pingBtn.disabled = true;
+      pingOut.replaceChildren();
+      const li = (t) => { const x = document.createElement('li'); x.textContent = t; return x; };
+      pingOut.append(li('Checking…'));
+      fetch('/api/admin/ping', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+        .then((j) => {
+          const rows = Object.entries(j.results || j).filter(([, v]) => v && typeof v === 'object' && 'ok' in v);
+          pingOut.replaceChildren(...rows.map(([k, v]) => li((v.ok ? '✓ ' : '✗ ') + k + (v.ok ? '' : ': ' + (v.error || 'failed')) + (v.latencyMs != null ? ' (' + v.latencyMs + ' ms)' : ''))));
+        })
+        .catch((e) => pingOut.replaceChildren(li('Check failed (' + e.message + ')')))
+        .finally(() => { pingBtn.disabled = false; });
+    });
+  }
 
   const form = document.getElementById('run-form');
   const out = document.getElementById('run-estimate');
