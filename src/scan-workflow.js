@@ -18,7 +18,7 @@
 import { WorkflowEntrypoint } from 'cloudflare:workers';
 import { buildQuestions } from '../scanner/questions.js';
 import { ENGINES } from '../scanner/engines/index.js';
-import { round6 } from '../scanner/config.js';
+import { round6, ACTIVE_ENGINES } from '../scanner/config.js';
 import { buildReport } from '../scanner/extract/build.js';
 import { proposeForAnswer } from '../scanner/extract/propose.js';
 import { validateReport } from '../shared/report-v2.js';
@@ -28,18 +28,15 @@ import {
 } from '../scanner/store.js';
 import {
   scanJobs, chunk, compactCall, isTransientEngineError, isTransientExtractError, scanTotals, callWindow,
+  ENGINE_BATCH, EXTRACT_BATCH, ENGINE_RETRIES, EXTRACT_RETRIES, answerRef, rawIdSeed, extractIdSeed,
+  adapterThrew, callFromStoredRaw, extractionResult, proposalsFromExtractions, publishGate,
 } from './admin/scan-core.js';
 import { dryRunEnabled, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 import { redact } from './admin/redact.js';
 
-/** Engine calls / extractions started together (different providers, so rate limits stay low). */
-const ENGINE_BATCH = 5;
-const EXTRACT_BATCH = 5;
-
+// Batch sizes and retry counts live in scan-core.js (shared with scanner/run.js, the local runner).
 // Attempts are counted by ctx.attempt (1-indexed). A step retries only by throwing, and it throws
 // only for failures that cost nothing (429 / 5xx / network): a billed call is never repeated.
-const ENGINE_RETRIES = 2;
-const EXTRACT_RETRIES = 3;
 const STEP_DB = { retries: { limit: 5, delay: '5 seconds', backoff: 'exponential' }, timeout: '2 minutes' };
 const STEP_ENGINE = { retries: { limit: ENGINE_RETRIES, delay: '20 seconds', backoff: 'exponential' }, timeout: '6 minutes' };
 const STEP_EXTRACT = { retries: { limit: EXTRACT_RETRIES, delay: '20 seconds', backoff: 'exponential' }, timeout: '5 minutes' };
@@ -47,7 +44,9 @@ const STEP_BUILD = { retries: { limit: 2, delay: '30 seconds', backoff: 'exponen
 
 export class ScanWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
-    const p = event.payload || {};
+    const p = { ...(event.payload || {}) };
+    // No engines named → the ones the site advertises (startScan normally fills this in).
+    if (!Array.isArray(p.engines) || !p.engines.length) p.engines = ACTIVE_ENGINES;
     const scanId = p.scanId;
     // Dry run needs BOTH the param (set only for localhost requests) and SCANNER_DRY_RUN=1.
     const dry = !!p.dryRun && dryRunEnabled(this.env);
@@ -88,20 +87,14 @@ export class ScanWorkflow extends WorkflowEntrypoint {
             // A retry after this step's scan_raw write already landed: reuse the stored answer
             // instead of paying the engine again.
             if (store && (ctx?.attempt || 1) > 1) {
-              const prev = await getRawById(env, await stableUuid(`${scanId}:${job.key}`), { fetchImpl });
-              if (prev && prev.ok) {
-                return compactCall({
-                  engine: job.engine, questionId: q.id, intent: q.intent, questionText: q.text, run: job.run,
-                  ok: true, text: prev.answer_text, citations: prev.citations || [], error: null,
-                  costUsd: Number(prev.cost_usd) || 0, askedAt: prev.asked_at, model: prev.model,
-                }, q);
-              }
+              const prev = await getRawById(env, await stableUuid(rawIdSeed(scanId, job.key)), { fetchImpl });
+              if (prev && prev.ok) return callFromStoredRaw({ ...prev, engine: job.engine, run: job.run }, q);
             }
             let res;
             try {
               res = await ENGINES[job.engine].ask({ question: q, business, env, fetchImpl });
             } catch (e) {
-              res = { engine: job.engine, ok: false, text: null, citations: [], request: null, raw: null, costUsd: 0, error: `adapter threw: ${e?.message || e}`, askedAt: new Date().toISOString(), model: null };
+              res = adapterThrew(job.engine, e);
             }
             const call = { ...res, engine: job.engine, questionId: q.id, intent: q.intent, questionText: q.text, run: job.run };
             call.error = call.error == null ? null : safe(call.error);
@@ -109,7 +102,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
             // Free, transient failure: retry the step (nothing is written yet).
             if (isTransientEngineError(call) && attempt <= ENGINE_RETRIES) throw new Error(`transient: ${call.error}`);
             if (store) {
-              const id = await stableUuid(`${scanId}:${job.key}`);
+              const id = await stableUuid(rawIdSeed(scanId, job.key));
               const saved = await saveRaw(env, [rawRow({ scanId, businessId: business.id, call, id })], { fetchImpl });
               if (!saved.ok) console.error('[scan-workflow] scan_raw write failed', scanId, job.key, safe(saved.error));
             }
@@ -120,7 +113,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
             const failed = compactCall({ engine: job.engine, questionId: job.questionId, run: job.run, ok: false, text: null, citations: [], costUsd: 0, error: safe(e), askedAt: null }, q);
             return step.do(`record failed ${job.key}`, STEP_DB, async () => {
               if (store) {
-                const id = await stableUuid(`${scanId}:${job.key}`);
+                const id = await stableUuid(rawIdSeed(scanId, job.key));
                 await saveRaw(env, [rawRow({ scanId, businessId: business.id, call: { ...failed, askedAt: new Date().toISOString(), raw: null, request: null }, id })], { fetchImpl });
               }
               return failed;
@@ -135,7 +128,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
       const extractions = [];
       for (const batch of chunk(answered, EXTRACT_BATCH)) {
         const done = await Promise.all(batch.map((c) => {
-          const key = `${c.engine}:${c.questionId}:${c.run}`;
+          const key = answerRef(c);
           return step.do(`extract ${key}`, STEP_EXTRACT, async (ctx) => {
             const r = await proposeForAnswer({ answer: { id: key, text: c.text }, business, env, fetchImpl, maxRetries: 0 });
             const error = r.ok === false ? safe(r.error) : null;
@@ -146,17 +139,11 @@ export class ScanWorkflow extends WorkflowEntrypoint {
             if (store) {
               // The proposals aren't stored, so a retry after a landed write must call again; seed the
               // id with the attempt so that second (billed) call is recorded too, not deduplicated away.
-              const attemptSeed = attempt > 1 ? `:a${attempt}` : '';
-              const id = await stableUuid(`${scanId}:extract:${key}${attemptSeed}`);
+              const id = await stableUuid(extractIdSeed(scanId, key, attempt));
               const saved = await saveUsage(env, [usageRow({ id, scanId, kind: 'extract', provider: 'anthropic', model: r.model, usage: r.usage, costUsd: r.costUsd, ok: r.ok !== false, error, answerRef: key })], { fetchImpl });
               if (!saved.ok) console.error('[scan-workflow] scan_usage write failed', scanId, key, safe(saved.error));
             }
-            return {
-              key, ok: r.ok !== false, error,
-              businesses: r.businesses || [], ownerFacts: r.ownerFacts || [],
-              model: r.model || null, costUsd: round6(r.costUsd),
-              inputTokens: r.usage?.input_tokens || 0, outputTokens: r.usage?.output_tokens || 0,
-            };
+            return extractionResult(key, r, error);
           }).catch((e) => ({ key, ok: false, error: safe(e), businesses: [], ownerFacts: [], model: null, costUsd: 0, inputTokens: 0, outputTokens: 0 }));
         }));
         extractions.push(...done);
@@ -164,9 +151,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
 
       // ---- build + validate + save --------------------------------------------------------
       const build = await step.do('build report', STEP_BUILD, async (ctx) => {
-        const proposalsByAnswer = Object.fromEntries(extractions.map((x) => [x.key, x.ok
-          ? { businesses: x.businesses, ownerFacts: x.ownerFacts, model: x.model }
-          : { ok: false, error: x.error, model: x.model }]));
+        const proposalsByAnswer = proposalsFromExtractions(extractions);
         const scan = { scanId, questions, engines: p.engines, runs: p.runs, calls, window: callWindow(calls) };
         let baseline = null;
         if (store && business.id) {
@@ -177,7 +162,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
         const onExtract = async (x) => {
           extraExtractCostUsd += x.costUsd || 0;
           if (store) {
-            const id = await stableUuid(`${scanId}:extract:${x.key}`);
+            const id = await stableUuid(extractIdSeed(scanId, x.key));
             await saveUsage(env, [usageRow({ id, scanId, kind: 'extract', provider: 'anthropic', model: x.model, usage: x.usage, costUsd: x.costUsd, ok: x.ok, error: x.error && safe(x.error), answerRef: x.key })], { fetchImpl });
           }
         };
@@ -185,11 +170,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
           scan, business, baseline, env, fetchImpl, id: p.reportToken, proposalsByAnswer, onExtract,
         });
         // The publish gate: re-check regardless of what the builder says.
-        const validation = validateReport(report);
-        if (!report.answers?.length) {
-          validation.ok = false;
-          validation.errors = [...validation.errors, 'no successful answers (every engine failed)'];
-        }
+        const validation = publishGate(report, validateReport(report));
         let saved = false;
         let storeError = null;
         if (store && validation.ok) {

@@ -3,7 +3,13 @@
 // Runtime-agnostic: no Node built-ins, never reads process.env. Every caller passes an
 // `env` object (the Worker env, or process.env in the CLI).
 
+/** Every engine the scanner knows how to call. */
 export const ENGINE_IDS = ['chatgpt', 'gemini', 'google_ai_mode', 'perplexity', 'claude'];
+
+/** Engines the business actually runs and advertises. Owner decision (Sep 2026): start with these
+ *  three; add 'google_ai_mode' / 'perplexity' here once their keys exist, and every page's copy
+ *  (assistant names, "N searches") follows. Order = how they're listed in copy. */
+export const ACTIVE_ENGINES = ['chatgpt', 'claude', 'gemini'];
 
 export const ENGINE_NAMES = {
   chatgpt: 'ChatGPT',

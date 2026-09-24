@@ -98,17 +98,20 @@ export function rawRow({ scanId, businessId, call, id }) {
  * costs 1 subrequest instead of 40 (Workers cap subrequests per invocation).
  * @returns {Promise<{ok:boolean, count:number, error:string|null}>} never throws
  */
-export async function saveRaw(env, rows, { fetchImpl = fetch, chunk = 50 } = {}) {
+export async function saveRaw(env, rows, { fetchImpl = fetch, chunk = 50, replace = false } = {}) {
   try {
     const { base, headers } = supa(env);
     let count = 0;
     for (let i = 0; i < rows.length; i += chunk) {
       const part = rows.slice(i, i + chunk);
       // Rows with a stable id (Workflow steps) are upserts: a retried step can't duplicate a row.
+      // `replace` overwrites a stored row with the same id (a resumed local scan re-asking a
+      // call that failed last time); otherwise the first row written wins.
       const withIds = part.every((r) => r.id);
+      const resolution = replace ? 'merge-duplicates' : 'ignore-duplicates';
       const res = await fetchImpl(`${base}/scan_raw${withIds ? '?on_conflict=id' : ''}`, {
         method: 'POST',
-        headers: { ...headers, Prefer: withIds ? 'return=minimal,resolution=ignore-duplicates' : 'return=minimal' },
+        headers: { ...headers, Prefer: withIds ? `return=minimal,resolution=${resolution}` : 'return=minimal' },
         body: JSON.stringify(part),
       });
       if (!res.ok) return { ok: false, count, error: `scan_raw insert failed: ${res.status} ${await failText(res)}` };

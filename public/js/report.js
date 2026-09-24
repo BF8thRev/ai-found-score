@@ -236,7 +236,7 @@ function escapeHtml(str) {
 const ENGINE_NAMES = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_ai_mode: 'Google AI Mode', perplexity: 'Perplexity', claude: 'Claude' };
 // Preferred column order only. Columns come from the engines that actually
 // answered (plus method.engines order for anything not listed here).
-const ENGINE_COLUMNS = ['chatgpt', 'gemini', 'google_ai_mode', 'perplexity', 'claude'];
+const ENGINE_COLUMNS = ['chatgpt', 'claude', 'gemini', 'google_ai_mode', 'perplexity'];
 const INTENT_LABELS = { best: 'best', urgent: 'urgent', job: 'a specific job', trust: 'good reviews', price: 'cheapest' };
 const FIELD_LABELS = { hours: 'Hours', phone: 'Phone', price: 'Price', address: 'Address', services: 'Services', name: 'Name', website: 'Website' };
 
@@ -308,7 +308,7 @@ function intentResultsV2(report) {
 
 // What we call the things we count. A search is one question asked on one
 // assistant. With one run per search (the default), each search is one answer,
-// so the page says "25 searches". With more runs it says "50 answers from 25 searches".
+// so the page says "15 searches". With more runs it says "30 answers from 15 searches".
 function countWords(report) {
   const answers = report.answers || [];
   const method = report.method || {};
@@ -319,7 +319,7 @@ function countWords(report) {
   return {
     runs,
     searches,
-    unit: multi ? 'answers' : 'searches', // "7 of 25 searches"
+    unit: multi ? 'answers' : 'searches', // "7 of 15 searches"
     one: multi ? 'answer' : 'search', // "every search named you"
     total: multi ? `${N} answers from ${searches} searches` : `${N} ${plural(N, 'search', 'searches')}`,
     sameSearches: `${searches} ${plural(searches, 'search', 'searches')}`,

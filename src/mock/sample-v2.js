@@ -3,6 +3,7 @@
 // example.com domains so no real directory or brand appears in a sample.
 
 import { buildSample } from './build-sample.js';
+import { ACTIVE_ENGINES } from '../../scanner/config.js';
 
 const Q = (town, zip) => [
   { id: 'q1', intent: 'best', text: `What's the best plumber in ${town}, NY?` },
@@ -54,6 +55,8 @@ const HARBORVIEW_LISTINGS = [
 
 const HARBORVIEW_SPEC = {
   id: 'sample-001',
+  // Answers are written for every engine; the sample shows the ones the site advertises.
+  engines: ACTIVE_ENGINES,
   generatedAt: '2026-09-23T14:19:00-04:00',
   startAt: '2026-09-23T14:04:00-04:00',
   business: {
@@ -129,7 +132,7 @@ const HARBORVIEW_SPEC = {
     {
       severity: 'high',
       title: 'Two sites the AI cited for "best" and "cheapest" don’t list you',
-      description: 'ChatGPT, Claude, Gemini and Perplexity cited localpages.example.com and bestof-li.example.com in the searches that didn’t name you. Neither page lists Harborview Plumbing & Heating.',
+      description: 'ChatGPT, Claude and Gemini cited localpages.example.com and bestof-li.example.com in the searches that didn’t name you. Neither page lists Harborview Plumbing & Heating.',
       steps: [
         'Claim or create your business page on localpages.example.com under Plumbers in Massapequa, NY.',
         'Submit Harborview Plumbing & Heating to the bestof-li.example.com plumbers list for Massapequa.',
@@ -147,11 +150,11 @@ const HARBORVIEW_SPEC = {
     },
     {
       severity: 'medium',
-      title: 'Google AI Mode quoted an $89 service call',
-      description: 'Your website says $79. Put the $79 service call on your Google profile and in your Google Business services list so every source says the same thing.',
+      title: 'The review site ChatGPT cited for "good reviews" lists you 4th',
+      description: 'Asked for a plumber with good reviews, ChatGPT cited townreviews.example.com and named Tidewater Plumbing Co. and Kessler Bros. Plumbing, not you. That page lists Harborview Plumbing & Heating 4th.',
       steps: [
-        'Add "$79 service call" to the services section of your Google Business Profile.',
-        'Add the same line to your website’s water heater and emergency pages.',
+        'Claim your page on townreviews.example.com and check that the name, address and phone match your website.',
+        'Send your last ten customers a link to that page and ask for a review.',
       ],
     },
     {
@@ -181,6 +184,8 @@ const HARBORVIEW_SPEC = {
 
 const CEDAR_SPEC = {
   id: 'sample-edge-failed',
+  // The advertised engines, one of which (Gemini) didn't respond.
+  engines: ACTIVE_ENGINES,
   generatedAt: '2026-09-23T15:12:00-04:00',
   startAt: '2026-09-23T15:05:00-04:00',
   business: {
@@ -263,9 +268,9 @@ export const SAMPLE_V2 = buildSample(HARBORVIEW_SPEC);
 export const SAMPLE_EDGE_FAILED = buildSample(CEDAR_SPEC);
 
 // Same scan as sample-001, shown as a 30-day re-check so the before/after
-// strip has something to draw. The baseline totals are fictional too.
+// strip has something to draw. The baseline totals are fictional too (same number of searches).
 export const SAMPLE_RECHECK = {
   ...SAMPLE_V2,
   id: 'sample-recheck',
-  baseline: { generatedAt: '2026-08-24T14:10:00-04:00', totals: { answers: 25, namedYou: 11, firstYou: 4 } },
+  baseline: { generatedAt: '2026-08-24T14:10:00-04:00', totals: { answers: SAMPLE_V2.totals.answers, namedYou: 6, firstYou: 2 } },
 };

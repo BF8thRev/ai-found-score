@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runScan, pingAll, summarizeScan, pool } from '../scan.js';
 import { saveReport, getBaseline, rawRow } from '../store.js';
-import { estimateScanCost, resolveKeys, priceCall, ENGINE_IDS, TYPICAL_CALL, DEFAULT_RUNS } from '../config.js';
+import { estimateScanCost, resolveKeys, priceCall, ENGINE_IDS, ACTIVE_ENGINES, TYPICAL_CALL, DEFAULT_RUNS } from '../config.js';
 import { fixtureFetch, jsonResponse, DRY_RUN_ENV } from '../dry-run.js';
 
 const business = { id: '0b8f2a6e-3c1d-4e5f-9a7b-1c2d3e4f5a6b', name: 'Fictional Wash', trade: 'laundromat', town: 'North Babylon', nearbyTown: 'Deer Park', state: 'NY', zip: '11703' };
@@ -30,10 +30,17 @@ test(`cost: a default 5 × ${N} × ${DEFAULT_RUNS} scan plus extraction estimate
   assert.ok(Math.abs(estimateScanCost({ runs: 2 }).total - 2 * est.total) < 1e-5);
 });
 
+test('runScan: engines default to ACTIVE_ENGINES (the advertised ones)', async () => {
+  const scan = await runScan({ business, env, fetchImpl: fixtureFetch() });
+  assert.deepEqual(scan.engines, ACTIVE_ENGINES);
+  assert.equal(scan.calls.length, 5 * ACTIVE_ENGINES.length * DEFAULT_RUNS);
+  assert.deepEqual([...new Set(scan.calls.map((c) => c.engine))].sort(), [...ACTIVE_ENGINES].sort());
+});
+
 test(`runScan: 5 questions × ${N} engines × ${DEFAULT_RUNS} run (default) on fixtures, cost under budget`, async () => {
   const f = fixtureFetch();
   const seen = [];
-  const scan = await runScan({ business, env, fetchImpl: f, onCall: (c) => seen.push(c.engine) });
+  const scan = await runScan({ business, env, engines: ENGINE_IDS, fetchImpl: f, onCall: (c) => seen.push(c.engine) });
   assert.match(scan.scanId, /^[0-9a-f-]{36}$/);
   assert.equal(scan.questions.length, 5);
   assert.equal(scan.runs, DEFAULT_RUNS);
@@ -79,7 +86,7 @@ test('runScan store:true writes one scan_raw row per call (failed included) in o
     perplexity: () => jsonResponse({ error: { message: 'invalid request body', type: 'invalid_request', code: 400 } }, 400),
     supabase: (u, init) => { posts.push({ u, init }); return new Response(null, { status: 201 }); },
   });
-  const scan = await runScan({ business, env, runs: 2, fetchImpl: f, store: true });
+  const scan = await runScan({ business, env, engines: ENGINE_IDS, runs: 2, fetchImpl: f, store: true });
   assert.deepEqual(scan.stored, { ok: true, count: 5 * N * 2, error: null });
   assert.equal(posts.length, 1);
   assert.equal(posts[0].u, 'https://dry-run.supabase.co/rest/v1/scan_raw');

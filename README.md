@@ -49,6 +49,32 @@ The sender (email and Lob jobs) must check `unsubscribes` by email and by `repor
 - **Money rules:** spent = metered API cost (`scan_raw` + `scan_usage`) + expenses except `api_topup`; earned = `payments` where `livemode`; API credit top-ups are shown as cash out but not added to spent (the metered cost already counts what they paid for).
 - **Local dry run:** put `ADMIN_TOKEN=<anything>` and `SCANNER_DRY_RUN=1` in `.dev.vars`, run `npm run dev`, sign in at `http://localhost:8787/admin` and start a scan. Engine answers come from `scanner/test/fixtures/engines/`, the extractor is canned, nothing is stored and nothing costs money. The flag is ignored unless the request comes from localhost; never set it on Cloudflare.
 
+## Running scans from your PC (Free plan)
+
+On the Workers Free plan a full scan can't run on Cloudflare (10 ms CPU, 50 subrequests per invocation). Until that changes, run scans from Node on your own PC: `scanner/run.js` does exactly what the Workflow does (same `scans` / `scan_raw` / `scan_usage` / `scan_results` rows, same row ids, same report gate), so `/admin` and `/report/<token>` show the results as if the Workflow had run. No hosting cost; you pay only the API calls.
+
+1. In the repo root, create `.dev.vars` (git-ignored; same `KEY=value` file `wrangler dev` reads). Environment variables override it.
+   ```
+   SUPABASE_URL=https://bahmemiydzpotfrxmlzw.supabase.co
+   SUPABASE_SERVICE_KEY=        # service/secret key: the runner writes the scan tables
+   ANTHROPIC_API_KEY=           # Claude engine AND the extractor (required)
+   OPENAI_API_KEY=              # ChatGPT
+   GEMINI_API_KEY=              # Gemini
+   ```
+   An engine without a key is dropped before the scan starts (not called, not charged); its column is left off the report, which names it as not answering.
+2. Write the business as JSON (`name`, `trade`, `address`, `town`, `state`, `zip`, `phone`, `website`, optional `nearbyTown`, `id`). See `scanner/examples/sample-business.json`.
+3. Run:
+   ```bash
+   npm run scan -- --business biz.json --estimate    # keys found/missing + cost estimate, spends nothing
+   npm run scan -- --business biz.json               # asks "Proceed? [y/N]", then scans and stores
+   npm run scan -- --business biz.json --dry-run --yes   # fixtures + in-memory store: no network, no cost
+   ```
+   Options: `--engines chatgpt,claude,gemini` (default: `ACTIVE_ENGINES` in `scanner/config.js`), `--runs 1`, `--token <reportToken>` (default: a fresh random token), `--notes "..."`, `--yes`.
+   It prints each call as it lands, then answers / named / named first, cost per engine, extraction cost, total, and the report URL (`https://aifoundscore.com/report/<token>`, saved only if the report passes validation; otherwise the validation errors).
+4. If a run dies part way (closed laptop, network), resume it: `npm run scan -- --business biz.json --resume <scanId>`. Calls already stored ok are reused and not paid again; every answer is extracted again (those extractor calls are billed again and recorded as new `scan_usage` rows).
+
+**Upgrade path:** when scans must start from the web (the `/admin` Run-scan form, customer requests), switch to Workers Paid ($5/mo) and use the Workflow (`src/scan-workflow.js`). Both paths share their helpers (`src/admin/scan-core.js`), so their rows stay identical.
+
 ## Local dev
 
 Requires Node 18+ and a free Cloudflare account (only needed for actual deploy, not for building).

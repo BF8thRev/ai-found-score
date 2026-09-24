@@ -35,10 +35,14 @@ function domainOf(url) {
  *   startAt: ISO string (askedAt is spaced 20s apart from here),
  *   sourceChecks: { [domain]: { youListed, youPosition, topListed } },
  *   facts: [{ q, engine, run, field, aiSays, sourceSays, status }],
- *   listings, issues, method, baseline
+ *   listings, issues, method, baseline,
+ *   engines?: [engineId...]   keep only these engines' answers, facts and method.engines
+ *                             (the spec can hold answers for every engine; the sample shows the
+ *                             ones the site advertises). Competitors no kept answer names are dropped.
  * }
  */
-export function buildSample(spec) {
+export function buildSample(fullSpec) {
+  const spec = pickEngines(fullSpec);
   const questionById = Object.fromEntries(spec.questions.map((q) => [q.id, q]));
   const comps = spec.competitors.map((c) => ({ ...c, aliases: c.aliases?.length ? c.aliases : [c.name] }));
   const start = Date.parse(spec.startAt);
@@ -95,7 +99,7 @@ export function buildSample(spec) {
       first: hits.filter((a) => a.businessesNamed[0]?.entityId === c.id).length,
       answerIds: hits.map((a) => a.id),
     };
-  }).sort((a, b) => b.named - a.named || b.first - a.first);
+  }).filter((e) => e.named > 0).sort((a, b) => b.named - a.named || b.first - a.first);
 
   const totals = {
     answers: answers.length,
@@ -149,5 +153,22 @@ export function buildSample(spec) {
     issues: spec.issues || [],
     method: spec.method,
     baseline: spec.baseline ?? null,
+  };
+}
+
+/** spec limited to spec.engines (answers, facts, method.engines); unchanged when not set. */
+function pickEngines(spec) {
+  if (!spec.engines) return spec;
+  const keep = (e) => spec.engines.includes(e);
+  const engines = Object.fromEntries(Object.entries(spec.method.engines).filter(([e]) => keep(e)));
+  return {
+    ...spec,
+    answers: spec.answers.filter(([, engine]) => keep(engine)),
+    facts: (spec.facts || []).filter((f) => keep(f.engine)),
+    method: {
+      ...spec.method,
+      engines,
+      enginesFailed: (spec.method.enginesFailed || []).filter((e) => keep(e)),
+    },
   };
 }

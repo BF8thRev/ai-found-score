@@ -157,3 +157,68 @@ export function scanTotals({ calls = [], extractions = [], build = null }) {
     status: okCalls === 0 ? 'failed' : 'done',
   };
 }
+
+// ---------------------------------------------------------------------------
+// Pipeline pieces shared by the scan Workflow (src/scan-workflow.js) and the local runner
+// (scanner/run.js), so both write the same rows with the same ids.
+// ---------------------------------------------------------------------------
+
+/** Engine calls / extractions started together (different providers, so rate limits stay low). */
+export const ENGINE_BATCH = 5;
+export const EXTRACT_BATCH = 5;
+/** Extra attempts after a free, transient failure (429 / 5xx / network). A billed call is never repeated. */
+export const ENGINE_RETRIES = 2;
+export const EXTRACT_RETRIES = 3;
+
+/** `engine:questionId:run`, the key of one answer (scan_usage.answer_ref, proposals, step names). */
+export const answerRef = (c) => `${c.engine}:${c.questionId}:${c.run || 1}`;
+
+/** Seed of a call's scan_raw id: stableUuid(rawIdSeed(scanId, job.key)). */
+export const rawIdSeed = (scanId, key) => `${scanId}:${key}`;
+
+/**
+ * Seed of an extraction's scan_usage id. Attempt > 1 gets its own id: the proposals aren't
+ * stored, so a retry after a landed write is a second billed call and must be recorded too.
+ */
+export const extractIdSeed = (scanId, key, attempt = 1) => `${scanId}:extract:${key}${attempt > 1 ? `:a${attempt}` : ''}`;
+
+/** What an adapter "returned" when it threw (adapters shouldn't; one bug can't sink the scan). */
+export function adapterThrew(engine, e) {
+  return { engine, ok: false, text: null, citations: [], request: null, raw: null, costUsd: 0, error: `adapter threw: ${e?.message || e}`, askedAt: new Date().toISOString(), model: null };
+}
+
+/** A compact call rebuilt from a stored ok scan_raw row (reused instead of paying the engine again). */
+export function callFromStoredRaw(prev, q) {
+  return compactCall({
+    engine: prev.engine, questionId: q.id, intent: q.intent, questionText: q.text, run: prev.run,
+    ok: true, text: prev.answer_text, citations: prev.citations || [], error: null,
+    costUsd: Number(prev.cost_usd) || 0, askedAt: prev.asked_at, model: prev.model,
+  }, q);
+}
+
+/** The compact extraction result handed to the build step. `error` is already redacted. */
+export function extractionResult(key, r, error) {
+  return {
+    key, ok: r.ok !== false, error,
+    businesses: r.businesses || [], ownerFacts: r.ownerFacts || [],
+    model: r.model || null, costUsd: round6(r.costUsd),
+    inputTokens: r.usage?.input_tokens || 0, outputTokens: r.usage?.output_tokens || 0,
+  };
+}
+
+/** Extraction results → buildReport's proposalsByAnswer (a failure stays a failure). */
+export function proposalsFromExtractions(extractions) {
+  return Object.fromEntries(extractions.map((x) => [x.key, x.ok
+    ? { businesses: x.businesses, ownerFacts: x.ownerFacts, model: x.model }
+    : { ok: false, error: x.error, model: x.model }]));
+}
+
+/** The publish gate: validateReport's verdict, plus "no answers at all" is never publishable. */
+export function publishGate(report, validation) {
+  const v = { ok: validation.ok, errors: [...validation.errors] };
+  if (!report.answers?.length) {
+    v.ok = false;
+    v.errors.push('no successful answers (every engine failed)');
+  }
+  return v;
+}

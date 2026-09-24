@@ -1,6 +1,6 @@
 // src/admin/page.js — HTML for /admin (server-rendered; every dynamic value goes through esc()).
 
-import { ENGINE_NAMES, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
+import { ENGINE_NAMES, ACTIVE_ENGINES, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
 import { TRADES } from '../../scanner/questions.js';
 import {
   esc, usd, pct, moneySummary, engineVerdicts, activityFeed, shortTime, nyDate, EXPENSE_CATEGORIES,
@@ -130,7 +130,9 @@ function runSection(d, { watch = [], engineIds, flash }) {
   // Per-call cost at typical usage, for the live estimate in the form.
   const perCall = Object.fromEntries(engineIds.map((e) => [e, priceCall(e, TYPICAL_CALL[e])]));
   perCall.extract = priceCall('extract', TYPICAL_CALL.extract);
-  const est = estimateScanCost({ engines: engineIds, questions: 5, runs: 1 });
+  // Pre-ticked (and estimated): the engines the site advertises. The rest stay selectable.
+  const defaults = engineIds.filter((e) => ACTIVE_ENGINES.includes(e));
+  const est = estimateScanCost({ engines: defaults, questions: 5, runs: 1 });
   const trades = Object.keys(TRADES);
   return `<section id="run">
   <h2>Run a scan</h2>
@@ -154,7 +156,7 @@ function runSection(d, { watch = [], engineIds, flash }) {
     <label>Runs per question<select name="runs"><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select></label>
     <label>Questions<select name="questions"><option value="5" selected>All 5</option><option value="2">First 2 (light test)</option><option value="1">First 1 (light test)</option></select></label>
     <fieldset><legend class="small">Engines</legend>
-      ${engineIds.map((e) => `<label><input type="checkbox" name="engines" value="${esc(e)}" checked> ${esc(engineName(e))}</label>`).join('')}
+      ${engineIds.map((e) => `<label><input type="checkbox" name="engines" value="${esc(e)}"${defaults.includes(e) ? ' checked' : ''}> ${esc(engineName(e))}</label>`).join('')}
     </fieldset>
     <div class="full"><button class="primary" type="submit">Start scan</button>
       <span class="small" id="run-estimate">Estimated cost: ${usd(est.total)} (typical usage)</span></div>

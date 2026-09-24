@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan, pingAll, summarizeScan } from './scan.js';
-import { ENGINE_IDS, DEFAULT_RUNS, estimateScanCost, enginesConfigured } from './config.js';
+import { ENGINE_IDS, ACTIVE_ENGINES, DEFAULT_RUNS, estimateScanCost, enginesConfigured } from './config.js';
 import { buildQuestions } from './questions.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -57,13 +57,14 @@ function loadEnv() {
   return env;
 }
 
-const USAGE = `Usage: node scanner/cli.js --business path.json [--engines ${ENGINE_IDS.join(',')}] [--runs 1]
+const USAGE = `Usage: node scanner/cli.js --business path.json [--engines ${ACTIVE_ENGINES.join(',')}] [--runs 1]
                           [--dry-run] [--ping] [--store] [--out result.json] [--estimate]`;
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(USAGE);
-  const engines = args.engines || ENGINE_IDS;
+  // Default: the engines the site advertises. Any of ENGINE_IDS can be named with --engines.
+  const engines = args.engines || ACTIVE_ENGINES;
 
   let env = loadEnv();
   let fetchImpl = globalThis.fetch;

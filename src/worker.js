@@ -7,14 +7,15 @@
 //   POST /api/lead            -> "Email me this report"
 //   POST /api/request         -> landing-page free-report request (email optional; returns id)
 //                                or {request_id, email} to attach an email to that request
-//   GET  /api/questions       -> the 5 questions we'd ask for ?trade=&town=&zip=&state=
+//   GET  /api/questions       -> the 5 questions we'd ask for ?trade=&town=&zip=&state=, plus the active assistants
 //   POST /api/stripe-webhook  -> Stripe webhook, verified signature, writes payment
 //   GET|POST /unsubscribe, /stop -> email or postcard opt-out
 //   /admin, /admin/*          -> business dashboard (session cookie or Bearer ADMIN_TOKEN); src/admin/routes.js
 //   GET  /api/admin/ping      -> live key check per engine + extractor (cookie or Bearer ADMIN_TOKEN)
 //   POST /api/admin/scan      -> start a background scan (Cloudflare Workflow) -> { scanId, instanceId, statusUrl }
 //   GET  /api/admin/scan/:id  -> scan status + progress
-//   everything else           -> static assets (public/) via env.ASSETS
+//   everything else           -> static assets (public/) via env.ASSETS; HTML and /llms.txt get the
+//                                assistant names and counts filled in from ACTIVE_ENGINES (serveAsset)
 //
 // Also exports ScanWorkflow (src/scan-workflow.js), bound as SCAN_WORKFLOW in wrangler.jsonc.
 
@@ -26,7 +27,8 @@ import { buildQuestions, normalizeTrade } from '../scanner/questions.js';
 import { verifyStripeSignature } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
-import { resolveKeys, enginesConfigured } from '../scanner/config.js';
+import { resolveKeys, enginesConfigured, ACTIVE_ENGINES } from '../scanner/config.js';
+import { engineCopy, copyTokens, fillTokens, copyFor } from './lib/engines-copy.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 
 // The background scan runner (Cloudflare Workflows entrypoint; binding SCAN_WORKFLOW).
@@ -89,14 +91,14 @@ export default {
 
     // Pretty-URL rewrites. Serve the clean-URL asset paths directly.
     if (url.pathname.startsWith('/report/') && url.pathname.length > '/report/'.length) {
-      return env.ASSETS.fetch(new URL('/report', url).toString());
+      return serveAsset(env, request, '/report');
     }
     if (url.pathname === '/success') {
-      return env.ASSETS.fetch(new URL('/success', url).toString());
+      return serveAsset(env, request, '/success');
     }
 
     // Static assets (landing, report, success pages).
-    return env.ASSETS.fetch(request);
+    return serveAsset(env, request);
   },
 };
 
@@ -290,8 +292,6 @@ async function handleLead(request, env) {
   return Response.json({ ok: true });
 }
 
-// The assistants the free report asks (site copy: 5 questions x 5 = 25 searches).
-const REPORT_ASSISTANTS = ['ChatGPT', 'Claude', 'Gemini', 'Google AI Mode', 'Perplexity'];
 const TOWN_RE = /^[\p{L}\p{M}0-9 .,'’-]{1,60}$/u;
 
 // The exact questions the scanner would ask for this trade and town, built
@@ -308,12 +308,13 @@ function handleQuestions(url) {
   if (zip && !/^\d{5}$/.test(zip)) return bad('ZIP must be 5 digits.');
   if (!/^[A-Za-z]{2}$/.test(state)) return bad('State must be a 2-letter code.');
   const questions = buildQuestions({ trade, town, zip, state }).map(({ id, intent, text }) => ({ id, intent, text }));
+  const copy = engineCopy(ACTIVE_ENGINES, { questions: questions.length });
   return Response.json({
     ok: true,
     trade,
     questions,
-    assistants: REPORT_ASSISTANTS,
-    searches: questions.length * REPORT_ASSISTANTS.length,
+    assistants: copy.names,
+    searches: copy.searchCount,
   }, { headers: { 'Cache-Control': 'public, max-age=300' } });
 }
 
@@ -426,7 +427,7 @@ async function handleUnsubscribe(request, url, env) {
     if (status) page.searchParams.set('status', status);
     return status
       ? Response.redirect(page.toString(), 303)
-      : env.ASSETS.fetch(page.toString());
+      : serveAsset(env, request, '/unsubscribe', 'GET');
   };
 
   if (!token && !email && !code) return servePage(null);
@@ -525,6 +526,106 @@ async function handleStripeWebhook(request, env) {
   }
 
   return Response.json({ received: true });
+}
+
+// ---------------------------------------------------------------------------
+// Static assets with the assistant copy filled in
+// ---------------------------------------------------------------------------
+// Pages name the assistants we ask and count the searches. Both come from ACTIVE_ENGINES
+// (scanner/config.js) via src/lib/engines-copy.js, so adding an engine there updates every page.
+// The HTML files already read correctly for the current list (the fallback if this ever doesn't
+// run); the Worker overwrites:
+//   <span data-ai-list>…</span>            "ChatGPT, Claude and Gemini" (data-ai-list="or" → "… or Gemini")
+//   <span data-ai-count="word">…</span>    "three" ("Word" → "Three", "" / "digit" → "3")
+//   <span data-search-count>…</span>       "15" (same forms)
+//   <span data-question-count>…</span>     "5" (same forms)
+//   data-ai-names="…"                      "ChatGPT|Claude|Gemini" (for page scripts)
+//   <meta … content="…" data-copy="…{{AI_LIST}}…">  content = the template filled in
+//   <script type="application/ld+json">…{{AI_LIST}}…</script>  tokens filled in
+//   /llms.txt                              tokens filled in
+// Tokens: see copyTokens(). Only text/html responses and /llms.txt are touched.
+
+const COPY = engineCopy(ACTIVE_ENGINES);
+const TOKENS = copyTokens(COPY);
+// Goes into rewritten responses' ETags, so a cached page is revalidated when the list changes.
+const COPY_TAG = `-ai.${ACTIVE_ENGINES.join('.')}`;
+
+/**
+ * env.ASSETS.fetch, then fill in the assistant copy. `path` serves a different asset (pretty
+ * URLs); `method` overrides the request's (a POST that ends on a page).
+ */
+async function serveAsset(env, request, path, method) {
+  let req = request;
+  if (path || method) {
+    const u = new URL(request.url);
+    if (path) { u.pathname = path; u.search = ''; }
+    req = new Request(u.toString(), { method: method || request.method, headers: request.headers });
+  }
+  // Our ETag = asset ETag + COPY_TAG; hand the asset server the ETag it knows.
+  const inm = req.headers.get('If-None-Match');
+  if (inm && inm.includes(COPY_TAG)) {
+    const headers = new Headers(req.headers);
+    headers.set('If-None-Match', inm.split(COPY_TAG).join(''));
+    req = new Request(req, { headers });
+  }
+  const res = await env.ASSETS.fetch(req);
+  const isHtml = (res.headers.get('Content-Type') || '').includes('text/html');
+  const isLlms = new URL(req.url).pathname === '/llms.txt';
+  if (!isHtml && !isLlms) return res;
+
+  const tagged = (r) => {
+    const etag = r.headers.get('ETag');
+    if (etag && !etag.includes(COPY_TAG)) r.headers.set('ETag', etag.replace(/"$/, `${COPY_TAG}"`));
+    return r;
+  };
+  if (!res.body || res.status === 304 || req.method === 'HEAD') return tagged(new Response(res.body, res));
+  if (isLlms) {
+    const out = new Response(fillTokens(await res.text(), TOKENS), res);
+    out.headers.delete('Content-Length');
+    return tagged(out);
+  }
+  return tagged(copyRewriter().transform(res));
+}
+
+function copyRewriter() {
+  const fill = (kind, attr) => ({
+    element(el) {
+      const text = copyFor(kind, el.getAttribute(attr), COPY);
+      if (text != null) el.setInnerContent(text);
+    },
+  });
+  let ld = '';
+  return new HTMLRewriter()
+    .on('[data-ai-list]', fill('list', 'data-ai-list'))
+    .on('[data-ai-count]', fill('ai', 'data-ai-count'))
+    .on('[data-search-count]', fill('search', 'data-search-count'))
+    .on('[data-question-count]', fill('question', 'data-question-count'))
+    .on('[data-ai-names]', { element(el) { el.setAttribute('data-ai-names', COPY.names.join('|')); } })
+    .on('meta[data-copy]', {
+      element(el) {
+        el.setAttribute('content', fillTokens(decodeAttr(el.getAttribute('data-copy')), TOKENS));
+        el.removeAttribute('data-copy');
+      },
+    })
+    .on('script[type="application/ld+json"]', {
+      // Text arrives in chunks; collect the whole script, then write it back filled in.
+      text(t) {
+        ld += t.text;
+        if (t.lastInTextNode) {
+          t.replace(fillTokens(ld, TOKENS), { html: true });
+          ld = '';
+        } else {
+          t.remove();
+        }
+      },
+    });
+}
+
+// HTMLRewriter hands attribute values over as written in the file (entities not decoded).
+function decodeAttr(v) {
+  return String(v || '')
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 }
 
 // Admin routes (/admin, /api/admin/*) live in src/admin/: routes.js (auth, pages), api.js (scan API).
