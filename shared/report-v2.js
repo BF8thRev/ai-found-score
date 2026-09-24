@@ -46,12 +46,20 @@ export function lintText(str) {
 // URLs, values read from pages), not our copy. They are skipped by the lint.
 const LINT_SKIP_TOP = new Set(['answers', 'entities', 'business', 'baseline', 'id', 'generatedAt']);
 const LINT_SKIP_KEYS = new Set([
-  'text', 'url', 'urls', 'domain', 'aiSays', 'sourceSays', 'name', 'aliases', 'topListed',
+  'text', 'url', 'urls', 'domain', 'aiSays', 'sourceSays', 'name', 'aliases', 'topListed', 'quote', 'format',
   'fields', 'answerId', 'answerIds', 'citedIn', 'entityId', 'questionId', 'id', 'askedAt',
   'model', 'api', 'error', 'checkError', 'rule', 'kind', 'status', 'severity', 'field', 'intent', 'engine', 'ownerMatch', 'sourceFrom',
 ]);
 
 function lintWalk(value, path, out, data = []) {
+  // Copy-paste fix text is our copy (built from templates + the owner's details): lint its
+  // label and text even though "text" is skipped elsewhere; the owner's details are masked.
+  if (path.endsWith('.copyText') && Array.isArray(value)) {
+    value.forEach((c, i) => {
+      for (const k of ['label', 'text']) lintWalk(c && c[k], `${path}[${i}].${k}`, out, data);
+    });
+    return;
+  }
   if (typeof value === 'string') {
     for (const h of lintText(maskData(value, data))) out.push({ path, ...h, match: value.substr(h.index, h.match.length) });
   } else if (Array.isArray(value)) {
@@ -75,6 +83,11 @@ function dataStrings(report) {
   for (const a of report.answers || []) for (const b of (a && a.businessesNamed) || []) add(b && b.name);
   for (const s of report.sources || []) add(s && s.topListed);
   for (const l of report.listings || []) for (const v of Object.values((l && l.fields) || {})) add(v);
+  for (const d of report.ownerDescriptors || []) add(d && d.quote);
+  // The owner's own details (name, address, website facts) fill the fix steps and copy text.
+  const b = report.business || {};
+  for (const k of ['name', 'address', 'town', 'phone', 'website', 'trade']) add(b[k]);
+  for (const v of Object.values(b.facts || {})) add(v);
   // Longest first, so a name that contains a shorter one is masked whole.
   return [...out].sort((a, b) => b.length - a.length);
 }
@@ -142,10 +155,14 @@ export function othersNamed(answer) {
  *   best_named_you: every answer names the owner, so lead with the best one:
  *     named first beats named, then most others named, then the same tie-breaks.
  * Answers with an `unsure` owner match are never used as "didn't name you".
+ * Answers marked `headlineUnstable` (a re-ask of the same search flipped the owner's
+ * named / not-named status) are skipped while any other answer is left.
  */
 export function pickHeadline(report) {
-  const answers = (report && report.answers) || [];
-  if (!answers.length) return null;
+  const all = (report && report.answers) || [];
+  if (!all.length) return null;
+  const stable = all.filter((a) => !a.headlineUnstable);
+  const answers = stable.length ? stable : all;
   const qOrd = questionOrder(report);
   const tie = (a, b) =>
     engineRank(a.engine) - engineRank(b.engine) ||
@@ -214,6 +231,22 @@ export function edgeState(report) {
   const failedEngines = [...(((report && report.method) || {}).enginesFailed || [])];
   return { state, flags, failedEngines };
 }
+
+/** The refund promise: "if we can't show you 3 things you can fix, money back". */
+export const MIN_FIX_ITEMS = 3;
+
+/** Fix items in a report: its issues (titles stay visible on a locked report). */
+export function fixItems(report) {
+  return ((report && report.issues) || []).filter((i) => i && i.title);
+}
+
+/** True when the $29 Fix steps tier may be offered for this report (≥ MIN_FIX_ITEMS fixes). */
+export function snapshotOffered(report) {
+  return fixItems(report).length >= MIN_FIX_ITEMS;
+}
+
+/** Most "how AI describes you" phrases a report may carry. */
+export const MAX_OWNER_DESCRIPTORS = 6;
 
 /**
  * validateReport(report) → { ok, errors: string[] }
@@ -341,6 +374,29 @@ export function validateReport(report) {
     if (typeof f.aiSays !== 'string' || !f.aiSays) return err(`${ft}.aiSays is empty`);
     if (!(a.text || '').includes(f.aiSays)) err(`${ft}.aiSays ${JSON.stringify(f.aiSays)} is not a literal quote from answer ${a.id}`);
     if (!['match', 'differs', 'not stated'].includes(f.status)) err(`${ft}.status "${f.status}" is not match | differs | not stated`);
+  });
+
+  // "How AI describes you": literal quotes from answers that name the owner, capped.
+  if (report.ownerDescriptors != null && !Array.isArray(report.ownerDescriptors)) err('ownerDescriptors must be an array');
+  const descs = Array.isArray(report.ownerDescriptors) ? report.ownerDescriptors : [];
+  if (descs.length > MAX_OWNER_DESCRIPTORS) err(`ownerDescriptors has ${descs.length} entries; at most ${MAX_OWNER_DESCRIPTORS}`);
+  descs.forEach((d, i) => {
+    const dt = `ownerDescriptors[${i}]`;
+    const a = d && byId.get(d.answerId);
+    if (!a) return err(`${dt}.answerId "${d && d.answerId}" is not an answer`);
+    if (typeof d.quote !== 'string' || !d.quote.trim()) return err(`${dt}.quote is empty`);
+    if (!(a.text || '').includes(d.quote)) err(`${dt}.quote ${JSON.stringify(d.quote)} is not a literal quote from answer ${a.id}`);
+    if (!a.namedYou) err(`${dt} comes from answer ${a.id}, which does not name the owner`);
+  });
+
+  // Fix steps and copy-paste text: plain strings, nothing else.
+  (report.issues || []).forEach((it, i) => {
+    const t = `issues[${i}]`;
+    if (!it || typeof it.title !== 'string' || !it.title) return err(`${t}.title is empty`);
+    if (it.steps != null && !(Array.isArray(it.steps) && it.steps.every((s) => typeof s === 'string' && s.trim())))
+      err(`${t}.steps must be an array of non-empty strings`);
+    if (it.copyText != null && !(Array.isArray(it.copyText) && it.copyText.every((c) => c && typeof c.label === 'string' && c.label && typeof c.text === 'string' && c.text.trim())))
+      err(`${t}.copyText must be an array of { label, text }`);
   });
 
   (report.sources || []).forEach((s, i) => {

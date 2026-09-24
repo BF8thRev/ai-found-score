@@ -59,8 +59,9 @@ test('resume keeps the saved report; --rebuild re-extracts and replaces it in pl
   const usageBefore = t.scan_usage.length;
   sum = await run(s, { scanId, resume: true, rebuild: true });
   assert.equal(s.hits.filter((h) => h === 'api.openai.com' || h === 'claude' || h === 'generativelanguage.googleapis.com').length, 0);
-  assert.equal(s.hits.filter((h) => h === 'extract').length, 15);
-  assert.equal(t.scan_usage.length, usageBefore + 15, 're-extraction recorded in scan_usage');
+  // 15 answers + the stored headline re-ask (its engine call is reused, its extraction is not).
+  assert.equal(s.hits.filter((h) => h === 'extract').length, 16);
+  assert.equal(t.scan_usage.length, usageBefore + 16, 're-extraction recorded in scan_usage');
   assert.equal(sum.reportSaved, true);
   assert.equal(sum.reportReplaced, true);
   assert.equal(sum.callsReused, 15);
@@ -72,8 +73,16 @@ test('resume keeps the saved report; --rebuild re-extracts and replaces it in pl
   assert.equal(row.report.id, 'tok123abcd');
   assert.notEqual(row.report.generatedAt, '2000-01-01T00:00:00.000Z');
   assert.equal(row.scanned_at, row.report.generatedAt);
-  // This run paid only for extraction.
-  assert.ok(Math.abs(sum.runCostUsd - sum.extractCostUsd) < 1e-9);
+  // This run paid only for extraction; scans.extract_cost_usd is every scan_usage row of the
+  // scan (first run + resume + rebuild), not just this run's.
+  const allUsage = t.scan_usage.filter((r) => r.scan_id === scanId).reduce((a, r) => a + r.cost_usd, 0);
+  assert.ok(Math.abs(t.scans[0].extract_cost_usd - allUsage) < 1e-5, `${t.scans[0].extract_cost_usd} vs ${allUsage}`);
+  assert.ok(Math.abs(sum.extractCostUsd - allUsage) < 1e-5);
+  const thisRun = t.scan_usage.slice(usageBefore).reduce((a, r) => a + r.cost_usd, 0);
+  assert.ok(Math.abs(sum.runCostUsd - thisRun) < 1e-5, 'this run paid only for extraction');
+  assert.ok(sum.extractCostUsd > sum.runCostUsd, 'the total includes the earlier runs');
+  const rawCost = t.scan_raw.reduce((a, r) => a + r.cost_usd, 0);
+  assert.ok(Math.abs(t.scans[0].total_cost_usd - (rawCost + allUsage)) < 1e-5);
   assert.match(formatSummary(sum), /Report \(replaced\): /);
 });
 

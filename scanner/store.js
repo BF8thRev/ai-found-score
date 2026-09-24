@@ -244,6 +244,24 @@ export async function saveUsage(env, rows, { fetchImpl = fetch } = {}) {
   }
 }
 
+/**
+ * Sum of cost_usd over EVERY scan_usage row of a scan (all runs, resumes and rebuilds).
+ * This is what scans.extract_cost_usd must equal. Returns null when it can't be read (never throws).
+ */
+export async function sumUsageCost(env, scanId, { fetchImpl = fetch } = {}) {
+  try {
+    if (!isUuid(scanId)) return null;
+    const { base, headers } = supa(env);
+    const res = await fetchImpl(`${base}/scan_usage?scan_id=eq.${scanId}&select=cost_usd`, { headers });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return null;
+    return Math.round(rows.reduce((s, r) => s + (Number(r.cost_usd) || 0), 0) * 1e6) / 1e6;
+  } catch {
+    return null;
+  }
+}
+
 const SCAN_COLUMNS = ['id', 'business_id', 'business_name', 'report_token', 'status', 'engines', 'runs', 'questions',
   'started_at', 'finished_at', 'calls_total', 'calls_ok', 'engine_cost_usd', 'extract_cost_usd', 'total_cost_usd',
   'named_you', 'first_you', 'answers', 'report_valid', 'errors', 'trigger', 'notes'];

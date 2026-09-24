@@ -10,6 +10,8 @@ export const ENGINE_IDS = ['chatgpt', 'gemini', 'google_ai_mode', 'perplexity', 
  *  three; add 'google_ai_mode' / 'perplexity' here once their keys exist, and every page's copy
  *  (assistant names, "N searches") follows. Order = how they're listed in copy. */
 export const ACTIVE_ENGINES = ['chatgpt', 'claude', 'gemini'];
+// ACTIVE_ENGINES is the static fallback for code that has no env (site copy, samples).
+// Scans default to activeEngines(env): whatever has keys right now.
 
 export const ENGINE_NAMES = {
   chatgpt: 'ChatGPT',
@@ -185,6 +187,22 @@ export function enginesConfigured(env = {}) {
     google_ai_mode: !!(k.dataforseoLogin && k.dataforseoPassword),
     claude: !!k.anthropicKey,
   };
+}
+
+/**
+ * The engines a scan runs by default: every engine whose keys are configured in `env`
+ * (resolveKeys aliases included), in ENGINE_IDS order. [] when none are configured.
+ * Code with no env uses the static ACTIVE_ENGINES instead.
+ */
+export function activeEngines(env = {}) {
+  const c = enginesConfigured(env);
+  return ENGINE_IDS.filter((e) => c[e]);
+}
+
+/** activeEngines(env), or ACTIVE_ENGINES when no engine has a key (so the error names the missing key). */
+export function defaultScanEngines(env = {}) {
+  const a = activeEngines(env);
+  return a.length ? a : [...ACTIVE_ENGINES];
 }
 
 // US state abbreviations → names (DataForSEO location_name and API user_location need names).

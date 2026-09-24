@@ -5,7 +5,7 @@
 //        ?sync=1                  tiny inline test only: one engine, questions ≤ 2
 //   GET  /api/admin/scan/:id      status + progress (calls done/total, cost so far, errors)
 
-import { ENGINE_IDS, ACTIVE_ENGINES, round6 } from '../../scanner/config.js';
+import { ENGINE_IDS, round6, defaultScanEngines } from '../../scanner/config.js';
 import { ENGINES } from '../../scanner/engines/index.js';
 import { runScan, summarizeScan } from '../../scanner/scan.js';
 import { buildQuestions } from '../../scanner/questions.js';
@@ -24,10 +24,13 @@ export const NO_STORE = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex,
 /** Every engine the scanner knows: the config list plus anything in the registry. */
 export const ALL_ENGINES = [...new Set([...ENGINE_IDS, ...Object.keys(ENGINES)])];
 
-/** No engines named → the ones the site advertises (ACTIVE_ENGINES); any known engine can still be named. */
-export function withActiveDefault(body) {
+/**
+ * No engines named → every engine with a key in `env` (activeEngines), or the static
+ * ACTIVE_ENGINES when there's no env / no key at all. Any known engine can still be named.
+ */
+export function withActiveDefault(body, env) {
   if (!body || typeof body !== 'object' || (Array.isArray(body.engines) && body.engines.length)) return body;
-  return { ...body, engines: ACTIVE_ENGINES };
+  return { ...body, engines: defaultScanEngines(env) };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -100,7 +103,7 @@ export async function handleAdminPing(env) {
  * → { ok: true, scanId, instanceId, statusUrl, dryRun } | { ok: false, status, error }
  */
 export async function startScan(env, url, body) {
-  const parsed = parseScanRequest(withActiveDefault(body), { knownEngines: ALL_ENGINES });
+  const parsed = parseScanRequest(withActiveDefault(body, env), { knownEngines: ALL_ENGINES });
   if (!parsed.ok) return { ok: false, status: 422, error: parsed.error };
   if (!env.SCAN_WORKFLOW) return { ok: false, status: 500, error: 'SCAN_WORKFLOW binding missing (wrangler.jsonc)' };
   const dryRun = dryRunEnabled(env) && isLocalRequest(url);
@@ -208,7 +211,7 @@ export async function handleAdminScanStatus(id, env) {
 // ?sync=1 — tiny inline scan for a light test (one engine, ≤ 2 questions)
 // ---------------------------------------------------------------------------
 async function handleSyncScan(body, env) {
-  const parsed = parseScanRequest(withActiveDefault(body), { knownEngines: ALL_ENGINES });
+  const parsed = parseScanRequest(withActiveDefault(body, env), { knownEngines: ALL_ENGINES });
   if (!parsed.ok) return json({ error: parsed.error }, 422);
   const p = parsed.params;
   if (p.engines.length !== 1 || !p.questionLimit || p.questionLimit > 2 || p.runs !== 1) {

@@ -19,7 +19,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import {
-  ENGINE_IDS, ACTIVE_ENGINES, DEFAULT_RUNS, ENGINE_NAMES, estimateScanCost, enginesConfigured, resolveKeys, round6,
+  ENGINE_IDS, DEFAULT_RUNS, ENGINE_NAMES, estimateScanCost, enginesConfigured, resolveKeys, round6, defaultScanEngines,
 } from './config.js';
 import { buildQuestions } from './questions.js';
 import { ENGINES } from './engines/index.js';
@@ -29,12 +29,13 @@ import { proposeForAnswer } from './extract/propose.js';
 import { validateReport } from '../shared/report-v2.js';
 import {
   canStore, ensureBusiness, upsertScan, rawRow, saveRaw, usageRow, saveUsage, stableUuid, isUuid,
-  saveReport, updateReport, findReportByScan, getBaseline, getRawById, getScan,
+  saveReport, updateReport, findReportByScan, getBaseline, getRawById, getScan, sumUsageCost,
 } from './store.js';
 import {
   parseScanRequest, newReportToken, scanJobs, compactCall, isTransientEngineError, isTransientExtractError,
   scanTotals, callWindow, ENGINE_BATCH, EXTRACT_BATCH, ENGINE_RETRIES, EXTRACT_RETRIES, answerRef, rawIdSeed,
   extractIdSeed, adapterThrew, callFromStoredRaw, extractionResult, proposalsFromExtractions, publishGate,
+  shouldConfirmHeadline, headlineTarget, confirmHeadline, confirmationForBuild, confirmRef, CONFIRM_RUN,
 } from '../src/admin/scan-core.js';
 import { redact } from '../src/admin/redact.js';
 import { loadEnv } from './env.js';
@@ -47,12 +48,12 @@ const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // arguments
 // ---------------------------------------------------------------------------
 
-export const USAGE = `Usage: node scanner/run.js --business path.json [--engines ${ACTIVE_ENGINES.join(',')}] [--runs ${DEFAULT_RUNS}]
+export const USAGE = `Usage: node scanner/run.js --business path.json [--engines chatgpt,claude,gemini] [--runs ${DEFAULT_RUNS}]
                           [--token <reportToken>] [--notes "..."] [--resume <scanId> [--rebuild]]
                           [--estimate] [--yes] [--dry-run]
 
   --business  JSON file: name, trade, address, town, state, zip, phone, website, nearbyTown?, id?
-  --engines   comma list (default: ${ACTIVE_ENGINES.join(',')}; known: ${ENGINE_IDS.join(',')})
+  --engines   comma list (default: every engine with a key in .dev.vars / env; known: ${ENGINE_IDS.join(',')})
   --runs      runs per question per engine, 1-3 (default ${DEFAULT_RUNS})
   --token     report token to publish under (default: a fresh random one)
   --notes     note stored on the scans row (shown on /admin)
@@ -244,10 +245,64 @@ export async function runLocalScan({
       }
     });
 
-    // ---- build + validate + save (Workflow step "build report") -------------------------
     const proposalsByAnswer = proposalsFromExtractions(extractions);
     // Engines requested but not run (no key) are listed as not answering: method.enginesFailed.
     const scan = { scanId, questions, engines: [...engines, ...skippedEngines], runs, calls, window: callWindow(calls) };
+
+    // ---- headline confirmation (Workflow steps "pick headline", "confirm ask", "confirm extract")
+    // One run per engine can't show variation, so the search the report leads with is asked once
+    // more. Only when the report could publish (no point paying for a blocked one).
+    let confirmation = null;
+    let confirmReused = false;
+    if (shouldConfirmHeadline(runs)) {
+      const pre = await buildReport({ scan, business, env, fetchImpl, id: reportToken, proposalsByAnswer, maxFetch: 0 });
+      const target = publishGate(pre.report, validateReport(pre.report)).ok ? headlineTarget(pre.report) : null;
+      if (target) {
+        const q = fullQuestions[target.questionId];
+        const cref = confirmRef(target.ref);
+        log(`Confirming the headline: asking ${target.engine} ${target.questionId} once more...`);
+        confirmation = await confirmHeadline({
+          target, business,
+          ask: async () => {
+            const id = await stableUuid(rawIdSeed(scanId, cref));
+            let replace = false;
+            if (resume) {
+              const prev = await getRawById(env, id, opts);
+              if (prev && prev.ok) {
+                confirmReused = true;
+                return callFromStoredRaw({ ...prev, engine: target.engine, run: CONFIRM_RUN }, q);
+              }
+              if (prev) replace = true;
+            }
+            let res;
+            try {
+              res = await ENGINES[target.engine].ask({ question: q, business, env, fetchImpl });
+            } catch (e) {
+              res = adapterThrew(target.engine, e);
+            }
+            const call = { ...res, engine: target.engine, questionId: q.id, intent: q.intent, questionText: q.text, run: CONFIRM_RUN };
+            call.error = call.error == null ? null : safe(call.error);
+            const saved = await saveRaw(env, [rawRow({ scanId, businessId: business.id, call, id })], { fetchImpl, replace });
+            if (!saved.ok) warn(`scan_raw write failed for ${cref}: ${safe(saved.error)}`);
+            return compactCall(call, q);
+          },
+          extract: async (c) => {
+            const r = await proposeForAnswer({ answer: { id: cref, text: c.text }, business, env, fetchImpl, maxRetries: 0 });
+            const error = r.ok === false ? safe(r.error) : null;
+            const id = await stableUuid(extractIdSeed(scanId, cref) + resumeSeed);
+            const saved = await saveUsage(env, [usageRow({ id, scanId, kind: 'extract', provider: 'anthropic', model: r.model, usage: r.usage, costUsd: r.costUsd, ok: r.ok !== false, error, answerRef: cref })], opts);
+            if (!saved.ok) warn(`scan_usage write failed for ${cref}: ${safe(saved.error)}`);
+            return extractionResult(cref, r, error);
+          },
+        });
+        const how = confirmation.agreed === true ? 'confirmed (same result)'
+          : confirmation.agreed === false ? 'changed on the re-ask: leading with the next answer'
+            : `not confirmed (${confirmation.error})`;
+        log(`  headline ${how}`);
+      }
+    }
+
+    // ---- build + validate + save (Workflow step "build report") -------------------------
     const baseline = business.id ? await getBaseline(env, business.id, { excludeScanId: scanId, fetchImpl }).catch(() => null) : null;
     let extraExtractCostUsd = 0;
     const onExtract = async (x) => {
@@ -257,6 +312,7 @@ export async function runLocalScan({
     };
     const { report, rejected } = await buildReport({
       scan, business, baseline, env, fetchImpl, id: reportToken, proposalsByAnswer, onExtract,
+      headlineConfirmation: confirmationForBuild(confirmation),
     });
     const validation = publishGate(report, validateReport(report));
     let saved = false;
@@ -294,10 +350,14 @@ export async function runLocalScan({
       saved,
       storeError,
       extraExtractCostUsd: round6(extraExtractCostUsd),
+      headlineConfirmed: report.method?.headlineConfirmed ?? null,
     };
 
     // ---- finalize (Workflow step "finalize") -----------------------------------------------
-    const totals = scanTotals({ calls, extractions, build });
+    // extract_cost_usd = every scan_usage row of this scan (earlier runs of a resumed scan too).
+    const usageCostUsd = await sumUsageCost(env, scanId, opts);
+    const totals = scanTotals({ calls, extractions, build, confirmation, usageCostUsd });
+    const thisRunExtract = round6(extractions.reduce((s, x) => s + (Number(x.costUsd) || 0), 0) + build.extraExtractCostUsd + (Number(confirmation?.extractCostUsd) || 0));
     const finishedAt = new Date().toISOString();
     await upsertScan(env, { id: scanId, ...totals, finished_at: finishedAt }, opts);
 
@@ -330,12 +390,14 @@ export async function runLocalScan({
       callsOk: totals.calls_ok,
       callsReused: reused,
       extractions: extractions.length,
+      headlineConfirmed: build.headlineConfirmed,
       byEngine,
       engineCostUsd: totals.engine_cost_usd,
       extractCostUsd: totals.extract_cost_usd,
       costUsd: totals.total_cost_usd,
       // What this run spent: engine calls made now (reused answers were paid earlier) + extraction.
-      runCostUsd: round6(calls.filter((c) => !c.reused).reduce((a, c) => a + (Number(c.costUsd) || 0), 0) + totals.extract_cost_usd),
+      runCostUsd: round6(calls.filter((c) => !c.reused).reduce((a, c) => a + (Number(c.costUsd) || 0), 0)
+        + (confirmation && !confirmReused ? Number(confirmation.costUsd) || 0 : 0) + thisRunExtract),
       errors: totals.errors,
       warnings,
       finishedAt,
@@ -383,6 +445,7 @@ export function formatSummary(s, { dryRun = false } = {}) {
   L.push(`Scan ${s.scanId}: ${s.status}${dryRun ? ' (dry run)' : ''}`);
   L.push(`  Answers: ${s.answers}   named you: ${s.namedYou}   named you first: ${s.firstYou}`);
   L.push(`  Calls: ${s.callsOk}/${s.callsTotal} ok${s.callsReused ? ` (${s.callsReused} reused from the earlier run)` : ''}, extractions: ${s.extractions}`);
+  if (s.headlineConfirmed != null) L.push(`  Headline: ${s.headlineConfirmed ? 'confirmed on a re-ask' : 'not confirmed on a re-ask (see method.headlineConfirm)'}`);
   for (const [e, b] of Object.entries(s.byEngine)) L.push(`  ${engineName(e).padEnd(15)} ${b.ok}/${b.calls} ok   ${usd(b.costUsd)}`);
   if (s.enginesSkipped.length) L.push(`  Not run (no key): ${s.enginesSkipped.map(engineName).join(', ')}`);
   L.push(`  Extraction      ${usd(s.extractCostUsd)}`);
@@ -450,7 +513,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const parsed = parseScanRequest({
     business: { ...raw, id: raw.id || previous?.business_id || undefined },
-    engines: args.engines || previous?.engines || ACTIVE_ENGINES,
+    engines: args.engines || previous?.engines || defaultScanEngines(env),
     runs: args.runs ?? previous?.runs ?? DEFAULT_RUNS,
     reportToken: args.token || previous?.report_token || undefined,
     notes: args.notes,

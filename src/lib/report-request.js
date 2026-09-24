@@ -10,10 +10,13 @@
 //          so the email is never lost. That fallback creates a row, so it needs a valid token
 //          just like a first submit.
 // Turnstile is skipped (with one logged warning) until it is configured: see src/lib/turnstile.js.
+// A new row that passed Turnstile also gets {preview_token} when live previews are on
+// (src/lib/live-preview.js): the page uses it to ask one question live without a second check.
 
 import { recordReportRequest, attachReportRequestEmail } from './db.js';
 import { normalizeTrade } from '../../scanner/questions.js';
 import { turnstileConfigured, verifyTurnstile, warnUnconfiguredOnce, REQUEST_ACTION } from './turnstile.js';
+import { livePreviewStatus, signPreviewToken } from './live-preview.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -51,8 +54,8 @@ export async function handleReportRequest(request, url, env, deps = {}) {
   const fail = (status, error) => (isJson
     ? Response.json({ ok: false, error }, { status })
     : Response.redirect(new URL('/?request=error#request', url).toString(), 303));
-  const okResponse = (id) => (isJson
-    ? Response.json({ ok: true, id: id ?? null })
+  const okResponse = (id, previewToken) => (isJson
+    ? Response.json({ ok: true, id: id ?? null, ...(previewToken ? { preview_token: previewToken } : {}) })
     : Response.redirect(new URL('/?request=ok#request', url).toString(), 303));
 
   // Honeypot: real people never fill the hidden field.
@@ -96,6 +99,7 @@ export async function handleReportRequest(request, url, env, deps = {}) {
   if (zip && !/^\d{5}$/.test(zip)) return fail(422, 'Please enter a 5-digit ZIP.');
 
   // Every new row is bot-checked (first submit, and the attach fallback above).
+  let verified = false;
   if (turnstileConfigured(env)) {
     const check = await verifyTurnstile({
       secret: String(env.TURNSTILE_SECRET_KEY).trim(),
@@ -112,6 +116,7 @@ export async function handleReportRequest(request, url, env, deps = {}) {
       console.warn('[request] turnstile failed', check.reason, (check.codes || []).join(','));
       return check.reason === 'unavailable' ? fail(503, BOT_CHECK_UNAVAILABLE) : fail(403, BOT_CHECK_FAILED);
     }
+    verified = true;
   } else {
     warnUnconfiguredOnce();
   }
@@ -122,5 +127,9 @@ export async function handleReportRequest(request, url, env, deps = {}) {
     console.error('[request] write failed', e);
     return fail(500, 'Could not save your request.');
   }
-  return okResponse(req.id);
+  let previewToken = null;
+  if (verified && isJson && livePreviewStatus(env, { dryRun: !!deps.previewDryRun }).enabled) {
+    previewToken = await signPreviewToken(env, req).catch(() => null);
+  }
+  return okResponse(req.id, previewToken);
 }

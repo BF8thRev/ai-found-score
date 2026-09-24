@@ -31,3 +31,18 @@ test('Run-scan form: every engine listed, only ACTIVE_ENGINES ticked, estimate f
   assert.ok(est !== usd(estimateScanCost({ engines: ENGINE_IDS, questions: 5, runs: 1 }).total));
   assert.ok(html.includes(`Estimated cost: ${est}`), `estimate ${est}`);
 });
+
+test('withActiveDefault(body, env): no engines named → every engine with a key, in ENGINE_IDS order', () => {
+  const env = { ANTHROPIC_API_KEY: 'k', OPENAI_API_KEY: 'k', PERPLEXITY_API_KEY: 'k' };
+  assert.deepEqual(withActiveDefault({ business }, env).engines, ['chatgpt', 'perplexity', 'claude']);
+  // No keys at all: the static ACTIVE_ENGINES, so the scan reports the missing keys.
+  assert.deepEqual(withActiveDefault({ business }, {}).engines, ACTIVE_ENGINES);
+  assert.deepEqual(withActiveDefault({ business, engines: ['gemini'] }, env).engines, ['gemini']);
+  // The Run-scan form ticks the engines with keys.
+  const html = renderDashboard({ configured: true, data: { scans: [], engines: [] }, errors: {} },
+    { nonce: 'n', engineIds: ENGINE_IDS, watch: [], activeIds: ['chatgpt', 'perplexity'] });
+  for (const e of ENGINE_IDS) {
+    const box = html.match(new RegExp(`<input type="checkbox" name="engines" value="${e}"( checked)?>`));
+    assert.equal(!!box[1], ['chatgpt', 'perplexity'].includes(e), `${e}`);
+  }
+});

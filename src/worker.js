@@ -8,7 +8,7 @@
 //   POST /api/request         -> landing-page free-report request (email optional; returns id);
 //                                Turnstile-checked + per-IP rate limit (src/lib/report-request.js)
 //                                or {request_id, email} to attach an email to that request
-//   GET  /api/questions       -> the 5 questions we'd ask for ?trade=&town=&zip=&state=, plus the active assistants
+//   GET  /api/questions       -> the 5 questions we'd ask for ?trade=&town=&zip=&state=
 //                                (per-IP rate limit)
 //   POST /api/stripe-webhook  -> Stripe webhook, verified signature, writes payment
 //   GET|POST /unsubscribe, /stop -> email or postcard opt-out
@@ -16,9 +16,11 @@
 //   GET  /api/admin/ping      -> live key check per engine + extractor (cookie or Bearer ADMIN_TOKEN)
 //   POST /api/admin/scan      -> start a background scan (Cloudflare Workflow) -> { scanId, instanceId, statusUrl }
 //   GET  /api/admin/scan/:id  -> scan status + progress
-//   everything else           -> static assets (public/) via env.ASSETS; HTML and /llms.txt get the
-//                                assistant names and counts filled in from ACTIVE_ENGINES (serveAsset),
-//                                and HTML gets local examples from the visitor's request.cf (src/lib/geo.js)
+//   POST /api/live-preview    -> ask one of the visitor's questions live (src/lib/live-preview.js);
+//                                needs the signed token /api/request returned after Turnstile
+//   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h
+//   everything else           -> static assets (public/) via env.ASSETS; HTML gets the Turnstile site key
+//                                and local examples from the visitor's request.cf (src/lib/geo.js)
 //
 // Also exports ScanWorkflow (src/scan-workflow.js), bound as SCAN_WORKFLOW in wrangler.jsonc.
 
@@ -33,10 +35,13 @@ import { rateLimit } from './lib/rate-limit.js';
 import { verifyStripeSignature } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
-import { resolveKeys, enginesConfigured, ACTIVE_ENGINES } from '../scanner/config.js';
-import { engineCopy, copyTokens, fillTokens, copyFor } from './lib/engines-copy.js';
+import { lockReport } from './lib/lock.js';
+import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
+import { handleLivePreview, livePreviewStatus } from './lib/live-preview.js';
+import { handleProof } from './lib/proof.js';
+import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 
 // The background scan runner (Cloudflare Workflows entrypoint; binding SCAN_WORKFLOW).
 export { ScanWorkflow } from './scan-workflow.js';
@@ -64,7 +69,20 @@ export default {
     }
 
     if (url.pathname === '/api/request' && request.method === 'POST') {
-      return (await rateLimit(env, request, 'request')) || handleReportRequest(request, url, env);
+      const dry = previewDryRun(env, url);
+      return (await rateLimit(env, request, 'request'))
+        || handleReportRequest(request, url, env, dry
+          // Local dry run: nothing is written to Supabase.
+          ? { previewDryRun: true, recordReportRequest: async () => console.log('[dry-run] request not saved') }
+          : {});
+    }
+
+    if (url.pathname === '/api/live-preview' && request.method === 'POST') {
+      return handleLivePreviewRoute(request, url, env, ctx);
+    }
+
+    if (url.pathname === '/api/proof' && request.method === 'GET') {
+      return handleProof(request, env, { waitUntil: (p) => ctx.waitUntil(p) });
     }
 
     if (url.pathname === '/api/questions' && request.method === 'GET') {
@@ -126,6 +144,8 @@ async function handleHealth(env) {
     adminToken: !!String(env.ADMIN_TOKEN || '').trim(),
     // Site key + secret both set; false means free-report requests are not bot-checked.
     turnstile: turnstileConfigured(env),
+    // The form's "ask one now" (src/lib/live-preview.js): Turnstile + an engine key + service key.
+    livePreview: livePreviewStatus(env).enabled,
     database: 'not checked',
   };
   if (out.supabaseUrl && out.supabaseKey) {
@@ -213,31 +233,8 @@ async function handleGetReport(id, url, env) {
   });
 }
 
-// Headline findings stay visible: the score, which assistants named you,
-// which listings are wrong, and the issue titles. What's wrong on each
-// listing and how to fix each issue are withheld server-side until paid,
-// so they are never in the page for anyone to un-blur.
-// v2 follows the same rule: sections 1-7 and 9-11 are the free report;
-// section 8's issue descriptions and steps are the paid part.
-function lockReport(r) {
-  if (r.version === 2) {
-    return {
-      ...r,
-      locked: true,
-      // Anything that isn't a clean match keeps only its platform and status.
-      listings: (r.listings || []).map((l) =>
-        l.status === 'match' ? l : { platform: l.platform, status: l.status, locked: true }),
-      issues: (r.issues || []).map((i) => ({ severity: i.severity, title: i.title, locked: true })),
-    };
-  }
-  return {
-    ...r,
-    locked: true,
-    listings: r.listings.map((l) =>
-      l.status === 'mismatch' ? { platform: l.platform, status: l.status, locked: true } : l),
-    issues: r.issues.map((i) => ({ severity: i.severity, title: i.title, locked: true })),
-  };
-}
+// lockReport (src/lib/lock.js): issue descriptions, fix steps and copy-paste text are
+// withheld server-side until paid, so they are never in the page to un-blur.
 
 // Link scanners (Outlook Safe Links, Proofpoint, Mimecast, ...) open every
 // link in an email. Counting them would inflate the email arm, so skip them.
@@ -317,17 +314,25 @@ function handleQuestions(url) {
   if (zip && !/^\d{5}$/.test(zip)) return bad('ZIP must be 5 digits.');
   if (!/^[A-Za-z]{2}$/.test(state)) return bad('State must be a 2-letter code.');
   const questions = buildQuestions({ trade, town, zip, state }).map(({ id, intent, text }) => ({ id, intent, text }));
-  const copy = engineCopy(ACTIVE_ENGINES, { questions: questions.length });
-  return Response.json({
-    ok: true,
-    trade,
-    questions,
-    assistants: copy.names,
-    searches: copy.searchCount,
-  }, { headers: { 'Cache-Control': 'public, max-age=300' } });
+  return Response.json({ ok: true, trade, questions }, { headers: { 'Cache-Control': 'public, max-age=300' } });
 }
 
 // POST /api/request lives in src/lib/report-request.js (Turnstile-checked).
+
+// Live preview dry run: SCANNER_DRY_RUN=1 (local .dev.vars / --var only) AND a localhost request.
+// Answers come from the recorded fixtures and nothing touches Supabase (src/admin/dry-run.js).
+function previewDryRun(env, url) {
+  return dryRunEnabled(env) && isLocalRequest(url);
+}
+
+// POST /api/live-preview: one of the visitor's questions, asked live (src/lib/live-preview.js).
+function handleLivePreviewRoute(request, url, env, ctx) {
+  const waitUntil = (p) => ctx.waitUntil(p);
+  if (previewDryRun(env, url)) {
+    return handleLivePreview(request, dryRunEnv(env), { dryRun: true, fetchImpl: dryRunFetch({ delayMs: 600 }), waitUntil });
+  }
+  return handleLivePreview(request, env, { waitUntil });
+}
 
 // One-click unsubscribe. Every way in writes the same suppression row:
 //   GET  /unsubscribe?t=<report token>          link in the email footer
@@ -459,34 +464,21 @@ async function handleStripeWebhook(request, env) {
 }
 
 // ---------------------------------------------------------------------------
-// Static assets with the assistant copy filled in
+// Static assets, with the Turnstile site key and local examples filled in
 // ---------------------------------------------------------------------------
-// Pages name the assistants we ask and count the searches. Both come from ACTIVE_ENGINES
-// (scanner/config.js) via src/lib/engines-copy.js, so adding an engine there updates every page.
-// The HTML files already read correctly for the current list (the fallback if this ever doesn't
-// run); the Worker overwrites:
-//   <span data-ai-list>…</span>            "ChatGPT, Claude and Gemini" (data-ai-list="or" → "… or Gemini")
-//   <span data-ai-count="word">…</span>    "three" ("Word" → "Three", "" / "digit" → "3")
-//   <span data-search-count>…</span>       "15" (same forms)
-//   <span data-question-count>…</span>     "5" (same forms)
-//   data-ai-names="…"                      "ChatGPT|Claude|Gemini" (for page scripts)
-//   data-turnstile-sitekey=""               TURNSTILE_SITE_KEY, only when Turnstile is fully configured
-//   <meta … content="…" data-copy="…{{AI_LIST}}…">  content = the template filled in
-//   <script type="application/ld+json">…{{AI_LIST}}…</script>  tokens filled in
-//   /llms.txt                              tokens filled in
-//   data-geo-*                             the visitor's town/state/ZIP and example questions (src/lib/geo.js)
-// Tokens: see copyTokens(). Only text/html responses and /llms.txt are touched.
+// Marketing pages no longer name the assistants or count the searches (each report lists exactly
+// which assistants were asked and when), so the only HTML rewrites are:
+//   data-turnstile-sitekey=""   TURNSTILE_SITE_KEY, only when Turnstile is fully configured
+//   data-geo-*                  the visitor's town/state/ZIP and example questions (src/lib/geo.js)
 // HTML personalised from the visitor's location is Cache-Control: private and its ETag carries a hash
 // of that location, so no shared cache hands one visitor's town to another and a 304 never crosses towns.
 // The location is only used to fill the page: never logged or stored.
 
-const COPY = engineCopy(ACTIVE_ENGINES);
-const TOKENS = copyTokens(COPY);
-// Goes into rewritten responses' ETags, so a cached page is revalidated when the list changes.
-const COPY_TAG = `-ai.${ACTIVE_ENGINES.join('.')}`;
+// Goes into rewritten responses' ETags; bump it when the rewrite itself changes.
+const PAGE_TAG = '-p2';
 
 /**
- * env.ASSETS.fetch, then fill in the assistant copy. `path` serves a different asset (pretty
+ * env.ASSETS.fetch, then fill in the page slots. `path` serves a different asset (pretty
  * URLs); `method` overrides the request's (a POST that ends on a page).
  */
 async function serveAsset(env, request, path, method) {
@@ -502,7 +494,7 @@ async function serveAsset(env, request, path, method) {
   // The visitor's town (src/lib/geo.js), from the original request so a dev ?geo= survives the pretty-URL rewrite.
   const geo = geoForRequest(request);
   const personal = geo.source === 'ip';
-  const tag = COPY_TAG + (siteKey ? `-ts.${siteKey.slice(-8).replace(/[^A-Za-z0-9_-]/g, '')}` : '') + geoTag(geo);
+  const tag = PAGE_TAG + (siteKey ? `-ts.${siteKey.slice(-8).replace(/[^A-Za-z0-9_-]/g, '')}` : '') + geoTag(geo);
   // Our ETag = asset ETag + tag; hand the asset server the ETag it knows.
   const inm = req.headers.get('If-None-Match');
   if (inm && inm.includes(tag)) {
@@ -512,66 +504,23 @@ async function serveAsset(env, request, path, method) {
   }
   const res = await env.ASSETS.fetch(req);
   const isHtml = (res.headers.get('Content-Type') || '').includes('text/html');
-  const isLlms = new URL(req.url).pathname === '/llms.txt';
-  if (!isHtml && !isLlms) return res;
+  if (!isHtml) return res;
 
   const tagged = (r) => {
     const etag = r.headers.get('ETag');
     if (etag && !etag.includes(tag)) r.headers.set('ETag', etag.replace(/"$/, `${tag}"`));
     // A page with this visitor's town in it is for this browser only (never a shared/edge cache).
-    if (personal && isHtml) r.headers.set('Cache-Control', 'private, max-age=0, must-revalidate');
+    if (personal) r.headers.set('Cache-Control', 'private, max-age=0, must-revalidate');
     return r;
   };
   if (!res.body || res.status === 304 || req.method === 'HEAD') return tagged(new Response(res.body, res));
-  if (isLlms) {
-    const out = new Response(fillTokens(await res.text(), TOKENS), res);
-    out.headers.delete('Content-Length');
-    return tagged(out);
-  }
-  return tagged(addGeoHandlers(copyRewriter(siteKey), geo).transform(res));
+  return tagged(addGeoHandlers(pageRewriter(siteKey), geo).transform(res));
 }
 
-function copyRewriter(siteKey) {
-  const fill = (kind, attr) => ({
-    element(el) {
-      const text = copyFor(kind, el.getAttribute(attr), COPY);
-      if (text != null) el.setInnerContent(text);
-    },
-  });
-  let ld = '';
+function pageRewriter(siteKey) {
   return new HTMLRewriter()
-    .on('[data-ai-list]', fill('list', 'data-ai-list'))
-    .on('[data-ai-count]', fill('ai', 'data-ai-count'))
-    .on('[data-search-count]', fill('search', 'data-search-count'))
-    .on('[data-question-count]', fill('question', 'data-question-count'))
-    .on('[data-ai-names]', { element(el) { el.setAttribute('data-ai-names', COPY.names.join('|')); } })
     // Turnstile widget slot(s): the page script loads the widget only when this is non-empty.
-    .on('[data-turnstile-sitekey]', { element(el) { el.setAttribute('data-turnstile-sitekey', siteKey || ''); } })
-    .on('meta[data-copy]', {
-      element(el) {
-        el.setAttribute('content', fillTokens(decodeAttr(el.getAttribute('data-copy')), TOKENS));
-        el.removeAttribute('data-copy');
-      },
-    })
-    .on('script[type="application/ld+json"]', {
-      // Text arrives in chunks; collect the whole script, then write it back filled in.
-      text(t) {
-        ld += t.text;
-        if (t.lastInTextNode) {
-          t.replace(fillTokens(ld, TOKENS), { html: true });
-          ld = '';
-        } else {
-          t.remove();
-        }
-      },
-    });
-}
-
-// HTMLRewriter hands attribute values over as written in the file (entities not decoded).
-function decodeAttr(v) {
-  return String(v || '')
-    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
+    .on('[data-turnstile-sitekey]', { element(el) { el.setAttribute('data-turnstile-sitekey', siteKey || ''); } });
 }
 
 // Admin routes (/admin, /api/admin/*) live in src/admin/: routes.js (auth, pages), api.js (scan API).

@@ -49,8 +49,9 @@ test('dry run end to end: scans, scan_raw, scan_usage, scan_results rows with th
   assert.equal(scan.status, 'done');
   assert.equal(scan.trigger, 'admin');
   assert.deepEqual(scan.engines, ACTIVE_ENGINES);
-  assert.equal(scan.calls_total, 15);
-  assert.equal(scan.calls_ok, 15);
+  // 15 searches + the headline re-ask.
+  assert.equal(scan.calls_total, 16);
+  assert.equal(scan.calls_ok, 16);
   assert.equal(scan.report_token, 'tok123abcd');
   assert.equal(scan.report_valid, true);
   assert.ok(scan.started_at && scan.finished_at);
@@ -59,14 +60,28 @@ test('dry run end to end: scans, scan_raw, scan_usage, scan_results rows with th
 
   // Same stableUuid ids as src/scan-workflow.js.
   const keys = jobKeys(ACTIVE_ENGINES);
-  assert.equal(t.scan_raw.length, 15);
+  assert.equal(t.scan_raw.length, 16);
   const rawIds = new Set(t.scan_raw.map((r) => r.id));
   for (const k of keys) assert.ok(rawIds.has(await stableUuid(`${scanId}:${k}`)), `scan_raw id for ${k}`);
   assert.ok(t.scan_raw.every((r) => r.ok && r.scan_id === scanId));
 
-  assert.equal(t.scan_usage.length, 15);
+  // The headline re-ask: stored as run 2 of the headline's search, with its own ids.
+  const report = t.scan_results[0].report;
+  const hc = report.method.headlineConfirm;
+  assert.equal(report.method.headlineConfirmed, true);
+  assert.equal(hc.result, 'same');
+  const ref = `${hc.engine}:${hc.questionId}:1`;
+  const confirmRow = t.scan_raw.find((r) => r.run === 2);
+  assert.equal(confirmRow.id, await stableUuid(`${scanId}:${ref}:confirm`));
+  assert.equal(confirmRow.engine, hc.engine);
+  assert.equal(confirmRow.question_id, hc.questionId);
+  assert.equal(sum.headlineConfirmed, true);
+
+  assert.equal(t.scan_usage.length, 16);
   const usageIds = new Set(t.scan_usage.map((r) => r.id));
   for (const k of keys) assert.ok(usageIds.has(await stableUuid(`${scanId}:extract:${k}`)), `scan_usage id for ${k}`);
+  assert.ok(usageIds.has(await stableUuid(`${scanId}:extract:${ref}:confirm`)), 'scan_usage row for the confirm extraction');
+  assert.ok(t.scan_usage.some((r) => r.answer_ref === `${ref}:confirm`));
   assert.ok(t.scan_usage.every((r) => r.kind === 'extract' && r.provider === 'anthropic' && r.cost_usd > 0));
 
   assert.equal(t.scan_results.length, 1);
@@ -104,10 +119,12 @@ test('a transient engine failure is retried; the billed answer is stored once', 
   const s = await setup({ intercept: ({ kind, init }) => (kind === 'api.openai.com' && /best laundromat/.test(init.body) && failed++ < 2 ? apiError(429, 'rate_limit_error', 'slow down') : null) });
   const sum = await run(s, { log: (m) => { if (m.startsWith('  retry')) retried.push(m); } });
   assert.equal(retried.length, 1);
-  assert.equal(count(s.hits, 'api.openai.com'), 7);
-  assert.equal(sum.callsOk, 15);
+  const hc = s.db.tables.scan_results[0].report.method.headlineConfirm;
+  assert.equal(count(s.hits, 'api.openai.com'), 7 + (hc.engine === 'chatgpt' ? 1 : 0));
+  assert.equal(sum.callsOk, 16);
   assert.ok(s.db.tables.scan_raw.every((r) => r.ok));
-  assert.equal(s.db.tables.scan_raw.length, 15);
+  assert.equal(s.db.tables.scan_raw.filter((r) => r.run === 1).length, 15);
+  assert.equal(s.db.tables.scan_raw.length, 16);
 });
 
 test('resume: calls already stored ok are not asked again; failed ones are re-asked and replaced', async () => {
@@ -128,18 +145,20 @@ test('resume: calls already stored ok are not asked again; failed ones are re-as
   second.db.tables.scans = t.scans;
   second.db.tables.scan_raw = t.scan_raw;
   const sum = await run(second, { scanId, resume: true });
-  assert.equal(count(second.hits, 'api.openai.com'), 0);
-  assert.equal(count(second.hits, 'claude'), 0);
-  assert.equal(count(second.hits, 'generativelanguage.googleapis.com'), 5);
+  const hc = second.db.tables.scan_results[0].report.method.headlineConfirm;
+  const reask = (host, engine) => count(second.hits, host) - (hc.engine === engine ? 1 : 0);
+  assert.equal(reask('api.openai.com', 'chatgpt'), 0);
+  assert.equal(reask('claude', 'claude'), 0);
+  assert.equal(reask('generativelanguage.googleapis.com', 'gemini'), 5);
   assert.equal(sum.callsReused, 10);
   const rows = second.db.tables.scan_raw;
-  assert.equal(rows.length, 15, 'no duplicate scan_raw rows');
+  assert.equal(rows.length, 16, 'no duplicate scan_raw rows (15 + the headline re-ask)');
   assert.ok(rows.every((r) => r.ok), 'the failed Gemini rows were replaced');
   assert.equal(second.db.tables.scans.length, 1);
   assert.equal(second.db.tables.scans[0].status, 'done');
-  assert.equal(second.db.tables.scans[0].calls_ok, 15);
+  assert.equal(second.db.tables.scans[0].calls_ok, 16);
   assert.equal(second.db.tables.scan_results.length, 1);
-  assert.equal(second.db.tables.scan_usage.length, 15);
+  assert.equal(second.db.tables.scan_usage.length, 16);
   // Engine cost counts the reused answers too (they were paid for on the first run).
   const rawCost = rows.reduce((a, r) => a + r.cost_usd, 0);
   assert.ok(Math.abs(sum.engineCostUsd - rawCost) < 1e-5);
@@ -174,8 +193,8 @@ test('missing-key engines are dropped before the scan and listed on the report a
   assert.equal(count(s.hits, 'generativelanguage.googleapis.com'), 0);
   const scan = s.db.tables.scans[0];
   assert.deepEqual(scan.engines, ['chatgpt', 'claude']);
-  assert.equal(scan.calls_total, 10);
-  assert.equal(scan.calls_ok, 10);
+  assert.equal(scan.calls_total, 11, '10 searches + the headline re-ask');
+  assert.equal(scan.calls_ok, 11);
   assert.ok(!scan.errors.some((e) => e.engine === 'gemini'), 'not counted as failed calls');
   assert.match(scan.notes, /not run \(no API key\): gemini/);
   assert.equal(sum.reportSaved, true);

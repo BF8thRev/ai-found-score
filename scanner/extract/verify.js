@@ -104,8 +104,41 @@ export function verifyFacts(text, proposed = []) {
   return { kept, rejected };
 }
 
+/** Longest descriptor quote kept (a phrase, not a paragraph). */
+export const MAX_DESCRIPTOR_LEN = 160;
+
+/**
+ * verifyDescriptors(text, proposed, otherNames) → { kept:[{quote,pos}], rejected }
+ * Same guardrail as facts: a descriptor survives only as a literal substring of the answer.
+ * Also rejected: too short/long, or containing another business's name (it's about them).
+ * Duplicates (case/space-insensitive) are dropped.
+ */
+export function verifyDescriptors(text, proposed = [], otherNames = []) {
+  const kept = [];
+  const rejected = [];
+  const seen = new Set();
+  const others = otherNames.filter((n) => typeof n === 'string' && n.trim().length >= 3).map((n) => n.toLowerCase());
+  for (const d of proposed) {
+    const q = d && typeof d.quote === 'string' ? d.quote.trim() : '';
+    const pos = q ? text.indexOf(q) : -1;
+    if (pos === -1) { rejected.push({ ...d, reason: 'quote is not a literal substring of the answer' }); continue; }
+    const words = q.split(/\s+/).filter(Boolean).length;
+    if (words < 2 || q.length > MAX_DESCRIPTOR_LEN) { rejected.push({ ...d, reason: 'descriptor must be a short phrase (2+ words, at most 160 characters)' }); continue; }
+    const lower = q.toLowerCase();
+    if (others.some((n) => lower.includes(n))) { rejected.push({ ...d, reason: 'descriptor names another business' }); continue; }
+    const key = descriptorKey(q);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push({ quote: text.slice(pos, pos + q.length), pos });
+  }
+  return { kept, rejected };
+}
+
+/** Dedupe key for a descriptor: lowercase, punctuation-trimmed, single spaces. */
+export const descriptorKey = (q) => String(q || '').toLowerCase().replace(/\s+/g, ' ').replace(/^[\s,.;:!-]+|[\s,.;:!-]+$/g, '');
+
 const numbersIn = (s) => (String(s).match(/\d+(?:\.\d+)?/g) || []).map(Number);
-const is24 = (s) => /\b24\s*\/\s*7\b|\b24[\s-]*(?:hours?|hrs?)\b|\bopen\s+24\b|\baround the clock\b|\bnever closes\b/i.test(s);
+export const is24 =(s) => /\b24\s*\/\s*7\b|\b24[\s-]*(?:hours?|hrs?)\b|\bopen\s+24\b|\baround the clock\b|\bnever closes\b/i.test(s);
 const STOP = new Set(['a', 'an', 'the', 'and', 'or', 'with', 'of', 'to', 'for', 'at', 'in', 'on', 'is', 'are', 'its', 'their', 'your', 'per']);
 const words = (s) => normalizeName(s).split(' ').filter((w) => w && !STOP.has(w));
 
@@ -328,12 +361,19 @@ export function verifyAnswer({ answer, proposal, business }) {
   const earliest = businessesNamed.filter((b) => b.ownerMatch !== 'unsure').reduce((m, b) => (!m || b.pos < m.pos ? b : m), null);
   const namedYou = businessesNamed.some((b) => b.isYou);
   const facts = verifyFacts(text, (proposal && proposal.ownerFacts) || []);
+  // Descriptors only count when this answer is confirmed to name the owner; a phrase that
+  // names a competitor (or an unsure match) is about someone else.
+  const otherNames = businessesNamed.filter((b) => !b.isYou).map((b) => b.name);
+  const desc = namedYou
+    ? verifyDescriptors(text, (proposal && proposal.ownerDescriptors) || [], otherNames)
+    : { kept: [], rejected: ((proposal && proposal.ownerDescriptors) || []).map((d) => ({ ...d, reason: 'answer does not name the owner' })) };
   return {
     businessesNamed,
     namedYou,
     namedYouFirst: namedYou && !!earliest && !!earliest.isYou,
     ownerMatch,
     facts: facts.kept,
-    rejected: { businesses: rejected, facts: facts.rejected },
+    descriptors: desc.kept,
+    rejected: { businesses: rejected, facts: facts.rejected, descriptors: desc.rejected },
   };
 }

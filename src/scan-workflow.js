@@ -7,7 +7,10 @@
 //                                returns only compact data (text, citations, ok, error, cost)
 //   record failed <...>          only when a call step gave up: stores the failure row
 //   extract <engine:q:run>       one Claude extractor call; writes its scan_usage row (tokens, cost)
-//   build report                 buildReport → validateReport → save scan_results (only if valid)
+//   pick headline                runs = 1 only: the answer the report would lead with (no fetches)
+//   confirm ask <ref>:confirm    asks that search once more on the same engine; scan_raw row, run = 2
+//   confirm extract <ref>:confirm  extracts the re-ask; scan_usage row (answer_ref <ref>:confirm)
+//   build report                 buildReport (+ headline confirmation) → validateReport → save scan_results (only if valid)
 //   finalize                     scan totals into `scans`
 //   mark failed                  only if something above threw
 //
@@ -18,18 +21,19 @@
 import { WorkflowEntrypoint } from 'cloudflare:workers';
 import { buildQuestions } from '../scanner/questions.js';
 import { ENGINES } from '../scanner/engines/index.js';
-import { round6, ACTIVE_ENGINES } from '../scanner/config.js';
+import { round6, defaultScanEngines } from '../scanner/config.js';
 import { buildReport } from '../scanner/extract/build.js';
 import { proposeForAnswer } from '../scanner/extract/propose.js';
 import { validateReport } from '../shared/report-v2.js';
 import {
   canStore, ensureBusiness, upsertScan, rawRow, saveRaw, usageRow, saveUsage, stableUuid,
-  saveReport, findReportByScan, getBaseline, getRawById,
+  saveReport, findReportByScan, getBaseline, getRawById, sumUsageCost,
 } from '../scanner/store.js';
 import {
   scanJobs, chunk, compactCall, isTransientEngineError, isTransientExtractError, scanTotals, callWindow,
   ENGINE_BATCH, EXTRACT_BATCH, ENGINE_RETRIES, EXTRACT_RETRIES, answerRef, rawIdSeed, extractIdSeed,
   adapterThrew, callFromStoredRaw, extractionResult, proposalsFromExtractions, publishGate,
+  shouldConfirmHeadline, headlineTarget, confirmHeadline, confirmationForBuild, confirmRef, CONFIRM_RUN,
 } from './admin/scan-core.js';
 import { dryRunEnabled, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 import { redact } from './admin/redact.js';
@@ -45,8 +49,8 @@ const STEP_BUILD = { retries: { limit: 2, delay: '30 seconds', backoff: 'exponen
 export class ScanWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
     const p = { ...(event.payload || {}) };
-    // No engines named → the ones the site advertises (startScan normally fills this in).
-    if (!Array.isArray(p.engines) || !p.engines.length) p.engines = ACTIVE_ENGINES;
+    // No engines named → every engine with a key (startScan normally fills this in).
+    if (!Array.isArray(p.engines) || !p.engines.length) p.engines = defaultScanEngines(this.env);
     const scanId = p.scanId;
     // Dry run needs BOTH the param (set only for localhost requests) and SCANNER_DRY_RUN=1.
     const dry = !!p.dryRun && dryRunEnabled(this.env);
@@ -149,6 +153,58 @@ export class ScanWorkflow extends WorkflowEntrypoint {
         extractions.push(...done);
       }
 
+      // ---- headline confirmation (runs = 1) ------------------------------------------------
+      // One run per engine can't show variation, so the search the report leads with is asked
+      // once more on the same engine. Skipped when the report couldn't publish anyway.
+      let confirmation = null;
+      if (shouldConfirmHeadline(p.runs)) {
+        const target = await step.do('pick headline', STEP_BUILD, async () => {
+          const scan = { scanId, questions, engines: p.engines, runs: p.runs, calls, window: callWindow(calls) };
+          const pre = await buildReport({ scan, business, env, fetchImpl, id: p.reportToken, proposalsByAnswer: proposalsFromExtractions(extractions), maxFetch: 0 });
+          return publishGate(pre.report, validateReport(pre.report)).ok ? headlineTarget(pre.report) : null;
+        });
+        if (target) {
+          const cref = confirmRef(target.ref);
+          const q = fullQuestions[target.questionId] || qById[target.questionId];
+          const rawId = await stableUuid(rawIdSeed(scanId, cref));
+          confirmation = await confirmHeadline({
+            target, business,
+            ask: () => step.do(`confirm ask ${cref}`, STEP_ENGINE, async (ctx) => {
+              if (store && (ctx?.attempt || 1) > 1) {
+                const prev = await getRawById(env, rawId, { fetchImpl });
+                if (prev && prev.ok) return callFromStoredRaw({ ...prev, engine: target.engine, run: CONFIRM_RUN }, q);
+              }
+              let res;
+              try {
+                res = await ENGINES[target.engine].ask({ question: q, business, env, fetchImpl });
+              } catch (e) {
+                res = adapterThrew(target.engine, e);
+              }
+              const call = { ...res, engine: target.engine, questionId: q.id, intent: q.intent, questionText: q.text, run: CONFIRM_RUN };
+              call.error = call.error == null ? null : safe(call.error);
+              if (isTransientEngineError(call) && (ctx?.attempt || 1) <= ENGINE_RETRIES) throw new Error(`transient: ${call.error}`);
+              if (store) {
+                const saved = await saveRaw(env, [rawRow({ scanId, businessId: business.id, call, id: rawId })], { fetchImpl });
+                if (!saved.ok) console.error('[scan-workflow] scan_raw write failed', scanId, cref, safe(saved.error));
+              }
+              return compactCall(call, q);
+            }).catch((e) => ({ ok: false, text: null, citations: [], costUsd: 0, error: safe(e) })),
+            extract: (c) => step.do(`confirm extract ${cref}`, STEP_EXTRACT, async (ctx) => {
+              const r = await proposeForAnswer({ answer: { id: cref, text: c.text }, business, env, fetchImpl, maxRetries: 0 });
+              const error = r.ok === false ? safe(r.error) : null;
+              const attempt = ctx?.attempt || 1;
+              if (r.ok === false && !r.usage && isTransientExtractError(r.error) && attempt <= EXTRACT_RETRIES) throw new Error(`transient: ${error}`);
+              if (store) {
+                const id = await stableUuid(extractIdSeed(scanId, cref, attempt));
+                const saved = await saveUsage(env, [usageRow({ id, scanId, kind: 'extract', provider: 'anthropic', model: r.model, usage: r.usage, costUsd: r.costUsd, ok: r.ok !== false, error, answerRef: cref })], { fetchImpl });
+                if (!saved.ok) console.error('[scan-workflow] scan_usage write failed', scanId, cref, safe(saved.error));
+              }
+              return extractionResult(cref, r, error);
+            }).catch((e) => ({ key: cref, ok: false, error: safe(e), businesses: [], ownerFacts: [], ownerDescriptors: [], costUsd: 0 })),
+          });
+        }
+      }
+
       // ---- build + validate + save --------------------------------------------------------
       const build = await step.do('build report', STEP_BUILD, async (ctx) => {
         const proposalsByAnswer = proposalsFromExtractions(extractions);
@@ -168,6 +224,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
         };
         const { report, rejected } = await buildReport({
           scan, business, baseline, env, fetchImpl, id: p.reportToken, proposalsByAnswer, onExtract,
+          headlineConfirmation: confirmationForBuild(confirmation),
         });
         // The publish gate: re-check regardless of what the builder says.
         const validation = publishGate(report, validateReport(report));
@@ -195,12 +252,15 @@ export class ScanWorkflow extends WorkflowEntrypoint {
           saved,
           storeError,
           extraExtractCostUsd: round6(extraExtractCostUsd),
+          headlineConfirmed: report.method?.headlineConfirmed ?? null,
         };
       });
 
       // ---- finalize ----------------------------------------------------------------------
       return await step.do('finalize', STEP_DB, async () => {
-        const totals = scanTotals({ calls, extractions, build });
+        // extract_cost_usd = every scan_usage row of this scan (retried steps included).
+        const usageCostUsd = store ? await sumUsageCost(env, scanId, { fetchImpl }) : null;
+        const totals = scanTotals({ calls, extractions, build, confirmation, usageCostUsd });
         const finishedAt = new Date().toISOString();
         if (store) await upsertScan(env, { id: scanId, ...totals, finished_at: finishedAt }, { fetchImpl });
         return {
@@ -216,6 +276,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
           callsTotal: totals.calls_total,
           callsOk: totals.calls_ok,
           extractions: extractions.length,
+          headlineConfirmed: build.headlineConfirmed,
           engineCostUsd: totals.engine_cost_usd,
           extractCostUsd: totals.extract_cost_usd,
           costUsd: totals.total_cost_usd,

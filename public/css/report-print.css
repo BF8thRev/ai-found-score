@@ -1,0 +1,33 @@
+/* "Save as PDF": print stylesheet for report.html (linked with media="print").
+   Hides navigation, buttons and offers; prints every answer expanded.
+   report.js also opens every <details> on beforeprint (closed details hide their content). */
+
+@page { margin: 14mm 12mm; }
+
+html, body { background: #fff !important; }
+body { font-size: 12pt; color: #000; }
+
+.site-header, .site-footer, nav, .header-cta,
+.cta-band, .unlock-panel, .lead-form, .r2-tools, .r2-copy-btn,
+[data-tier], .locked-note { display: none !important; }
+
+.report-header { background: none !important; padding: 0 0 8pt !important; }
+.wrap { max-width: none !important; padding: 0 !important; }
+.report-section { break-inside: auto; margin: 14pt 0 !important; }
+.issue-card, .listing-card, .r2-copy, .r2-desc, .r2-tile { break-inside: avoid; box-shadow: none !important; }
+
+/* Every answer expanded. */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details::details-content { content-visibility: visible; display: block; }
+details .body { display: block !important; }
+.r2-ans { break-inside: avoid-page; }
+
+/* Code prints light, and wraps instead of running off the page. */
+.r2-code { background: #f4f4f4 !important; color: #000 !important; border: 1px solid #ccc; }
+.r2-code code { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+.r2-grid-wrap { overflow: visible !important; }
+
+/* Links: show where cited sources point. */
+.r2-src a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #555; overflow-wrap: anywhere; }
+a { color: #000; text-decoration: none; }

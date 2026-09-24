@@ -1,9 +1,9 @@
 # AI Found Score
 
-> Free report for local service businesses. We ask {{AI_LIST}} the questions a customer in the business's town would ask ({{QUESTION_COUNT_WORD}} questions, {{SEARCH_COUNT}} searches in all) and show every answer word for word: who got named, who got named first, and which websites the AI cited. The report also checks whether the business's name, phone, address, and hours match across Google, Apple, Bing, Yelp, and Facebook.
+> Free report for local service businesses. We ask the AI assistants customers use the questions a customer in the business's town would ask (five questions, through each assistant's official or commercial service with web search on) and show every answer word for word: who got named, who got named first, and which websites the AI cited. Each report lists exactly which assistants were asked and when. The report also checks whether the business's name, phone, address, and hours match across Google, Apple, Bing, Yelp, and Facebook.
 
 - The free report costs nothing and uses public data only. No logins are required.
-- Paid options, all one-time: Fix steps ($29, every fix step by step), Fix it and re-check ($59, we fix listings, get the business onto the websites AI cited, and run the same searches again 30 days later), Full Year ($69, adds the same searches every month for a year), Full listing build ($199).
+- Paid options, both one-time: Fix steps ($29, every fix step by step), Fix it and re-check ($59, we fix listings, get the business onto the websites AI cited, and run the same searches we ran for the first report again 30 days later).
 - AI Found Score can't promise what AI will say, and does not promise placement or bookings.
 - Operator: Fields Holding d/b/a GetAiFound Score, 120 Terminal Drive, Plainview, NY 11803. Email: hello@aifoundscore.com
 

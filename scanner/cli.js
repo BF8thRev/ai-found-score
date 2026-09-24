@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan, pingAll, summarizeScan } from './scan.js';
-import { ENGINE_IDS, ACTIVE_ENGINES, DEFAULT_RUNS, estimateScanCost, enginesConfigured } from './config.js';
+import { ENGINE_IDS, ACTIVE_ENGINES, DEFAULT_RUNS, estimateScanCost, enginesConfigured, defaultScanEngines } from './config.js';
 import { buildQuestions } from './questions.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -63,9 +63,6 @@ const USAGE = `Usage: node scanner/cli.js --business path.json [--engines ${ACTI
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(USAGE);
-  // Default: the engines the site advertises. Any of ENGINE_IDS can be named with --engines.
-  const engines = args.engines || ACTIVE_ENGINES;
-
   let env = loadEnv();
   let fetchImpl = globalThis.fetch;
   if (args.dryRun) {
@@ -74,6 +71,9 @@ async function main() {
     fetchImpl = dry.fixtureFetch();
     console.error('[dry-run] answering from scanner/test/fixtures/engines/ — no network');
   }
+  // Default: every engine with a key (activeEngines); the static ACTIVE_ENGINES in a dry run.
+  // Any of ENGINE_IDS can be named with --engines.
+  const engines = args.engines || (args.dryRun ? ACTIVE_ENGINES : defaultScanEngines(env));
 
   if (args.ping) {
     const configured = enginesConfigured(env);

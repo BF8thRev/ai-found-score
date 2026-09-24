@@ -19,6 +19,7 @@ import { parseExpenseForm, scanFormToBody } from './metrics.js';
 import { handleAdminPing, handleAdminScanStart, handleAdminScanStatus, startScan, ALL_ENGINES, NO_STORE } from './api.js';
 import { dryRunEnabled, isLocalRequest } from './dry-run.js';
 import { redact } from './redact.js';
+import { defaultScanEngines } from '../../scanner/config.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -121,7 +122,7 @@ export async function handleAdminRequest(request, url, env) {
     const n = nonce();
     const dash = await loadDashboard(env);
     const dryRun = dryRunEnabled(env) && isLocalRequest(url);
-    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun }), { status, nonce: n });
+    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env) }), { status, nonce: n });
   };
 
   if (path === '/admin/expenses') {

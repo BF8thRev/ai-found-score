@@ -2,6 +2,7 @@
 // fixed template string with slots; nothing is free-written. Pure, runtime-agnostic.
 
 import { ENGINE_NAMES } from '../../shared/report-v2.js';
+import { businessDetails, fixFactDiffers, fixNotListed, fixLostQuestion, baselineFixes } from './fixes.js';
 
 const SEV = { high: 0, medium: 1, low: 2 };
 const FIELD_LABEL = { hours: 'hours', phone: 'phone number', price: 'price', address: 'address', services: 'services' };
@@ -31,13 +32,17 @@ export const TEMPLATES = {
 };
 
 /**
- * buildIssues({ report, extra }) → [{ severity, title, description, kind }]
+ * buildIssues({ report, extra, business }) → [{ kind, severity, title, description, steps, copyText }]
  * `report` must already have answers, questions, aiFacts, sources, entities.
+ * `business` is the scan's business input (with its website `facts`); defaults to report.business.
+ * Every generated issue carries its fix (steps + copy-paste text, scanner/extract/fixes.js),
+ * and the always-applicable baseline fixes are appended (severity low).
  * `extra` (e.g. listing mismatches from the listing checker) is merged in, then
  * everything is ordered high → medium → low, stable.
  */
-export function buildIssues({ report, extra = [] }) {
+export function buildIssues({ report, extra = [], business = report.business || {} }) {
   const out = [];
+  const d = businessDetails(business);
   const byId = new Map(report.answers.map((a) => [a.id, a]));
   const qText = (qid) => (report.questions.find((q) => q.id === qid) || {}).text || '';
   const engineName = (e) => ENGINE_NAMES[e] || e;
@@ -47,7 +52,7 @@ export function buildIssues({ report, extra = [] }) {
     if (f.status !== 'differs') continue;
     const a = byId.get(f.answerId);
     const s = { field: FIELD_LABEL[f.field] || f.field, engine: engineName(a.engine), aiSays: f.aiSays, sourceSays: f.sourceSays, sourceName: f.sourceFrom === 'listing' ? 'listing' : 'website' };
-    out.push({ kind: 'fact_differs', severity: 'high', title: TEMPLATES.factDiffers.title(s), description: TEMPLATES.factDiffers.description(s) });
+    out.push({ kind: 'fact_differs', severity: 'high', title: TEMPLATES.factDiffers.title(s), description: TEMPLATES.factDiffers.description(s), ...fixFactDiffers(d, { ...s, field: f.field }) });
   }
 
   for (const src of report.sources || []) {
@@ -59,7 +64,7 @@ export function buildIssues({ report, extra = [] }) {
       engines: list([...new Set(lostIn.map((a) => engineName(a.engine)))]),
       question: qText(lostIn[0].questionId),
     };
-    out.push({ kind: 'not_listed', severity: 'high', title: TEMPLATES.notListed.title(s), description: TEMPLATES.notListed.description(s) });
+    out.push({ kind: 'not_listed', severity: 'high', title: TEMPLATES.notListed.title(s), description: TEMPLATES.notListed.description(s), ...fixNotListed(d, s) });
   }
 
   for (const q of report.questions) {
@@ -79,10 +84,13 @@ export function buildIssues({ report, extra = [] }) {
       shown: proven.length,
       names: list(proven),
     };
-    out.push({ kind: 'lost_question', severity: 'medium', title: TEMPLATES.lostQuestion.title(s), description: TEMPLATES.lostQuestion.description(s) });
+    out.push({ kind: 'lost_question', severity: 'medium', title: TEMPLATES.lostQuestion.title(s), description: TEMPLATES.lostQuestion.description(s), ...fixLostQuestion(d, { ...s, intent: q.intent }) });
   }
 
   for (const x of extra) if (x && x.title) out.push({ severity: 'medium', ...x });
+
+  // Fixes every business can make, so a paying customer always gets concrete steps.
+  out.push(...baselineFixes({ business, questions: report.questions || [] }));
 
   return out
     .map((x, i) => ({ x, i }))

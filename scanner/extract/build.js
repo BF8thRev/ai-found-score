@@ -18,7 +18,7 @@
 
 import { computeTotals, pickHeadline, validateReport } from '../../shared/report-v2.js';
 import { proposeForAnswer } from './propose.js';
-import { verifyAnswer, factStatus, ownerFact } from './verify.js';
+import { verifyAnswer, factStatus, ownerFact, descriptorKey } from './verify.js';
 import { groupEntities } from './entities.js';
 import { normalizeName } from './normalize.js';
 import { buildSources } from './sources.js';
@@ -100,8 +100,68 @@ export function pickFacts(facts, engineOf = new Map(), max = MAX_FACTS) {
   return (checked.length ? checked : kept).slice(0, max).map((x) => x.f);
 }
 
+/** Most "how AI describes you" phrases the report keeps. */
+export const MAX_DESCRIPTORS = 6;
+
 /**
- * buildReport({ scan, business, listings?, issues?, baseline?, proposalsByAnswer?, env, fetchImpl, id?, now?, maxFetch? })
+ * pickDescriptors(raw, engineOf) → [{ answerId, quote }] (≤ MAX_DESCRIPTORS).
+ * raw: verified descriptors in answer order. Deduped (case/space-insensitive, and a phrase
+ * contained in one already kept is dropped), then taken round-robin across engines so one
+ * assistant's wording doesn't fill the list.
+ */
+export function pickDescriptors(raw, engineOf = new Map(), max = MAX_DESCRIPTORS) {
+  const kept = [];
+  for (const d of raw) {
+    const k = descriptorKey(d.quote);
+    if (!k || kept.some((x) => x.k.includes(k) || k.includes(x.k))) continue;
+    kept.push({ ...d, k });
+  }
+  const byEngine = new Map();
+  for (const d of kept) {
+    const e = engineOf.get(d.answerId) || '';
+    if (!byEngine.has(e)) byEngine.set(e, []);
+    byEngine.get(e).push(d);
+  }
+  const out = [];
+  const lists = [...byEngine.values()];
+  for (let i = 0; out.length < max && lists.some((l) => l.length > i); i++) {
+    for (const l of lists) if (l[i] && out.length < max) out.push({ answerId: l[i].answerId, quote: l[i].quote });
+  }
+  return out;
+}
+
+/**
+ * applyHeadlineConfirmation(report, confirmation) → report (mutated)
+ * confirmation = { ref: 'engine:qid:run' of the headline answer, ok, agreed: true|false|null, error? }
+ *   agreed true  → method.headlineConfirmed = true
+ *   agreed false → the re-asked answer's owner status flipped: that answer gets
+ *                  headlineUnstable: true, the next candidate becomes the headline,
+ *                  method.headlineConfirmed = false
+ *   agreed null  → the re-ask failed or was unsure: headline kept, headlineConfirmed = false
+ * No confirmation (runs > 1, or not attempted) leaves the report unchanged.
+ */
+export function applyHeadlineConfirmation(report, c) {
+  if (!c || !report || !Array.isArray(report.answers)) return report;
+  const a = report.answers.find((x) => answerKey(x) === c.ref);
+  report.method = report.method || {};
+  if (!a) {
+    report.method.headlineConfirmed = false;
+    return report;
+  }
+  report.method.headlineConfirm = {
+    answerId: a.id, engine: a.engine, questionId: a.questionId, run: 2,
+    result: c.agreed === true ? 'same' : c.agreed === false ? 'changed' : 'inconclusive',
+  };
+  if (c.agreed === false) {
+    a.headlineUnstable = true;
+    report.headline = pickHeadline(report);
+  }
+  report.method.headlineConfirmed = c.agreed === true;
+  return report;
+}
+
+/**
+ * buildReport({ scan, business, listings?, issues?, baseline?, proposalsByAnswer?, env, fetchImpl, id?, now?, maxFetch?, headlineConfirmation? })
  *   → Promise<{ report, validation, rejected, extraction }>
  * `rejected` lists every model proposal the code threw out (for the scan log).
  * `extraction` = { calls, costUsd, inputTokens, outputTokens, failures[] } for the scan cost total.
@@ -113,7 +173,7 @@ export function pickFacts(facts, engineOf = new Map(), max = MAX_FACTS) {
  */
 export async function buildReport({
   scan, business, listings = [], issues = [], baseline = null, proposalsByAnswer = {},
-  env = {}, fetchImpl, id, now, maxFetch = 5, onExtract,
+  env = {}, fetchImpl, id, now, maxFetch = 5, onExtract, headlineConfirmation = null,
 }) {
   const questions = (scan.questions || []).map((q) => ({ id: q.id, intent: q.intent, text: q.text }));
   const qById = new Map(questions.map((q) => [q.id, q]));
@@ -138,6 +198,7 @@ export async function buildReport({
   // Answers + verified extraction.
   const answers = [];
   const factsRaw = [];
+  const descriptorsRaw = [];
   const rejected = [];
   const extraction = { calls: 0, costUsd: 0, inputTokens: 0, outputTokens: 0, failures: [] };
   for (const r of good) {
@@ -183,6 +244,7 @@ export async function buildReport({
     const v = verifyAnswer({ answer: base, proposal, business });
     for (const x of v.rejected.businesses) rejected.push({ answerId: aid, kind: 'business', ...x });
     for (const x of v.rejected.facts) rejected.push({ answerId: aid, kind: 'fact', ...x });
+    for (const x of v.rejected.descriptors || []) rejected.push({ answerId: aid, kind: 'descriptor', ...x });
     const ans = {
       ...base,
       businessesNamed: v.businessesNamed,
@@ -193,6 +255,7 @@ export async function buildReport({
     answers.push(ans);
     // Facts only count when this answer is confirmed to be talking about the owner.
     if (v.namedYou) for (const f of v.facts) factsRaw.push({ answerId: aid, ...f });
+    if (v.namedYou) for (const d of v.descriptors || []) descriptorsRaw.push({ answerId: aid, quote: d.quote });
   }
 
   // Entities.
@@ -236,6 +299,8 @@ export async function buildReport({
       name: business.name, trade: business.trade || null, address: business.address || null,
       town: business.town || null, state: business.state || null, zip: business.zip || null,
       phone: business.phone || null, website: business.website || null,
+      // The owner's own website facts (what aiFacts and the fix steps are built from).
+      ...(business.facts && Object.keys(business.facts).length ? { facts: { ...business.facts } } : {}),
     },
     questions,
     answers,
@@ -244,6 +309,7 @@ export async function buildReport({
     headline: null,
     sources,
     aiFacts,
+    ownerDescriptors: pickDescriptors(descriptorsRaw, engineOf),
     listings,
     issues: [],
     method: {
@@ -261,7 +327,9 @@ export async function buildReport({
   };
   report.totals = computeTotals(report);
   report.headline = pickHeadline(report);
-  report.issues = buildIssues({ report, extra: issues });
+  // A re-ask of the headline search (scan-core confirmHeadline) may move the headline.
+  applyHeadlineConfirmation(report, headlineConfirmation);
+  report.issues = buildIssues({ report, extra: issues, business });
 
   const validation = validateReport(report);
   return { report, validation, rejected, extraction };

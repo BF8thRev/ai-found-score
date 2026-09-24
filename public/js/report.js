@@ -32,6 +32,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (report.version === 2) renderV2(root, report);
   else renderV1(root, report);
 
+  // Never show a buy button or link for a tier that isn't on sale (OFFERED_TIERS, config.js).
+  root.querySelectorAll('[data-tier]').forEach((el) => { if (!tierOn(el.getAttribute('data-tier'))) el.remove(); });
+  wireReportTools(root, report);
   window.wireCheckout?.(root, report.sample ? null : report.id);
   root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', (e) => submitLead(e, report.id)));
 
@@ -121,7 +124,7 @@ function renderV1(root, report) {
               ? blurred('Why this costs you calls, and the exact steps to fix it, written so anyone on your team can do it.')
               : `<p>${escapeHtml(issue.description)}</p>`}
           </div>`).join('')}
-        ${locked ? unlockPanel() : ''}
+        ${locked && tierOn('snapshot') ? unlockPanel() : ''}
       </section>
 
       <section class="report-section">
@@ -129,19 +132,20 @@ function renderV1(root, report) {
         <p>${escapeHtml(report.summary)}</p>
       </section>
 
-      ${paid ? `
+      ${paid ? (tierOn('before_after') ? `
       <div class="cta-band">
         <h2>Want it handled?</h2>
         <p>We fix your listings on all five sites, re-scan, and show you the before and after.</p>
         <p><a class="btn" data-tier="before_after" href="#">Fix it for me — $59</a></p>
-        <p class="fine"><a data-tier="full_year" href="#">Full Year $69</a> (plus monthly re-checks) · <a data-tier="listing_fix" href="#">Listing cleanup $199</a></p>
+        ${tierLinks(['full_year', 'listing_fix'])}
         <p class="fine"><a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
-      </div>` : `
+      </div>` : '') : `
       <div class="cta-band">
+        ${tierOn('snapshot') ? `
         <h2>See exactly what to fix</h2>
         <p>Every issue explained, with step-by-step fixes you can hand to anyone. One payment of $29. No subscription.</p>
-        <p><a class="btn big" data-tier="snapshot" href="#">Unlock the full report — $29</a></p>
-        <p class="fine">Rather we do it? <a data-tier="before_after" href="#">We fix it — $59</a> · <a data-tier="full_year" href="#">Full Year $69</a> · <a data-tier="listing_fix" href="#">Listing cleanup $199</a></p>
+        <p><a class="btn big" data-tier="snapshot" href="#">Unlock the full report — $29</a></p>` : '<h2>Want it handled?</h2>'}
+        ${tierLinks(['before_after', 'full_year', 'listing_fix'], 'Rather we do it? ')}
         <p class="fine">Secure checkout by Stripe. One-time payment. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
       </div>`}
 
@@ -159,10 +163,106 @@ function blurred(text) {
 function unlockPanel() {
   return `
     <div class="unlock-panel">
-      <p><strong>The fixes are in the full report.</strong> What’s wrong on each listing and how to fix it, step by step.</p>
-      <a class="btn" data-tier="snapshot" href="#">Unlock for $29</a>
+      <p><strong>The fix steps are in the full report.</strong> Every fix, step by step, with copy-paste text for your Google profile. If we can’t show you 3 things you can fix, you get your money back.</p>
+      <a class="btn" data-tier="snapshot" href="#">Get the fix steps — $29</a>
     </div>`;
 }
+
+// Tiers on sale (public/js/config.js OFFERED_TIERS). Without config.js, nothing is for sale.
+function tierOn(tier) {
+  return typeof window.tierOffered === 'function' ? window.tierOffered(tier) : false;
+}
+
+const TIER_LINK = {
+  before_after: '<a data-tier="before_after" href="#">Fix it and re-check — $59</a>',
+  full_year: '<a data-tier="full_year" href="#">Full Year $69</a> (plus monthly re-checks)',
+  listing_fix: '<a data-tier="listing_fix" href="#">Full listing build $199</a>',
+  snapshot: '<a data-tier="snapshot" href="#">Fix steps — $29</a>',
+};
+
+// A "fine print" line of links to the offered tiers among `tiers`; '' when none is on sale.
+function tierLinks(tiers, prefix = '') {
+  const on = tiers.filter(tierOn).map((t) => TIER_LINK[t]);
+  return on.length ? `<p class="fine">${prefix}${on.join(' · ')}</p>` : '';
+}
+
+// Share + Save as PDF, and the copy buttons on fix steps. One delegated listener.
+function reportTools() {
+  return `
+    <div class="r2-tools" role="group" aria-label="Share or save this report">
+      <button type="button" class="btn-secondary" data-action="share">Share this report</button>
+      <button type="button" class="btn-secondary" data-action="print">Save as PDF</button>
+      <span class="r2-tools-status" role="status"></span>
+    </div>`;
+}
+
+function reportUrl() {
+  // The shareable link: this page without ?preview or #hash.
+  return location.origin + location.pathname;
+}
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+
+// Closed <details> hide their content in print; open every answer while printing.
+function openAllForPrint() {
+  const closed = [...document.querySelectorAll('details:not([open])')];
+  closed.forEach((d) => { d.open = true; d.dataset.printOpened = '1'; });
+}
+function restoreAfterPrint() {
+  document.querySelectorAll('details[data-print-opened]').forEach((d) => { d.open = false; delete d.dataset.printOpened; });
+}
+
+function wireReportTools(root, report) {
+  const status = root.querySelector('.r2-tools-status');
+  const say = (msg) => { if (status) status.textContent = msg; };
+  root.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action], button[data-copy]');
+    if (!btn) return;
+    if (btn.dataset.copy != null) {
+      const text = COPY_STORE[Number(btn.dataset.copy)];
+      if (text == null) return;
+      const ok = await copyText(text);
+      const was = btn.textContent;
+      btn.textContent = ok ? 'Copied' : 'Select and copy';
+      setTimeout(() => { btn.textContent = was; }, 1800);
+      return;
+    }
+    if (btn.dataset.action === 'print') {
+      openAllForPrint();
+      window.print();
+      return;
+    }
+    if (btn.dataset.action === 'share') {
+      const url = reportUrl();
+      const title = `AI Found Score — ${report.business?.name || 'report'}`;
+      if (navigator.share) {
+        try { await navigator.share({ title, url }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
+      }
+      say((await copyText(url)) ? 'Link copied. Paste it anywhere to share.' : url);
+    }
+  });
+  window.addEventListener('beforeprint', openAllForPrint);
+  window.addEventListener('afterprint', restoreAfterPrint);
+}
+
+// Text behind each copy button (kept out of HTML attributes, so nothing needs escaping twice).
+const COPY_STORE = [];
 
 function leadForm(where) {
   return `
@@ -234,6 +334,8 @@ function escapeHtml(str) {
 // serve a report whose stored totals disagree).
 
 const ENGINE_NAMES = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_ai_mode: 'Google AI Mode', perplexity: 'Perplexity', claude: 'Claude' };
+// Mirror of MIN_FIX_ITEMS in shared/report-v2.js: the $29 tier needs this many fixes.
+const MIN_FIX_ITEMS = 3;
 // Preferred column order only. Columns come from the engines that actually
 // answered (plus method.engines order for anything not listed here).
 const ENGINE_COLUMNS = ['chatgpt', 'claude', 'gemini', 'google_ai_mode', 'perplexity'];
@@ -348,6 +450,9 @@ function renderV2(root, report) {
   // Unsure owner matches are never counted as "didn't name you".
   const lostAnswerIds = new Set(answers.filter((a) => !a.namedYou && a.ownerMatch !== 'unsure').map((a) => a.id));
   const cw = countWords(report);
+  const fixCount = issues.filter((i) => i && i.title).length;
+  // The $29 tier is offered only with at least MIN_FIX_ITEMS fixes (the refund promise).
+  const snapshotOk = locked && !paid && fixCount >= MIN_FIX_ITEMS && tierOn('snapshot');
   const ownDomain = String(b.website || '').replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase();
 
   // Engines in column order: known engines that answered, then any others.
@@ -390,9 +495,8 @@ function renderV2(root, report) {
     sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     factsV2({ report, b, aById }),
     listingsV2({ listings, badListings }),
-    // Named in every answer: Full Year only, so no $29 unlock panel either.
-    issuesV2({ issues, locked, noPaywall: noFixes || allNamed }),
-    offerV2({ paid, locked, allNamed, noFixes, missingSources, badListings, cw }),
+    issuesV2({ issues, locked, snapshotOk }),
+    offerV2({ paid, locked, allNamed, noFixes, missingSources, badListings, cw, fixCount, snapshotOk }),
     answersV2({ questions, answers }),
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
     report.sample ? '' : leadForm('bottom'),
@@ -425,6 +529,7 @@ function headerV2(report, b, meta) {
         <h1>${escapeHtml(b.name)}</h1>
         <p class="biz-meta">${meta}</p>
         <p class="fine">Checked ${escapeHtml(fmtDate(report.generatedAt))}</p>
+        ${reportTools()}
       </div>
     </section>`;
 }
@@ -615,6 +720,20 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
     </section>`;
 }
 
+// 6b. How AI describes you: short phrases quoted exactly from answers that named you.
+function descriptorsV2({ report, aById }) {
+  const ds = (report.ownerDescriptors || []).filter((d) => d && d.quote && aById[d.answerId]).slice(0, 6);
+  if (!ds.length) return '';
+  return `
+      <div class="r2-desc">
+        <h3>How AI describes you</h3>
+        <ul>${ds.map((d) => {
+          const a = aById[d.answerId];
+          return `<li><q>${escapeHtml(d.quote)}</q> <span class="r2-muted">${escapeHtml(engineName(a.engine))} · <a href="#ans-${escapeHtml(a.id)}" data-open="${escapeHtml(a.id)}">See the answer</a></span></li>`;
+        }).join('')}</ul>
+      </div>`;
+}
+
 // 6. What AI says about you: exact quotes, differs first.
 function factsV2({ report, b, aById }) {
   const order = { differs: 0, match: 1 };
@@ -623,7 +742,8 @@ function factsV2({ report, b, aById }) {
   // keeps one per field and engine, this guards reports stored before it did).
   const checked = all.filter((f) => f.status === 'differs' || f.status === 'match');
   const facts = (checked.length ? checked : all).slice(0, 8);
-  if (!facts.length) return '';
+  const described = descriptorsV2({ report, aById });
+  if (!facts.length && !described) return '';
   const cards = facts.map((f) => {
     const a = aById[f.answerId];
     const badge = f.status === 'differs' ? '<span class="badge mismatch">Doesn’t match</span>'
@@ -640,7 +760,8 @@ function factsV2({ report, b, aById }) {
   return `
     <section class="report-section">
       <h2>What AI says about you</h2>
-      <p class="sub">Facts the AI stated about ${escapeHtml(b.name)}, quoted exactly and checked against your website and listings.</p>
+      <p class="sub">${facts.length ? `Facts the AI stated about ${escapeHtml(b.name)}, quoted exactly and checked against your website and listings.` : `How the AI described ${escapeHtml(b.name)}, quoted exactly.`}</p>
+      ${described}
       ${cards}
     </section>`;
 }
@@ -666,39 +787,92 @@ function listingsV2({ listings, badListings }) {
     </section>`;
 }
 
-// 8. What to fix: titles free, steps locked until paid (removed server-side).
-function issuesV2({ issues, locked, noPaywall }) {
+// Copy-paste blocks under a fix: plain text, or a code block (JSON-LD), each with a Copy button.
+function copyBlocksV2(items) {
+  return (items || []).filter((c) => c && c.label && typeof c.text === 'string' && c.text).map((c) => {
+    const idx = COPY_STORE.push(c.text) - 1;
+    const body = c.format === 'code'
+      ? `<pre class="r2-code"><code>${escapeHtml(c.text)}</code></pre>`
+      : `<div class="r2-copytext">${escapeHtml(c.text)}</div>`;
+    return `
+      <div class="r2-copy">
+        <div class="r2-copy-head"><span>${escapeHtml(c.label)}</span><button type="button" class="btn-secondary r2-copy-btn" data-copy="${idx}">Copy</button></div>
+        ${body}
+      </div>`;
+  }).join('');
+}
+
+// 8. What to fix: titles free; descriptions, steps and copy text locked until paid
+// (removed server-side, src/lib/lock.js).
+function issuesV2({ issues, locked, snapshotOk }) {
   if (!issues.length) return '';
   return `
     <section class="report-section">
       <h2>What to fix, in order</h2>
-      <p class="sub">Start at the top.</p>
+      <p class="sub">${issues.length} ${plural(issues.length, 'fix', 'fixes')}. Start at the top.</p>
       ${issues.map((issue) => `
         <div class="issue-card">
           <span class="badge ${escapeHtml(issue.severity)}">${escapeHtml(severityLabel(issue.severity))}</span>
           <h3>${escapeHtml(issue.title)}</h3>
           ${issue.locked
-            ? blurred('What this is, and the exact steps to fix it, written so anyone on your team can do it.')
+            ? blurred('What this is, the exact steps to fix it, and text you can copy and paste.')
             : `${issue.description ? `<p>${escapeHtml(issue.description)}</p>` : ''}${
-              (issue.steps || []).length ? `<ol class="r2-steps">${issue.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}`}
+              (issue.steps || []).length ? `<ol class="r2-steps">${issue.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}${
+              copyBlocksV2(issue.copyText)}`}
         </div>`).join('')}
-      ${locked && !noPaywall ? unlockPanel() : ''}
+      ${snapshotOk ? unlockPanel() : ''}
     </section>`;
 }
 
-// 9. Offer: names the specific sites the fix covers.
-function offerV2({ paid, locked, allNamed, noFixes, missingSources, badListings, cw }) {
+// 9. Offer: names the specific sites the fix covers. Only tiers in OFFERED_TIERS (config.js);
+// the $29 Fix steps only with at least MIN_FIX_ITEMS fixes (snapshotOk).
+function offerV2({ paid, locked, allNamed, noFixes, missingSources, badListings, cw, fixCount, snapshotOk }) {
   const legal = '<p class="fine">Secure checkout by Stripe. One-time payment. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>';
-  // Named in every answer, or nothing to fix: Full Year only, even if a listing mismatch exists.
+  const refund = '<p class="fine">If we can’t show you 3 things you can fix, you get your money back.</p>';
+  const monitoring = '<p class="fine">Monthly monitoring is coming.</p>';
+  // Named in every answer, or no listing to fix and no cited site missing you: the $29 Fix steps
+  // (the baseline fixes still apply), and a quiet note that monitoring is coming.
   if (allNamed || noFixes) {
-    return `
+    const lead = allNamed ? `Every ${cw.one} named you.` : 'We found no listing to fix and no cited site missing you.';
+    if (tierOn('full_year')) {
+      return `
       <div class="cta-band">
         <h2>Keep it this way</h2>
-        <p>${allNamed ? `Every ${cw.one} named you. ` : 'We found no listing to fix and no cited site missing you. '}We run the same ${cw.sameSearches} every month for a year and email you when a competitor starts getting named over you.</p>
+        <p>${lead} We run the same ${cw.sameSearches} every month for a year and email you when a competitor starts getting named over you.</p>
         <p><a class="btn" data-tier="full_year" href="#">Full Year — $69</a></p>
+        ${snapshotOk ? tierLinks(['snapshot']) : ''}
         <p class="fine">No subscription. We can’t promise what AI will say. We can show you exactly what changed.</p>
         ${legal}
       </div>`;
+    }
+    if (snapshotOk) {
+      return `
+      <div class="cta-band">
+        <h2>Keep it this way</h2>
+        <p>${lead} There are still ${fixCount} things you can do to keep your details clear and consistent: every one step by step, with copy-paste text for your Google profile.</p>
+        <p><a class="btn big" data-tier="snapshot" href="#">Get the fix steps — $29</a></p>
+        ${refund}
+        ${monitoring}
+        ${legal}
+      </div>`;
+    }
+    return `
+      <div class="cta-band">
+        <h2>Keep it this way</h2>
+        <p>${lead}</p>
+        ${monitoring}
+      </div>`;
+  }
+  if (!tierOn('before_after')) {
+    if (!snapshotOk) return '';
+    return `
+    <div class="cta-band">
+      <h2>See exactly what to fix</h2>
+      <p>Every fix, step by step, with copy-paste text for your Google profile. One payment of $29. No subscription.</p>
+      <p><a class="btn big" data-tier="snapshot" href="#">Get the fix steps — $29</a></p>
+      ${refund}
+      ${legal}
+    </div>`;
   }
   const sites = [...new Set(missingSources.map((s) => s.domain))];
   const platforms = badListings.map((l) => l.platform);
@@ -711,7 +885,7 @@ function offerV2({ paid, locked, allNamed, noFixes, missingSources, badListings,
       <h2>${sites.length ? 'Get onto the sites AI is reading' : 'Fix what AI is reading'}</h2>
       <p>We ${parts.join(' and ')}, then run the same ${cw.sameSearches} again in 30 days and show you both results.${listedLine}</p>
       <p><a class="btn big" data-tier="before_after" href="#">Fix it and re-check — $59</a></p>
-      <p class="fine">${locked && !paid ? '<a data-tier="snapshot" href="#">Fix steps — $29</a> · ' : ''}<a data-tier="full_year" href="#">Full Year $69</a> (plus monthly re-checks) · <a data-tier="listing_fix" href="#">Full listing build $199</a></p>
+      ${tierLinks([...(snapshotOk ? ['snapshot'] : []), 'full_year', 'listing_fix'])}
       <p class="fine">No sales call. We can’t promise what AI will say. We can show you exactly what changed.</p>
       ${legal}
     </div>`;
@@ -750,6 +924,7 @@ function answersV2({ questions, answers }) {
         <details class="r2-ans" id="ans-${escapeHtml(a.id)}">
           <summary><span class="eng">${escapeHtml(engineName(a.engine))}${runs > 1 ? ` · run ${num(a.run) || 1}` : ''}</span><span class="mk ${m.cls}">${m.txt}</span><span class="lbl">${m.label}</span></summary>
           <div class="body">
+            ${a.headlineUnstable ? '<p class="r2-note">We asked this search again and the second answer changed whether it named you, so we didn’t lead with it.</p>' : ''}
             <blockquote>${answerHtml(a)}</blockquote>
             ${cites.length
               ? `<p class="r2-src">Cited: ${cites.map((c) => `<a href="${safeHref(c.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(shortUrl(c.url))}</a>`).join(' · ')}</p>`
@@ -766,6 +941,15 @@ function answersV2({ questions, answers }) {
     </section>`;
 }
 
+// The headline re-ask (one run per assistant, so the search we lead with is checked once more).
+function headlineLine(method) {
+  const hc = method.headlineConfirm;
+  if (!hc || method.headlineConfirmed == null) return '';
+  if (hc.result === 'same') return `We asked the search at the top of this report a second time on ${escapeHtml(engineName(hc.engine))}; it gave the same result.`;
+  if (hc.result === 'changed') return `The first search we picked to lead with gave a different result when we asked it again on ${escapeHtml(engineName(hc.engine))}, so this report leads with another one.`;
+  return `We tried to ask the search at the top of this report a second time on ${escapeHtml(engineName(hc.engine))} and couldn’t confirm it.`;
+}
+
 // 11. How we searched. Always rendered.
 function methodV2({ report, method, engines, failed, questions, N, cw, listings }) {
   const cfg = method.engines || {};
@@ -780,6 +964,7 @@ function methodV2({ report, method, engines, failed, questions, N, cw, listings 
     `${questions.length} ${plural(questions.length, 'question', 'questions')} phrased the way a local customer would ask, each asked ${runs === 1 ? 'once' : `${runs} times`} per assistant: ${cw.total} in all.`,
     `Asked ${escapeHtml(fmtDate(report.generatedAt))}${method.window ? ', ' + escapeHtml(method.window) : ''}.`,
     failed.length ? `${escapeHtml(listJoin(failed.map(engineName)))} didn’t respond, so ${plural(failed.length, 'it is', 'they are')} left out. We don’t fill the gap.` : '',
+    headlineLine(method),
     'We asked through each assistant’s official or commercial service, with web search on. Those answers can differ from the app on your phone.',
     listings.length ? '' : 'Listing consistency was not checked in this report.',
     'AI answers change; this is a snapshot.',

@@ -8,6 +8,7 @@
 // A spec that doesn't hold together throws at import time.
 
 import { pickHeadline } from '../../shared/report-v2.js';
+import { baselineFixes } from '../../scanner/extract/fixes.js';
 
 /** Earliest occurrence of any alias; longest alias wins at the same spot. */
 function findName(text, aliases) {
@@ -35,7 +36,10 @@ function domainOf(url) {
  *   startAt: ISO string (askedAt is spaced 20s apart from here),
  *   sourceChecks: { [domain]: { youListed, youPosition, topListed } },
  *   facts: [{ q, engine, run, field, aiSays, sourceSays, status }],
+ *   descriptors: [{ q, engine, run, quote }]   "How AI describes you" (literal quotes, owner named)
  *   listings, issues, method, baseline,
+ *   baselineFixes: true   append the always-applicable fixes (scanner/extract/fixes.js), built from
+ *                         business (+ business.facts) and questions exactly as a real scan does
  *   engines?: [engineId...]   keep only these engines' answers, facts and method.engines
  *                             (the spec can hold answers for every engine; the sample shows the
  *                             ones the site advertises). Competitors no kept answer names are dropped.
@@ -136,6 +140,19 @@ export function buildSample(fullSpec) {
     return { answerId: a.id, field: f.field, aiSays: f.aiSays, sourceSays: f.sourceSays ?? null, status: f.status };
   });
 
+  const ownerDescriptors = (spec.descriptors || []).map((d) => {
+    const a = answers.find((x) => x.questionId === d.q && x.engine === d.engine && x.run === d.run);
+    if (!a || !a.text.includes(d.quote) || !a.namedYou) {
+      throw new Error(`sample ${spec.id}: descriptor "${d.quote}" is not a quote from an answer naming the owner (${d.q}/${d.engine}/${d.run})`);
+    }
+    return { answerId: a.id, quote: d.quote };
+  });
+
+  const issues = [
+    ...(spec.issues || []),
+    ...(spec.baselineFixes ? baselineFixes({ business: spec.business, questions: spec.questions }) : []),
+  ];
+
   return {
     id: spec.id,
     version: 2,
@@ -149,8 +166,9 @@ export function buildSample(fullSpec) {
     headline,
     sources: [...byUrl.values()],
     aiFacts,
+    ownerDescriptors,
     listings: spec.listings || [],
-    issues: spec.issues || [],
+    issues,
     method: spec.method,
     baseline: spec.baseline ?? null,
   };
@@ -165,6 +183,7 @@ function pickEngines(spec) {
     ...spec,
     answers: spec.answers.filter(([, engine]) => keep(engine)),
     facts: (spec.facts || []).filter((f) => keep(f.engine)),
+    descriptors: (spec.descriptors || []).filter((d) => keep(d.engine)),
     method: {
       ...spec.method,
       engines,

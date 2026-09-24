@@ -52,6 +52,9 @@ Pure functions, used by the scanner (publish gate), the Worker (serve gate) and 
 - `pickHeadline(report)` → `{ answerId, rule }` per the plan's hero rule.
 - `lostIntents(report)` → intents the owner **lost**, in question order. An intent is lost when the owner was named in **half or fewer** of that intent's answers (`named × 2 <= answers`; exactly half counts as lost, matching the demo's 1-of-2 "best" and "cheapest"). Answers with an `unsure` owner match are left out of both counts; an intent with no counted answers is neither lost nor won. `intentResults(report)` → `[{ intent, answers, named, lost }]` for the tiles and the "where you win / lose" sentence. The report page must use the same rule (it must not re-derive "lost" as "any answer missed you").
 - `edgeState(report)` → one of `zero`, `all_named`, `nobody_twice`, `no_fixes`, `normal` (plus `failedEngines: []`).
+- `MIN_FIX_ITEMS` (3) / `fixItems(report)` / `snapshotOffered(report)`: the $29 Fix steps tier is offered only when the report has ≥ 3 fix items (`issues`). `report.js` mirrors the constant.
+- `pickHeadline` skips answers marked `headlineUnstable` while any other answer is left.
+- `validateReport` also checks: `ownerDescriptors` (≤ 6; each `quote` a literal substring of its answer, and that answer names the owner); `issues[].steps` (non-empty strings) and `issues[].copyText` (`{ label, text }`). The lint covers every step and every `copyText` label/text; the owner's own details (`business` fields and `business.facts`) and descriptor quotes are masked as data.
 - `validateReport` also fails: a report with **0 answers** (every engine failed; nothing to publish); any `method.extractionFailed` entry (a failed extraction makes an answer look like "didn't name you"); an owner mention (`businessesNamed[].isYou`) whose entity is not `isYou`, or a competitor mention attached to the owner entity; more than one `isYou` entity.
 - Lint masks verbatim data our templates interpolate (`aiFacts[].aiSays`/`sourceSays`, entity names/aliases, `businessesNamed[].name`, `sources[].topListed`, listing field values) before checking the words around it, so an AI quote like "within 30 minutes" in an issue description doesn't block a report.
 
@@ -67,6 +70,12 @@ Pure functions, used by the scanner (publish gate), the Worker (serve gate) and 
 - The owner is marked `isYou: true` on every `businessesNamed` entry that is a confirmed owner match **and** on its one entity in `entities`; competitors never carry `isYou`. Pages filter competitors with `!e.isYou`.
 - `totals.answers` = number of successful answers (5 questions × engines that responded × runs).
 - `baseline` = previous scan's `{ generatedAt, totals }` or null.
+- `business.facts` = the owner's own website facts (hours, price, services, address) the scan was given.
+- `ownerDescriptors: [{ answerId, quote }]` — "How AI describes you". The extractor schema has `ownerDescriptors: [{ quote }]`; code keeps only literal substrings of answers that name the owner, drops phrases naming another business, dedupes, round-robins engines, caps at 6. Recorded proposals without the field mean none.
+- `issues[]` = `{ kind, severity, title, description, steps: [string], copyText: [{ label, text, format? }] }` (`format: 'code'` = code block). Built by `scanner/extract/issues.js` + `fixes.js` from report data and the business's real details only; baseline fixes (`baseline_gbp`, `baseline_schema`, `baseline_faq`) are appended when they apply. Locked reports keep `kind`, `severity`, `title` (`src/lib/lock.js`).
+- `method.headlineConfirmed` / `method.headlineConfirm` and `answers[].headlineUnstable`: runs = 1 scans re-ask the headline search once (scan_raw `run = 2`, scan_usage `answer_ref <ref>:confirm`); see DATA_MODEL.md "Headline confirmation".
+- Scans default to `activeEngines(env)` (`scanner/config.js`: engines whose keys `resolveKeys` finds, in `ENGINE_IDS` order; `defaultScanEngines(env)` falls back to the static `ACTIVE_ENGINES` when no key is set). `ACTIVE_ENGINES` stays as the fallback for code with no env.
+- `scans.extract_cost_usd` = sum of every `scan_usage` row for the scan (`store.sumUsageCost`).
 - v1 reports (no `version` or `version: 1`) must still render exactly as today.
 
 ## Supabase

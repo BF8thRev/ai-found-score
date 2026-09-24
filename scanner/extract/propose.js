@@ -20,7 +20,7 @@ export const EXTRACT_PRICE_PER_MTOK = { input: PRICES.extract.inputPerM, output:
 export const PROPOSAL_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['businesses', 'ownerFacts'],
+  required: ['businesses', 'ownerFacts', 'ownerDescriptors'],
   properties: {
     businesses: {
       type: 'array',
@@ -48,6 +48,18 @@ export const PROPOSAL_SCHEMA = {
         },
       },
     },
+    ownerDescriptors: {
+      type: 'array',
+      description: 'Short phrases the answer uses to describe the TARGET business (what it is known or praised for, how it is characterized). At most 6.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['quote'],
+        properties: {
+          quote: { type: 'string', description: 'A short exact span of the answer (about 3 to 15 words) describing the target business, copied character for character. Not hours, phone, price or address. Never a phrase about another business.' },
+        },
+      },
+    },
   },
 };
 
@@ -61,6 +73,8 @@ export const EXTRACT_SYSTEM = [
   '- address: only a quote that contains a street number and street name (e.g. "1502 Main St") or a ZIP code. Vague location phrases ("on the town border", "near the train station", "in the village") are not addresses: leave them out.',
   '- hours: opening hours or days. price: amounts with their units. services: what the business offers. phone: a phone number.',
   '- At most one quote per field: the most specific one.',
+  '',
+  'ownerDescriptors: short phrases the answer uses to describe the TARGET business: what it is known or praised for, or how it is characterized (e.g. "praised for fast emergency response", "a massive, amenity-packed 24/7 alternative"). Exact substrings of the answer, about 3 to 15 words each, at most 6. Not hours, phone, price or address (those are ownerFacts). Never a phrase about another business. Empty if the answer does not name the target business.',
 ].join('\n');
 
 export function buildProposalRequest({ answerText, business, model, effort = 'low' }) {
@@ -100,11 +114,15 @@ function cleanProposal(p) {
     ownerFacts: ((p && p.ownerFacts) || [])
       .filter((f) => f && FACT_FIELDS.includes(f.field) && typeof f.quote === 'string' && f.quote)
       .map((f) => ({ field: f.field, quote: f.quote })),
+    // Older recorded proposals have no descriptors: treated as none, never invented.
+    ownerDescriptors: ((p && p.ownerDescriptors) || [])
+      .filter((d) => d && typeof d.quote === 'string' && d.quote.trim())
+      .map((d) => ({ quote: d.quote })),
   };
 }
 
 const failed = (model, error, usage = null) => ({
-  ok: false, error, businesses: [], ownerFacts: [], model, usage, costUsd: estimateCost(usage), source: 'model',
+  ok: false, error, businesses: [], ownerFacts: [], ownerDescriptors: [], model, usage, costUsd: estimateCost(usage), source: 'model',
 });
 
 function errorReason(e) {
@@ -119,7 +137,7 @@ function errorReason(e) {
 
 /**
  * proposeForAnswer({ answer, business, env, fetchImpl, proposals, maxRetries })
- *   → { ok, error, businesses:[{name,pos}], ownerFacts:[{field,quote}], model, usage, costUsd, source }
+ *   → { ok, error, businesses:[{name,pos}], ownerFacts:[{field,quote}], ownerDescriptors:[{quote}], model, usage, costUsd, source }
  * `proposals` (a recorded proposal for this answer) skips the network entirely.
  * On refusal, max_tokens, API errors or unparseable output: ok:false, empty lists,
  * and `error` says why. Nothing is ever invented.
@@ -129,7 +147,7 @@ export async function proposeForAnswer({ answer, business, env = {}, fetchImpl, 
     // A recorded failure (e.g. a background extraction step that gave up) stays a failure,
     // so the report is blocked exactly as if the call had failed here.
     if (proposals.ok === false) {
-      return { ok: false, error: String(proposals.error || 'extraction failed'), businesses: [], ownerFacts: [], model: proposals.model || 'recorded', usage: null, costUsd: 0, source: 'recorded' };
+      return { ok: false, error: String(proposals.error || 'extraction failed'), businesses: [], ownerFacts: [], ownerDescriptors: [], model: proposals.model || 'recorded', usage: null, costUsd: 0, source: 'recorded' };
     }
     return { ok: true, error: null, ...cleanProposal(proposals), model: proposals.model || 'recorded', usage: null, costUsd: 0, source: 'recorded' };
   }

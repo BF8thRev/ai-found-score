@@ -5,11 +5,18 @@
 
 const STRIPE_LINKS = {
   // Keys are stable ids (analytics, webhook TIER_BY_CENTS); only the labels changed.
-  snapshot: '#',       // Fix steps — $29 one-time (unlocks the fix steps)
-  before_after: '#',   // Fix it and re-check — $59 one-time
-  full_year: '#',       // Full Year — $69 one-time
-  listing_fix: '#',     // Full listing build — $199 one-time
+  snapshot: 'https://buy.stripe.com/28E00c7bth016jS8WN6Vq00',       // Fix steps — $29 one-time (unlocks the fix steps)
+  before_after: 'https://buy.stripe.com/fZuaEQ8fx39b7nWf1b6Vq01',   // Fix it and re-check — $59 one-time
+  full_year: 'https://buy.stripe.com/3cI9AM53l25737G60F6Vq02',       // Full Year (off sale: not in OFFERED_TIERS) — $69 one-time
+  listing_fix: 'https://buy.stripe.com/7sY00c2Vd5hjeQodd36Vq03',     // Full listing (off sale: not in OFFERED_TIERS) build — $199 one-time
 };
+
+// Tiers on sale right now. The report page never renders a button or link for a tier that
+// isn't listed here. Known: 'snapshot', 'before_after', 'full_year', 'listing_fix'.
+// Sep 2026: only Fix steps ($29) and Fix it and re-check ($59) are on sale.
+const OFFERED_TIERS = ['snapshot', 'before_after'];
+window.OFFERED_TIERS = OFFERED_TIERS;
+window.tierOffered = (tier) => OFFERED_TIERS.includes(tier);
 
 // Attach buy links to every [data-tier] element under root. On a report
 // page, pass the report token: it rides to Stripe as client_reference_id

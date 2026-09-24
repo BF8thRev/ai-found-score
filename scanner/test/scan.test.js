@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runScan, pingAll, summarizeScan, pool } from '../scan.js';
 import { saveReport, getBaseline, rawRow } from '../store.js';
-import { estimateScanCost, resolveKeys, priceCall, ENGINE_IDS, ACTIVE_ENGINES, TYPICAL_CALL, DEFAULT_RUNS } from '../config.js';
+import { estimateScanCost, resolveKeys, priceCall, ENGINE_IDS, ACTIVE_ENGINES, TYPICAL_CALL, DEFAULT_RUNS, activeEngines, enginesConfigured } from '../config.js';
 import { fixtureFetch, jsonResponse, DRY_RUN_ENV } from '../dry-run.js';
 
 const business = { id: '0b8f2a6e-3c1d-4e5f-9a7b-1c2d3e4f5a6b', name: 'Fictional Wash', trade: 'laundromat', town: 'North Babylon', nearbyTown: 'Deer Park', state: 'NY', zip: '11703' };
@@ -30,11 +30,15 @@ test(`cost: a default 5 × ${N} × ${DEFAULT_RUNS} scan plus extraction estimate
   assert.ok(Math.abs(estimateScanCost({ runs: 2 }).total - 2 * est.total) < 1e-5);
 });
 
-test('runScan: engines default to ACTIVE_ENGINES (the advertised ones)', async () => {
-  const scan = await runScan({ business, env, fetchImpl: fixtureFetch() });
-  assert.deepEqual(scan.engines, ACTIVE_ENGINES);
-  assert.equal(scan.calls.length, 5 * ACTIVE_ENGINES.length * DEFAULT_RUNS);
-  assert.deepEqual([...new Set(scan.calls.map((c) => c.engine))].sort(), [...ACTIVE_ENGINES].sort());
+test('runScan: engines default to activeEngines(env) (every engine with a key)', async () => {
+  const only = { OPENAI_API_KEY: 'k', ANTHROPIC_API_KEY: 'k' };
+  const scan = await runScan({ business, env: only, fetchImpl: fixtureFetch() });
+  assert.deepEqual(scan.engines, ['chatgpt', 'claude']);
+  assert.equal(scan.calls.length, 5 * 2 * DEFAULT_RUNS);
+  assert.deepEqual(activeEngines(env), ENGINE_IDS.filter((e) => enginesConfigured(env)[e]));
+  assert.deepEqual(activeEngines({}), []);
+  assert.deepEqual(activeEngines({ GEMINI_API_KEY: 'x', CLAUDE_API_KEY: 'y' }), ['gemini', 'claude'], 'ENGINE_IDS order, aliases accepted');
+  assert.ok(ACTIVE_ENGINES.length > 0, 'static fallback kept');
 });
 
 test(`runScan: 5 questions × ${N} engines × ${DEFAULT_RUNS} run (default) on fixtures, cost under budget`, async () => {

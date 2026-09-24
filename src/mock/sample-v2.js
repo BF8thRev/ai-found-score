@@ -68,6 +68,12 @@ const HARBORVIEW_SPEC = {
     zip: '11758',
     phone: '(516) 555-0148',
     website: 'harborviewplumbing.example.com',
+    // The owner's own website facts (fictional): what AI facts and the fix steps are built from.
+    facts: {
+      hours: 'Mon–Fri 8am–6pm, Sat 9am–2pm; 24/7 emergency line',
+      price: '$79 service call',
+      services: 'Plumbing repair, 24/7 emergency service, tank and tankless water heater installation, boiler and heating service',
+    },
   },
   owner: { aliases: ['Harborview Plumbing & Heating', 'Harborview Plumbing'] },
   competitors: [
@@ -127,9 +133,18 @@ const HARBORVIEW_SPEC = {
     { q: 'q3', engine: 'perplexity', run: 1, field: 'services', aiSays: 'installs tank and tankless water heaters', sourceSays: 'Tank and tankless water heater installation', status: 'match' },
     { q: 'q4', engine: 'gemini', run: 1, field: 'hours', aiSays: 'open Monday through Saturday', sourceSays: 'Mon–Fri 8am–6pm, Sat 9am–2pm', status: 'match' },
   ],
+  descriptors: [
+    { q: 'q1', engine: 'gemini', run: 1, quote: 'another well-rated option, especially for heating work' },
+    { q: 'q2', engine: 'chatgpt', run: 1, quote: 'advertises a 24/7 emergency line' },
+    { q: 'q2', engine: 'claude', run: 1, quote: 'lists a 24/7 emergency line for Massapequa on its website' },
+    { q: 'q4', engine: 'gemini', run: 1, quote: 'is also well reviewed' },
+    { q: 'q4', engine: 'google_ai_mode', run: 1, quote: 'reviewers mention fast emergency response' },
+  ],
+  baselineFixes: true,
   listings: HARBORVIEW_LISTINGS,
   issues: [
     {
+      kind: 'not_listed',
       severity: 'high',
       title: 'Two sites the AI cited for "best" and "cheapest" don’t list you',
       description: 'ChatGPT, Claude and Gemini cited localpages.example.com and bestof-li.example.com in the searches that didn’t name you. Neither page lists Harborview Plumbing & Heating.',
@@ -138,8 +153,12 @@ const HARBORVIEW_SPEC = {
         'Submit Harborview Plumbing & Heating to the bestof-li.example.com plumbers list for Massapequa.',
         'Use the exact name, address and phone from your website: Harborview Plumbing & Heating, 4820 Merrick Road, (516) 555-0148.',
       ],
+      copyText: [
+        { label: 'Your listing details for both sites', text: 'Business name: Harborview Plumbing & Heating\nAddress: 4820 Merrick Road, Massapequa, NY 11758\nPhone: (516) 555-0148\nWebsite: harborviewplumbing.example.com\nCategory: plumber' },
+      ],
     },
     {
+      kind: 'listing_mismatch',
       severity: 'high',
       title: 'Bing shows an old phone number, and Gemini repeated it',
       description: 'Bing shows (516) 555-0119. Your website and other listings show (516) 555-0148. Gemini gave the old number in one answer.',
@@ -147,8 +166,10 @@ const HARBORVIEW_SPEC = {
         'Sign in to Bing Places and open the Harborview Plumbing & Heating listing.',
         'Change the phone number to (516) 555-0148 and save.',
       ],
+      copyText: [{ label: 'Your phone number, as your website states it', text: '(516) 555-0148' }],
     },
     {
+      kind: 'listed_low',
       severity: 'medium',
       title: 'The review site ChatGPT cited for "good reviews" lists you 4th',
       description: 'Asked for a plumber with good reviews, ChatGPT cited townreviews.example.com and named Tidewater Plumbing Co. and Kessler Bros. Plumbing, not you. That page lists Harborview Plumbing & Heating 4th.',
@@ -158,6 +179,7 @@ const HARBORVIEW_SPEC = {
       ],
     },
     {
+      kind: 'listing_mismatch',
       severity: 'low',
       title: 'Facebook shows Sunday hours and a shorter name',
       description: 'Facebook says Mon–Sun 8am–8pm and "Harborview Plumbing". Everywhere else says Mon–Fri 8am–6pm, Sat 9am–2pm and "Harborview Plumbing & Heating".',
@@ -165,6 +187,7 @@ const HARBORVIEW_SPEC = {
         'In Facebook page settings, set hours to Mon–Fri 8am–6pm, Sat 9am–2pm.',
         'Change the page name to Harborview Plumbing & Heating.',
       ],
+      copyText: [{ label: 'Your hours, as your website states them', text: 'Mon–Fri 8am–6pm, Sat 9am–2pm' }],
     },
   ],
   method: {
@@ -197,6 +220,10 @@ const CEDAR_SPEC = {
     zip: '11757',
     phone: '(631) 555-0172',
     website: 'cedarlanelaundromat.example.com',
+    facts: {
+      price: '$1.95/lb, 15 lb minimum',
+      services: 'Laundry pickup and delivery, drop-off wash and fold, card-operated washers and dryers',
+    },
   },
   owner: { aliases: ['Cedar Lane Laundromat', 'Cedar Lane Laundry'] },
   competitors: [
@@ -244,12 +271,15 @@ const CEDAR_SPEC = {
   listings: [],
   issues: [
     {
+      kind: 'not_listed',
       severity: 'high',
       title: 'The directory the AI cited for "24 hour" and "cheapest" doesn’t list you',
       description: 'The AI cited localpages.example.com in answers that didn’t name you. Cedar Lane Laundromat is not on that page.',
       steps: ['Create your business page on localpages.example.com under Laundromats in Lindenhurst, NY.'],
+      copyText: [{ label: 'Your listing details for localpages.example.com', text: 'Business name: Cedar Lane Laundromat\nAddress: 210 Wellwood Ave, Lindenhurst, NY 11757\nPhone: (631) 555-0172\nWebsite: cedarlanelaundromat.example.com\nCategory: laundromat' }],
     },
   ],
+  baselineFixes: true,
   method: {
     engines: {
       chatgpt: { api: 'OpenAI Responses API with web search', model: null, loggedIn: false },

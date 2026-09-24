@@ -123,7 +123,7 @@ function moneySection(d, errors, now) {
 </section>`;
 }
 
-function runSection(d, { watch = [], engineIds, flash }) {
+function runSection(d, { watch = [], engineIds, flash, activeIds = ACTIVE_ENGINES }) {
   const running = (d.scans || []).filter((s) => s.status === 'queued' || s.status === 'running');
   const ids = [...new Set([...watch, ...running.map((s) => s.scan_id)])];
   const nameOf = Object.fromEntries((d.scans || []).map((s) => [s.scan_id, s.business_name]));
@@ -131,7 +131,7 @@ function runSection(d, { watch = [], engineIds, flash }) {
   const perCall = Object.fromEntries(engineIds.map((e) => [e, priceCall(e, TYPICAL_CALL[e])]));
   perCall.extract = priceCall('extract', TYPICAL_CALL.extract);
   // Pre-ticked (and estimated): the engines the site advertises. The rest stay selectable.
-  const defaults = engineIds.filter((e) => ACTIVE_ENGINES.includes(e));
+  const defaults = engineIds.filter((e) => activeIds.includes(e));
   const est = estimateScanCost({ engines: defaults, questions: 5, runs: 1 });
   const trades = Object.keys(TRADES);
   return `<section id="keys">
@@ -288,7 +288,7 @@ function expensesSection(d, errors, { flash, now }) {
  * The dashboard. `dash` = loadDashboard() result; `flash` = { run, expense } messages
  * ({ ok: boolean, text }); `watch` = scan ids to show live status for.
  */
-export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false }) {
+export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES }) {
   const d = dash.data || {};
   const errors = dash.errors || {};
   const flashHtml = (f) => (f ? `<p class="${f.ok ? 'ok-msg' : 'err'}" role="status">${esc(f.text)}</p>` : '');
@@ -308,7 +308,7 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
   </nav>
   ${notConfigured}
   ${moneySection(d, errors, now)}
-  ${runSection(d, { watch, engineIds, flash: flashHtml(flash.run) })}
+  ${runSection(d, { watch, engineIds, flash: flashHtml(flash.run), activeIds })}
   ${scansSection(d, errors)}
   ${enginesSection(d, errors)}
   ${funnelSection(d, errors)}

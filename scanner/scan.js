@@ -3,7 +3,7 @@
 // Runtime-agnostic (Worker or Node). Never throws for an engine failure: failed calls are
 // returned (and stored) with ok:false so the report can say which engine didn't respond.
 
-import { ENGINE_IDS, ACTIVE_ENGINES, DEFAULT_RUNS, DEFAULT_CONCURRENCY, DEFAULT_TIMEOUT_MS, round6 } from './config.js';
+import { ENGINE_IDS, defaultScanEngines, DEFAULT_RUNS, DEFAULT_CONCURRENCY, DEFAULT_TIMEOUT_MS, round6 } from './config.js';
 import { buildQuestions } from './questions.js';
 import { ENGINES } from './engines/index.js';
 import { supabaseStore } from './store.js';
@@ -35,7 +35,7 @@ export async function pool(items, limit, fn) {
  * @param {object}   o
  * @param {object}   o.business   { id?, name, trade, town, state?, zip?, nearbyTown?, ... }
  * @param {object}   o.env        Worker env or process.env (keys, SUPABASE_*)
- * @param {string[]} [o.engines]  engine ids (default ACTIVE_ENGINES, the ones the site advertises)
+ * @param {string[]} [o.engines]  engine ids (default activeEngines(env): every engine with a key)
  * @param {number}   [o.runs]     runs per question per engine (default 2)
  * @param {Function} [o.fetchImpl]
  * @param {true|object} [o.store] true → Supabase scan_raw rows; or { saveCalls({scanId,businessId,calls}) }
@@ -49,7 +49,7 @@ export async function pool(items, limit, fn) {
 export async function runScan({
   business,
   env = {},
-  engines = ACTIVE_ENGINES,
+  engines,
   runs = DEFAULT_RUNS,
   fetchImpl = fetch,
   store,
@@ -60,7 +60,7 @@ export async function runScan({
   questions: questionsOverride,
 } = {}) {
   const questions = Array.isArray(questionsOverride) && questionsOverride.length ? questionsOverride : buildQuestions(business);
-  const engineIds = [...new Set(engines)];
+  const engineIds = [...new Set(engines || defaultScanEngines(env))];
   const unknown = engineIds.filter((e) => !ENGINES[e]);
   if (unknown.length) throw new Error(`unknown engine(s): ${unknown.join(', ')} (use ${ENGINE_IDS.join(', ')})`);
   runs = Math.max(1, Math.floor(Number(runs) || DEFAULT_RUNS));
