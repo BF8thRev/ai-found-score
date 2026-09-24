@@ -134,7 +134,8 @@ export async function recordReportRequest(env, r) {
 const READY = true;
 
 function supaHeaders(env) {
-  const key = env.SUPABASE_ANON_KEY;
+  // Trim: a pasted secret often carries a trailing space or newline.
+  const key = String(env.SUPABASE_ANON_KEY || '').trim();
   return {
     apikey: key,
     Authorization: `Bearer ${key}`,

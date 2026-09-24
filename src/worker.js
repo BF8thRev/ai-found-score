@@ -80,6 +80,7 @@ async function handleHealth(env) {
   const out = {
     supabaseUrl: !!env.SUPABASE_URL,
     supabaseKey: !!env.SUPABASE_ANON_KEY,
+    supabaseKeyType: keyType(env.SUPABASE_ANON_KEY),
     stripeWebhookSecret: !!env.STRIPE_WEBHOOK_SECRET,
     database: 'not checked',
   };
@@ -92,6 +93,16 @@ async function handleHealth(env) {
     }
   }
   return Response.json(out, { headers: { 'Cache-Control': 'no-store' } });
+}
+
+// Which kind of Supabase key is configured, never the key itself.
+function keyType(raw) {
+  const k = String(raw || '').trim();
+  if (!k) return 'missing';
+  if (k.startsWith('sb_publishable_')) return 'publishable (correct)';
+  if (k.startsWith('sb_secret_')) return 'SECRET KEY - replace with the publishable key';
+  if (k.startsWith('eyJ')) return 'legacy JWT';
+  return 'unrecognized';
 }
 
 // Printed codes use an alphabet with no look-alikes; people still type
