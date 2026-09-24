@@ -5,6 +5,9 @@ import { DEFAULT_TIMEOUT_MS } from '../config.js';
 
 export const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 
+/** Out-of-credit / billing refusals: never temporary, so never retried. */
+export const BILLING_ERROR_RE = /insufficient_quota|no credits|credits are depleted|prepayment|billing|HTTP 402\b/i;
+
 /**
  * fetch + JSON parse with a timeout and one retry on 429/5xx/network error.
  * Never throws. Returns { ok, status, json, text, error, attempts }.
@@ -29,7 +32,7 @@ export async function fetchJson(fetchImpl, url, init = {}, { timeoutMs = DEFAULT
         error: res.ok ? null : `HTTP ${res.status}: ${errorMessage(json) || truncate(text, 300) || res.statusText || 'error'}`,
         attempts: attempt,
       };
-      if (res.ok || !RETRY_STATUSES.has(res.status)) return last;
+      if (res.ok || !RETRY_STATUSES.has(res.status) || BILLING_ERROR_RE.test(last.error || '')) return last;
     } catch (e) {
       timedOut = e?.name === 'AbortError';
       last = {

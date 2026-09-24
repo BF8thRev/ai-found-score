@@ -60,7 +60,7 @@ export const EXTRACT_SYSTEM = [
   'ownerFacts: only facts the answer states about the TARGET business (hours, phone, price, address, services). Each quote must be an exact substring of the answer. If the answer does not name the target business or states nothing about it, return an empty list.',
 ].join('\n');
 
-export function buildProposalRequest({ answerText, business, model }) {
+export function buildProposalRequest({ answerText, business, model, effort = 'low' }) {
   const target = [
     `Name: ${business.name}`,
     business.address && `Address: ${business.address}`,
@@ -72,7 +72,10 @@ export function buildProposalRequest({ answerText, business, model }) {
     model,
     max_tokens: 16000,
     thinking: { type: 'adaptive' },
-    output_config: { format: { type: 'json_schema', schema: PROPOSAL_SCHEMA } },
+    // Extraction is a copy-out task checked by code afterwards; low effort keeps thinking (billed
+    // as output) short. The first live scan at default effort cost ~13¢ per answer and one call
+    // ran out of room at 16k tokens.
+    output_config: { effort, format: { type: 'json_schema', schema: PROPOSAL_SCHEMA } },
     system: EXTRACT_SYSTEM,
     messages: [{
       role: 'user',
@@ -142,7 +145,7 @@ export async function proposeForAnswer({ answer, business, env = {}, fetchImpl, 
 
   let msg;
   try {
-    msg = await client.messages.create(buildProposalRequest({ answerText: answer.text, business, model }));
+    msg = await client.messages.create(buildProposalRequest({ answerText: answer.text, business, model, effort: env.EXTRACT_EFFORT || 'low' }));
   } catch (e) {
     return failed(model, errorReason(e));
   }

@@ -1,6 +1,7 @@
 // src/admin/scan-core.js — pure helpers shared by the scan Workflow, the admin API and the
 // dashboard's "Run scan" form. No I/O, no bindings: safe to unit-test under node --test.
 
+import { BILLING_ERROR_RE } from '../../scanner/engines/_common.js';
 import { ENGINE_IDS, DEFAULT_RUNS, round6 } from '../../scanner/config.js';
 import { normalizeTrade } from '../../scanner/questions.js';
 import { scrubKeyFragments } from '../../scanner/store.js';
@@ -116,6 +117,7 @@ export function compactCall(call, question = {}) {
 /** Transient failures worth a Workflow retry (no answer, nothing billed). */
 export function isTransientEngineError(call) {
   if (call.ok || (Number(call.costUsd) || 0) > 0) return false;
+  if (BILLING_ERROR_RE.test(String(call.error || ''))) return false;
   return /HTTP (429|500|502|503|504|529)\b|network error|overloaded|rate.?limit/i.test(String(call.error || ''));
 }
 
