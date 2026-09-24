@@ -1,0 +1,315 @@
+{
+  "_note": "The extractor proposals behind the first live report (reconstructed from its businessesNamed and aiFacts).",
+  "proposals": {
+    "chatgpt:q1:1": {
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 53
+        },
+        {
+          "name": "One Hour Laundry",
+          "pos": 240
+        },
+        {
+          "name": "Park Avenue Laundromat",
+          "pos": 970
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "hours",
+          "quote": "open 24 hours"
+        },
+        {
+          "field": "services",
+          "quote": "offers self‑service and wash‑&‑fold/coinless card system, convenient parking and modern machines"
+        }
+      ]
+    },
+    "chatgpt:q2:1": {
+      "businesses": [
+        {
+          "name": "24/7 Laundromat",
+          "pos": 159
+        },
+        {
+          "name": "Bubble Brush Self Serve",
+          "pos": 360
+        },
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 569
+        },
+        {
+          "name": "Laundro Lux",
+          "pos": 861
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "address",
+          "quote": "1502 Deer Park Ave"
+        },
+        {
+          "field": "hours",
+          "quote": "advertised as open 24/7"
+        }
+      ]
+    },
+    "chatgpt:q3:1": {
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 198
+        },
+        {
+          "name": "One Hour Laundry",
+          "pos": 368
+        },
+        {
+          "name": "ByNext",
+          "pos": 577
+        },
+        {
+          "name": "LuvWash",
+          "pos": 748
+        },
+        {
+          "name": "WashUp Laundry",
+          "pos": 924
+        },
+        {
+          "name": "Dutch Girl Cleaners",
+          "pos": 1177
+        },
+        {
+          "name": "Laundry Service Long Island",
+          "pos": 1198
+        },
+        {
+          "name": "Fabricare Center",
+          "pos": 1227
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "services",
+          "quote": "offers wash & fold pickup and delivery from their North Babylon location"
+        }
+      ]
+    },
+    "chatgpt:q4:1": {
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 294
+        },
+        {
+          "name": "Family Laundromat",
+          "pos": 646
+        },
+        {
+          "name": "730 Grand Laundromat",
+          "pos": 1164
+        },
+        {
+          "name": "Laundro Lux",
+          "pos": 1533
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "services",
+          "quote": "They list machines up to 80 lb (explicitly noted as able to take king comforters, blankets, rugs)."
+        },
+        {
+          "field": "hours",
+          "quote": "24-hour locations and a large number of machines"
+        }
+      ]
+    },
+    "chatgpt:q5:1": {
+      "businesses": [],
+      "ownerFacts": []
+    },
+    "claude:q1:1": {
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 88
+        },
+        {
+          "name": "One Hour Laundry",
+          "pos": 573
+        },
+        {
+          "name": "The Best Around Laundromat",
+          "pos": 881
+        },
+        {
+          "name": "Saxon Laundromat",
+          "pos": 1215
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "address",
+          "quote": "1502 Deer Park Ave"
+        },
+        {
+          "field": "hours",
+          "quote": "open 24 hours a day, 365 days a year"
+        },
+        {
+          "field": "services",
+          "quote": "24-hour self-serve to professional wash & fold and seamless pick-up & delivery"
+        },
+        {
+          "field": "services",
+          "quote": "200+ machines, free drying, wash & fold, and pick-up & delivery across Long Island"
+        },
+        {
+          "field": "services",
+          "quote": "free parking at the door"
+        }
+      ]
+    },
+    "claude:q2:1": {
+      "businesses": [
+        {
+          "name": "24/7 Laundromat",
+          "pos": 72
+        },
+        {
+          "name": "Laundry Express",
+          "pos": 183
+        },
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 309
+        },
+        {
+          "name": "730 Grand Laundromat",
+          "pos": 597
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "address",
+          "quote": "1502 Deer Park Ave in North Babylon, NY"
+        },
+        {
+          "field": "services",
+          "quote": "200+ machines, 80 lb washers for comforters, and free drying with every wash"
+        }
+      ]
+    },
+    "claude:q3:1": {
+      "businesses": [
+        {
+          "name": "Poplin",
+          "pos": 89
+        },
+        {
+          "name": "ByNext",
+          "pos": 413
+        },
+        {
+          "name": "One Hour Laundry",
+          "pos": 658
+        },
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 861
+        },
+        {
+          "name": "Spin Sudz",
+          "pos": 1054
+        },
+        {
+          "name": "The Best Around Laundromat",
+          "pos": 1509
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "address",
+          "quote": "sitting right on the North Babylon–Deer Park border"
+        },
+        {
+          "field": "services",
+          "quote": "offering 24-hour self-serve, professional wash & fold, and seamless pick-up & delivery"
+        }
+      ]
+    },
+    "claude:q4:1": {
+      "businesses": [
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 100
+        },
+        {
+          "name": "730 Grand Laundromat, Deer Park, NY",
+          "pos": 1304
+        },
+        {
+          "name": "Family Laundromat (Long Island)",
+          "pos": 1434
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "address",
+          "quote": "1502 Deer Park Ave, North Babylon, NY"
+        },
+        {
+          "field": "services",
+          "quote": "over 200 brand-new, large-capacity washers and dryers, including massive 80lb machines for king-size comforters"
+        },
+        {
+          "field": "services",
+          "quote": "free drying with every wash"
+        },
+        {
+          "field": "services",
+          "quote": "It's coinless — you can pay with card, tap-to-pay, or a laundry card."
+        },
+        {
+          "field": "hours",
+          "quote": "open 24 hours a day, 365 days a year for self-service, with an attended wash & fold counter as well"
+        }
+      ]
+    },
+    "claude:q5:1": {
+      "businesses": [
+        {
+          "name": "One Hour Laundry – North Babylon",
+          "pos": 145
+        },
+        {
+          "name": "Poplin",
+          "pos": 688
+        },
+        {
+          "name": "Family Laundromat",
+          "pos": 1094
+        },
+        {
+          "name": "ByNext",
+          "pos": 1233
+        },
+        {
+          "name": "Mega Wash & Dry",
+          "pos": 1372
+        }
+      ],
+      "ownerFacts": [
+        {
+          "field": "price",
+          "quote": "Pickup and delivery is $2.25 per pound with a 20 lb minimum. That covers washing, drying, folding, and both trips to your"
+        }
+      ]
+    }
+  }
+}

@@ -618,7 +618,11 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
 // 6. What AI says about you: exact quotes, differs first.
 function factsV2({ report, b, aById }) {
   const order = { differs: 0, match: 1 };
-  const facts = (report.aiFacts || []).slice().sort((x, y) => (order[x.status] ?? 2) - (order[y.status] ?? 2));
+  const all = (report.aiFacts || []).slice().sort((x, y) => (order[x.status] ?? 2) - (order[y.status] ?? 2));
+  // Only differs/match cards, unless nothing was checkable; capped (the builder already
+  // keeps one per field and engine, this guards reports stored before it did).
+  const checked = all.filter((f) => f.status === 'differs' || f.status === 'match');
+  const facts = (checked.length ? checked : all).slice(0, 8);
   if (!facts.length) return '';
   const cards = facts.map((f) => {
     const a = aById[f.answerId];

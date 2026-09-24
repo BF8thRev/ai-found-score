@@ -1,0 +1,289 @@
+{
+  "_note": "First real scan (37233a42-2a38-4115-b365-b388f10df12d), answers copied from the live report JSON on 2026-09-24. Gemini had no credit (402).",
+  "questions": [
+    {
+      "id": "q1",
+      "text": "What's the best laundromat in North Babylon, NY?",
+      "intent": "best"
+    },
+    {
+      "id": "q2",
+      "text": "24 hour laundromat near Deer Park NY",
+      "intent": "urgent"
+    },
+    {
+      "id": "q3",
+      "text": "Who does laundry pickup and delivery in North Babylon NY?",
+      "intent": "job"
+    },
+    {
+      "id": "q4",
+      "text": "Laundromat with big washers for comforters near Deer Park, NY",
+      "intent": "trust"
+    },
+    {
+      "id": "q5",
+      "text": "Cheapest wash and fold near North Babylon NY",
+      "intent": "price"
+    }
+  ],
+  "engines": [
+    "chatgpt",
+    "claude",
+    "gemini"
+  ],
+  "calls": [
+    {
+      "engine": "chatgpt",
+      "questionId": "q1",
+      "run": 1,
+      "ok": true,
+      "text": "Short answer: Many people in North Babylon recommend Mega Wash & Dry as the best all‑around choice (24‑hour, wash & fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, One Hour Laundry (North Babylon location) is another top option. ([megawashanddry.com](https://megawashanddry.com/Self-Service?utm_source=openai))\n\nMore detail so you can pick:\n- Mega Wash & Dry — open 24 hours, offers self‑service and wash‑&‑fold/coinless card system, convenient parking and modern machines. Good if you need off‑hours access or card payments. ([megawashanddry.com](https://megawashanddry.com/Self-Service?utm_source=openai))\n- One Hour Laundry (North Babylon) — advertises very large-capacity machines (up to 140 lb) and emphasis on fast wash & fold; good if you have bulky items (comforters, heavy rugs) or need a quick turnaround. ([onehourlaundry.com](https://onehourlaundry.com/about/?utm_source=openai))\n- Park Avenue Laundromat / other local shops — smaller, local laundromats (Park Avenue Laundromat at 761 Deer Park Ave is listed) that may be fine for routine loads if you prefer a neighborhood spot. Check hours and recent reviews before you go. ([yellowpages.com](https://www.yellowpages.com/north-babylon-ny/mip/park-avenue-laundromat-2755578?utm_source=openai))\n\nWould you like me to:\n- Look up exact addresses, current hours, phone numbers and recent Google/Yelp ratings for these places? (I can pull live details and directions.)  \n- Find a laundromat that offers pickup/delivery or special services (dry cleaning, comforter cleaning)?",
+      "citations": [
+        {
+          "url": "https://megawashanddry.com/Self-Service",
+          "domain": "megawashanddry.com"
+        },
+        {
+          "url": "https://onehourlaundry.com/about/",
+          "domain": "onehourlaundry.com"
+        },
+        {
+          "url": "https://www.yellowpages.com/north-babylon-ny/mip/park-avenue-laundromat-2755578",
+          "domain": "yellowpages.com"
+        }
+      ],
+      "askedAt": "2026-09-24T23:06:18.511Z",
+      "model": "gpt-5-mini"
+    },
+    {
+      "engine": "chatgpt",
+      "questionId": "q2",
+      "run": 1,
+      "ok": true,
+      "text": "Here are several laundromats that list 24-hour service near Deer Park, NY (Deer Park, NY 11729). I recommend calling ahead if you plan to go late at night.\n\n- 24/7 Laundromat — 247 Bay Shore Rd, Deer Park, NY 11729. (Listed as 24/7 in local directories.) ([laundromatradar.com](https://laundromatradar.com/laundromats/new-york/deer-park?utm_source=openai))\n\n- Bubble Brush Self Serve — 6 Lincoln Ave, Deer Park, NY. Listed on their site as open 24/7. Phone on site: 631-539-7405. ([bubblebrushselfserve.com](https://www.bubblebrushselfserve.com/?utm_source=openai))\n\n- Mega Wash & Dry (serves Deer Park / North Babylon) — location on Deer Park Ave (North Babylon area) advertised as open 24/7. Address shown for their Deer Park/North Babylon facility: 1502 Deer Park Ave (North Babylon). ([megawashanddry.com](https://megawashanddry.com/?utm_source=openai))\n\n- Laundro Lux / Laudro Lux (listed as open 24 hours in directory listings) — Deer Park addresses around Deer Park Ave / Deer Park Rd area (listings vary; please call to confirm exact address/hours). ([dexknows.com](https://www.dexknows.com/deer-park-ny/bp/laudro-lux-5701209?lid=5701209&utm_source=openai))\n\nIf you want, I can:\n- Look up phone numbers and current live hours for any one of these and give directions from your exact address in Deer Park.\n- Check user reviews and amenities (card payment, large-capacity washers, wash-and-fold, folding tables, wifi, security cameras). Which would you like?",
+      "citations": [
+        {
+          "url": "https://laundromatradar.com/laundromats/new-york/deer-park",
+          "domain": "laundromatradar.com"
+        },
+        {
+          "url": "https://www.bubblebrushselfserve.com/",
+          "domain": "bubblebrushselfserve.com"
+        },
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        },
+        {
+          "url": "https://www.dexknows.com/deer-park-ny/bp/laudro-lux-5701209?lid=5701209",
+          "domain": "dexknows.com"
+        }
+      ],
+      "askedAt": "2026-09-24T23:06:18.576Z",
+      "model": "gpt-5-mini"
+    },
+    {
+      "engine": "chatgpt",
+      "questionId": "q3",
+      "run": 1,
+      "ok": true,
+      "text": "Here are several laundry pickup & delivery options that list North Babylon (11703) in their service area. I recommend contacting them to confirm exact pickup days, minimums, and current pricing.\n\n- Mega Wash & Dry — offers wash & fold pickup and delivery from their North Babylon location. ([megawashanddry.com](https://www.megawashanddry.com/?utm_source=openai))  \n- One Hour Laundry — lists pickup & delivery for North Babylon / West Babylon (price-per-pound and minimums shown on their site). ([onehourlaundry.com](https://onehourlaundry.com/pickup/?utm_source=openai))  \n- ByNext (laundry delivery platform) — shows laundry pickup/delivery service in North Babylon. ([bynext.co](https://bynext.co/laundry/north-babylon/?utm_source=openai))  \n- LuvWash / On-demand laundry services — advertises pickup & delivery across Long Island including North Babylon. ([luvwash.com](https://www.luvwash.com/?utm_source=openai))  \n- WashUp Laundry — serves West Babylon and surrounding communities including North Babylon. ([washup.day](https://washup.day/west-babylon/?utm_source=openai))\n\nOther local cleaners that offer pickup/delivery (you can call or check their site for routes): Dutch Girl Cleaners, Laundry Service Long Island, Fabricare Center / Fabricare (free pickup noted on their price list). ([dutchgirlcleanernorthbabylon.com](https://dutchgirlcleanernorthbabylon.com/?utm_source=openai))\n\nDo you want me to:\n- check which of these offer same-day service or exact pricing for North Babylon (I can call/check hours and pickup days online), or\n- find phone numbers and addresses for the top 3 options?",
+      "citations": [
+        {
+          "url": "https://www.megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        },
+        {
+          "url": "https://onehourlaundry.com/pickup/",
+          "domain": "onehourlaundry.com"
+        },
+        {
+          "url": "https://bynext.co/laundry/north-babylon/",
+          "domain": "bynext.co"
+        },
+        {
+          "url": "https://www.luvwash.com/",
+          "domain": "luvwash.com"
+        },
+        {
+          "url": "https://washup.day/west-babylon/",
+          "domain": "washup.day"
+        },
+        {
+          "url": "https://dutchgirlcleanernorthbabylon.com/",
+          "domain": "dutchgirlcleanernorthbabylon.com"
+        }
+      ],
+      "askedAt": "2026-09-24T23:06:18.677Z",
+      "model": "gpt-5-mini"
+    },
+    {
+      "engine": "chatgpt",
+      "questionId": "q4",
+      "run": 1,
+      "ok": true,
+      "text": "Here are several nearby laundromats that advertise large-capacity washers (suitable for comforters/blankets) near Deer Park, NY. I included the most important details and sources — I recommend calling the location you choose to confirm machine size, price, and current hours before you go.\n\n1) Mega Wash & Dry (North Babylon / Deer Park area)  \n- Why: They list machines up to 80 lb (explicitly noted as able to take king comforters, blankets, rugs).  \n- Notes: 24-hour locations and a large number of machines; geared toward big loads.  \n- Source: Mega Wash & Dry pages. ([megawashanddry.com](https://megawashanddry.com/?utm_source=openai))\n\n2) Family Laundromat — Deer Park location  \n- Why: Part of a multi‑location chain; advertises services and handling of “household items” including comforters and bedding (they also offer wash & fold/household-item service if you prefer drop‑off).  \n- Notes: Good option if you want staff to handle the comforter rather than using coin machines yourself.  \n- Source: Family Laundromat Deer Park page. ([familylaundromatlongisland.com](https://www.familylaundromatlongisland.com/locations/deer-park?utm_source=openai))\n\n3) 730 Grand Laundromat (Deer Park)  \n- Why: Local Deer Park laundromat with large parking lot and listings showing it serves Deer Park — suitable if you want somewhere very local. I suggest calling to confirm which washer sizes they have.  \n- Source: 730 Grand Laundromat site / listings. ([730grandlaundromat.com](https://730grandlaundromat.com/?utm_source=openai))\n\n4) Laundro Lux / other local modern laundromats  \n- Why: Local listings note commercial-grade washers and that the facility handles large comforters and bedding; good to call and confirm exact largest drum size and pricing.  \n- Source: local listing. ([laundryarchive.com](https://laundryarchive.com/laundromats/ny/deer-park/6260/laundro-lux?utm_source=openai))\n\nQuick tips before you go\n- Call first to confirm the largest washer capacity and price (some places charge extra for large loads). If you need an exact guarantee (e.g., king/California‑king comforter), ask for the machine size in pounds (30 lb / 40 lb / 60–80 lb) or ask whether a king comforter will fit.  \n- If you don’t want to handle it yourself, ask about wash‑and‑fold or household‑item drop‑off (many local laundromats offer this). ([familylaundromatlongisland.com](https://www.familylaundromatlongisland.com/locations/deer-park?utm_source=openai))  \n- Bring or buy liquid detergent; large machines sometimes require specific amounts. Also check if dryers are large‑capacity so your comforter will fully tumble and dry.\n\nWould you like me to:  \n- Call up current hours/phone numbers for any of these and give you the exact addresses and prices? (If so, tell me which one(s).)",
+      "citations": [
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        },
+        {
+          "url": "https://www.familylaundromatlongisland.com/locations/deer-park",
+          "domain": "familylaundromatlongisland.com"
+        },
+        {
+          "url": "https://730grandlaundromat.com/",
+          "domain": "730grandlaundromat.com"
+        },
+        {
+          "url": "https://laundryarchive.com/laundromats/ny/deer-park/6260/laundro-lux",
+          "domain": "laundryarchive.com"
+        }
+      ],
+      "askedAt": "2026-09-24T23:06:19.051Z",
+      "model": "gpt-5-mini"
+    },
+    {
+      "engine": "chatgpt",
+      "questionId": "q5",
+      "run": 1,
+      "ok": true,
+      "text": "I can find the cheapest nearby wash & fold options — do you want drop‑off only (you go to the shop) or pickup/delivery (they collect from your home)? Also, how far are you willing to go (in minutes or miles)?",
+      "citations": [],
+      "askedAt": "2026-09-24T23:06:19.876Z",
+      "model": "gpt-5-mini"
+    },
+    {
+      "engine": "claude",
+      "questionId": "q1",
+      "run": 1,
+      "ok": true,
+      "text": "Based on local reviews, a few laundromats stand out in and around North Babylon, NY:\n\n**Mega Wash & Dry** (1502 Deer Park Ave) is frequently highlighted as a top choice. It's Long Island's premier full-service laundromat, sitting right on the North Babylon–Deer Park border, offering everything from 24-hour self-serve to professional wash & fold and seamless pick-up & delivery. It boasts 200+ machines, free drying, wash & fold, and pick-up & delivery across Long Island, and it's open 24 hours a day, 365 days a year, with 200+ machines and free parking at the door.\n\n**One Hour Laundry** (1137 Deer Park Ave, North Babylon) is another standout, especially since it's Long Island's first and only laundromat featuring an all-natural ozone disinfectant system, plus it offers a FREE dry cycle with every wash and even a stocked children's play zone for parents doing laundry.\n\n**The Best Around Laundromat** also gets strong customer praise — one reviewer noted they've been using The Best Around Laundromat for a while now, using their pick up and delivery service, and getting a text when they are on the way to pick up and drop off laundry.\n\nFor a nearby (Babylon proper) option that also gets rave reviews, **Saxon Laundromat** is often called out, with one Yelp reviewer stating \"Saxon laundromat is hands down the best!! I'm very particular about my laundry, Simon & staff always...\" take great care.\n\n**My take:** If you want 24/7 convenience with tons of machines and free drying, **Mega Wash & Dry** is probably the most practical \"best\" pick for North Babylon specifically, since it's actually located there (on the North Babylon/Deer Park line) and offers the most robust hours and machine count. If you prefer a smaller, attendant-run spot with strong personal service, **One Hour Laundry** or **The Best Around Laundromat** are great alternatives.\n\nSince \"best\" is subjective and based on aggregated online reviews rather than a single authoritative ranking, I'd suggest checking current Yelp/Google ratings for the specific location closest to you before heading out, as service quality can vary by location and day.",
+      "citations": [],
+      "askedAt": "2026-09-24T22:52:00.543+00:00",
+      "model": "claude-sonnet-5"
+    },
+    {
+      "engine": "claude",
+      "questionId": "q2",
+      "run": 1,
+      "ok": true,
+      "text": "Here are several 24-hour laundromats in and around Deer Park, NY:\n\n**1. 24/7 Laundromat**\nLocated at 247 Bay Shore Rd, Deer Park, NY 11729, and open 24/7 every day of the week.\n\n**2. Laundry Express**\nLocated at 1060 Long Island Ave, Deer Park, NY 11729, open 24 hours every day, Monday through Sunday.\n\n**3. Mega Wash & Dry**\nA premier, full-service laundromat located at 1502 Deer Park Ave in North Babylon, NY, right on the Deer Park border. Advertised as the closest 24-hour laundromat to Deer Park, NY, with 200+ machines, 80 lb washers for comforters, and free drying with every wash.\n\n**4. 730 Grand Laundromat**\nLocated at 1921 Deer Pk Rd B, Deer Park, NY 11729, this location is open 24 hours and offers a spacious facility with a large parking lot and plenty of washers and dryers, along with both self-service and drop-off laundry options.\n\n**Overview:** According to one laundromat directory, there are 10 laundromats in Deer Park, New York, with 4 of them open 24 hours.\n\nIf you'd like, I can help narrow this down based on your exact location within Deer Park, or check ratings/reviews for any of these options in more detail.",
+      "citations": [],
+      "askedAt": "2026-09-24T22:52:00.547+00:00",
+      "model": "claude-sonnet-5"
+    },
+    {
+      "engine": "claude",
+      "questionId": "q3",
+      "run": 1,
+      "ok": true,
+      "text": "Several businesses offer laundry pickup and delivery service in North Babylon, NY:\n\n1. **Poplin** – Offers professional laundry delivery in North Babylon for $1/lb, with \"Poplin Pros\" handling washing and folding from Babylon to Deer Park. A dedicated Laundry Pro arrives at your door to collect items, cleans them professionally, and returns them fresh, folded, and ready to wear within twenty-four hours.\n\n2. **ByNext** – Provides same-day laundry delivery service in North Babylon with doorstep pickup and professional wash and fold. Schedules can be arranged for pickup, and within 24–48 hours clothes are returned fresh, folded, and ready to use.\n\n3. **One Hour Laundry** – A local laundromat option: located at 1137 Deer Park Ave in North Babylon, offering Ozone Wash, drop-off, and self-service. They also promote pickup service via their website.\n\n4. **Mega Wash & Dry** – A full-service laundromat sitting right on the North Babylon–Deer Park border, offering 24-hour self-serve, professional wash & fold, and seamless pick-up & delivery.\n\n5. **Spin Sudz** – Based in Mastic Beach, this Long Island business serves North Babylon along with Babylon, Lindenhurst, and Deer Park, and has over 13 years of experience. They pick up, wash, fold, and deliver back within 24 hours.\n\n6. **Local laundromats via Yelp reviews** – Reviewers mention services like a laundromat where \"Lisa and the staff\" let you do your own laundry or drop it off, and they also offer pick up, as well as another business called \"The Best Around Laundromat\" that offers pickup/delivery with text alerts when the driver is en route.\n\n**Recommendation:** If you want a same-day/local laundromat option, **One Hour Laundry** or **Mega Wash & Dry** (both right on Deer Park Ave in North Babylon) are convenient, since they combine in-person laundromat services with pickup/delivery. If you prefer an app-based, fully remote service, **Poplin** or **ByNext** let you schedule everything online. I'd suggest checking current pricing and reviews (e.g., on Yelp or Google) before booking, since rates and availability can change.",
+      "citations": [
+        {
+          "url": "https://poplin.co/laundry-service/north-babylon-new-york",
+          "domain": "poplin.co"
+        },
+        {
+          "url": "https://bynext.co/laundry/north-babylon/",
+          "domain": "bynext.co"
+        },
+        {
+          "url": "https://www.facebook.com/onehourlaundryny/",
+          "domain": "facebook.com"
+        },
+        {
+          "url": "https://megawashanddry.com/",
+          "domain": "megawashanddry.com"
+        },
+        {
+          "url": "https://spinsudz.com/service-areas/west-babylon",
+          "domain": "spinsudz.com"
+        },
+        {
+          "url": "https://www.yelp.com/search?find_desc=Laundry+Services&find_loc=North+Babylon%2C+NY",
+          "domain": "yelp.com"
+        }
+      ],
+      "askedAt": "2026-09-24T22:52:19.88+00:00",
+      "model": "claude-sonnet-5"
+    },
+    {
+      "engine": "claude",
+      "questionId": "q4",
+      "run": 1,
+      "ok": true,
+      "text": "Here are some solid options for washing big items like comforters near Deer Park, NY:\n\n## Top Pick: Mega Wash & Dry (North Babylon/Deer Park border)\n**Address:** 1502 Deer Park Ave, North Babylon, NY (North Babylon Shopping Center, right on the Deer Park border)\n\nThis spot is built specifically for bulky loads. They invested in over 200 brand-new, large-capacity washers and dryers, including massive 80lb machines for king-size comforters. A few more helpful details:\n\n- It's on the North Babylon–Deer Park border on Deer Park Avenue, with over 200 machines, 80 lb washers that take a king comforter whole, and free drying with every wash.\n- The 80 lb washers handle king comforters, sleeping bags, and a week of family laundry in a single cycle — what takes three home loads takes one here.\n- With 200+ washers and dryers across 8,000 square feet, there's almost always an open machine, and every wash includes free drying, 7 days a week.\n- It's coinless — you can pay with card, tap-to-pay, or a laundry card.\n- It's open 24 hours a day, 365 days a year for self-service, with an attended wash & fold counter as well.\n- The high-extraction 80 lb washers are built for comforters, duvets, and sleeping bags, and since they spin out more water, drying is faster too.\n\n## Other options to consider\n- **730 Grand Laundromat, Deer Park, NY** – Offers a spacious facility with a large parking lot and plenty of washers and dryers.\n- **Family Laundromat (Long Island)** – Offers specialty services in the Deer Park area, including care for large household items including comforters, blankets, curtains, and bedding, plus pickup/delivery options if you'd rather not do it yourself.\n\nIf you want a true self-service option with the biggest machines, **Mega Wash & Dry** at 1502 Deer Park Ave looks like your best bet given its dedicated 80 lb comforter-sized washers. Want me to check current hours, reviews, or pricing details for any of these?",
+      "citations": [],
+      "askedAt": "2026-09-24T22:52:31.732+00:00",
+      "model": "claude-sonnet-5"
+    },
+    {
+      "engine": "claude",
+      "questionId": "q5",
+      "run": 1,
+      "ok": true,
+      "text": "Based on current pricing information for wash-and-fold services in and around North Babylon, NY, here's what I found:\n\n## Cheapest options\n\n**1. One Hour Laundry – North Babylon (1137 Deer Park Ave)** — Best value with a physical location right in North Babylon.\n- Drop-off wash & fold: \"$1.35, Per Pound\" at the North Babylon location (Lindenhurst is $1.09/lb, West Babylon is $1.40/lb).\n- If you want pickup & delivery instead of dropping off yourself, \"Our North Babylon and West Babylon locations charge $1.50 per pound with a 20 lb. minimum\", with pickup handled \"via Uber, Doordash or Roadie\" and ready within 24 hours.\n- Bonus: they offer a \"FREE dry cycle with every wash\".\n\n**2. Poplin (app-based pickup & delivery)** — Cheapest *advertised* rate, but it's a marketplace of independent \"Pros\" so pricing can vary by provider.\n- \"We believe that premium service should be accessible and transparent, which is why our pricing is designed to provide incredible value without hidden fees\", with rates \"starting at just one dollar per pound\".\n\n## Other nearby options (for comparison)\n\n- **Family Laundromat (West Babylon)**: \"Award-winning laundry service in Babylon. Same-day pickup & delivery, wash & fold from $1.50/lb\".\n- **ByNext (delivery service)**: Offers pay-per-pound plans, with \"Average cost is $20–$50 per order, depending on what's in your basket\".\n- **Mega Wash & Dry (Babylon Village/North Babylon border)**: More premium pricing — \"Pickup and delivery is $2.25 per pound with a 20 lb minimum. That covers washing, drying, folding, and both trips to your\" door.\n\n## Bottom line\nIf you're willing to drop off your laundry yourself, **One Hour Laundry in North Babylon at $1.35/lb** is the cheapest brick-and-mortar option nearby. If you want pickup/delivery convenience, **Poplin's app-based service (starting at $1/lb)** or **One Hour Laundry's own pickup at $1.50/lb** are your most affordable bets — just note that app-based marketplace pricing can fluctuate by provider and order size.\n\nWould you like me to check exact addresses/hours or get a live quote estimate for a specific bag/load size?",
+      "citations": [],
+      "askedAt": "2026-09-24T22:53:11.775+00:00",
+      "model": "claude-sonnet-5"
+    },
+    {
+      "engine": "gemini",
+      "questionId": "q1",
+      "run": 1,
+      "ok": false,
+      "text": null,
+      "citations": [],
+      "askedAt": "2026-09-24T23:06:20.000Z",
+      "model": "gemini-3.8-flash",
+      "error": "billing (HTTP 402): out of credit"
+    },
+    {
+      "engine": "gemini",
+      "questionId": "q2",
+      "run": 1,
+      "ok": false,
+      "text": null,
+      "citations": [],
+      "askedAt": "2026-09-24T23:06:20.000Z",
+      "model": "gemini-3.8-flash",
+      "error": "billing (HTTP 402): out of credit"
+    },
+    {
+      "engine": "gemini",
+      "questionId": "q3",
+      "run": 1,
+      "ok": false,
+      "text": null,
+      "citations": [],
+      "askedAt": "2026-09-24T23:06:20.000Z",
+      "model": "gemini-3.8-flash",
+      "error": "billing (HTTP 402): out of credit"
+    },
+    {
+      "engine": "gemini",
+      "questionId": "q4",
+      "run": 1,
+      "ok": false,
+      "text": null,
+      "citations": [],
+      "askedAt": "2026-09-24T23:06:20.000Z",
+      "model": "gemini-3.8-flash",
+      "error": "billing (HTTP 402): out of credit"
+    },
+    {
+      "engine": "gemini",
+      "questionId": "q5",
+      "run": 1,
+      "ok": false,
+      "text": null,
+      "citations": [],
+      "askedAt": "2026-09-24T23:06:20.000Z",
+      "model": "gemini-3.8-flash",
+      "error": "billing (HTTP 402): out of credit"
+    }
+  ]
+}

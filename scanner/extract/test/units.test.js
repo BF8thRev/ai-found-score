@@ -359,3 +359,107 @@ test('buildReport: uncited search results never become cited sources; issue copy
   assert.match(lost.description, /named 2 other businesses, including Acme Pipes\.$/);
   assert.doesNotMatch(lost.description, /Solo Drains/);
 });
+
+// ---- report-quality fixes from the first real report (Mega Wash & Dry) ----------------------
+const MW = {
+  hours: 'Open 24 Hours Monday - Sunday',
+  price: '$2.25/lb, 20 lb minimum',
+  address: '1502 Deer Park Ave, North Babylon, NY 11703',
+  services: 'wash/dry/fold pickup and delivery, 200+ Speed Queen machines, up to 80 lb washers, free drying',
+};
+
+test('address facts: need a street number + name or a ZIP; normalized comparison', async () => {
+  const { isAddressFact, verifyFacts } = await import('../verify.js');
+  assert.equal(isAddressFact('sitting right on the North Babylon–Deer Park border'), false);
+  assert.equal(isAddressFact('near the Deer Park train station'), false);
+  assert.equal(isAddressFact('1502 Deer Park Ave'), true);
+  assert.equal(isAddressFact('North Babylon, NY 11703'), true);
+  assert.equal(factStatus('address', 'sitting right on the North Babylon–Deer Park border', MW.address), 'not stated');
+  assert.equal(factStatus('address', '1502 Deer Park Ave in North Babylon, NY', MW.address), 'match');
+  assert.equal(factStatus('address', '1502 Deer Park Avenue', MW.address), 'match');
+  assert.equal(factStatus('address', '1502 deer park ave.', '1502 Deer Park Ave'), 'match');
+  assert.equal(factStatus('address', '1502 Deer Park, North Babylon, NY', MW.address), 'match');
+  assert.equal(factStatus('address', 'North Babylon, NY 11703', MW.address), 'match');
+  assert.equal(factStatus('address', '1520 Deer Park Ave', MW.address), 'differs');
+  assert.equal(factStatus('address', '1502 Park Ave', MW.address), 'differs');
+  assert.equal(factStatus('address', 'North Babylon, NY 11704', MW.address), 'differs');
+  const text = 'Mega Wash & Dry, sitting right on the North Babylon–Deer Park border, at 1502 Deer Park Ave.';
+  const v = verifyFacts(text, [{ field: 'address', quote: 'sitting right on the North Babylon–Deer Park border' }, { field: 'address', quote: '1502 Deer Park Ave' }]);
+  assert.deepEqual(v.kept.map((f) => f.aiSays), ['1502 Deer Park Ave']);
+  assert.match(v.rejected[0].reason, /street number/);
+});
+
+test('price facts: numbers + units compared', () => {
+  assert.equal(factStatus('price', '$2.25 per pound with a 20 lb minimum', MW.price), 'match');
+  assert.equal(factStatus('price', '$2.25/lb with a 20 lb. minimum', MW.price), 'match');
+  assert.equal(factStatus('price', '$2.25 a pound', MW.price), 'match');
+  assert.equal(factStatus('price', '$1.99/lb', MW.price), 'differs');
+  assert.equal(factStatus('price', '$2.25 per load', MW.price), 'differs');
+  assert.equal(factStatus('price', '$2.25/lb with a 15 lb minimum', MW.price), 'differs');
+  assert.equal(factStatus('price', 'affordable rates', MW.price), 'not stated');
+});
+
+test('hours facts: every "24 hours" wording matches "Open 24 Hours Monday - Sunday"', () => {
+  for (const h of ['open 24 hours a day, 365 days a year', 'open 24/7', '24 hours', 'advertised as open 24/7', 'open around the clock']) {
+    assert.equal(factStatus('hours', h, MW.hours), 'match', h);
+  }
+  assert.equal(factStatus('hours', 'open until 10pm', MW.hours), 'differs');
+  assert.equal(factStatus('hours', 'open late', MW.hours), 'not stated');
+});
+
+test('services facts: key-term overlap; differs only on a contradiction', () => {
+  assert.equal(factStatus('services', 'offers wash & fold pickup and delivery from their North Babylon location', MW.services), 'match');
+  assert.equal(factStatus('services', '200+ machines, free drying, wash & fold, and pick-up & delivery across Long Island', MW.services), 'match');
+  assert.equal(factStatus('services', 'free drying with every wash', MW.services), 'match');
+  assert.equal(factStatus('services', 'free parking at the door', MW.services), 'not stated');
+  assert.equal(factStatus('services', 'It’s coinless — you can pay with card, tap-to-pay, or a laundry card.', MW.services), 'not stated');
+  assert.equal(factStatus('services', 'they do not offer delivery', MW.services), 'differs');
+});
+
+test('pickFacts: one per field and engine (differs, then most specific), differs first, capped, not stated only as a fallback', async () => {
+  const { pickFacts, MAX_FACTS } = await import('../build.js');
+  const engineOf = new Map([['a1', 'chatgpt'], ['a2', 'chatgpt'], ['a3', 'claude']]);
+  const f = (answerId, field, status, aiSays, sourceSays = null) => ({ answerId, field, status, aiSays, sourceSays });
+  const out = pickFacts([
+    f('a1', 'address', 'match', '1502 Deer Park Ave', MW.address),
+    f('a2', 'address', 'match', '1502 Deer Park Ave, North Babylon, NY', MW.address),
+    f('a1', 'hours', 'match', 'open 24 hours', MW.hours),
+    f('a2', 'hours', 'differs', 'open until 10pm', MW.hours),
+    f('a3', 'services', 'not stated', 'free parking', MW.services),
+  ], engineOf);
+  assert.deepEqual(out.map((x) => [x.answerId, x.field, x.status]), [['a2', 'hours', 'differs'], ['a2', 'address', 'match']]);
+
+  const onlyUnchecked = pickFacts([f('a3', 'services', 'not stated', 'free parking'), f('a3', 'services', 'not stated', 'coinless')], engineOf);
+  assert.equal(onlyUnchecked.length, 1);
+  assert.equal(onlyUnchecked[0].status, 'not stated');
+
+  const many = [];
+  for (let i = 0; i < 20; i++) many.push(f(`x${i}`, 'hours', 'match', 'open 24 hours', MW.hours));
+  assert.equal(pickFacts(many, new Map()).length, MAX_FACTS);
+});
+
+test('issues: "AI states your X differently" only from a genuine differs', async () => {
+  const { buildIssues } = await import('../issues.js');
+  const report = {
+    answers: [{ id: 'a1', engine: 'claude', questionId: 'q1', namedYou: true, businessesNamed: [] }],
+    questions: [{ id: 'q1', text: 'q' }],
+    aiFacts: [
+      { answerId: 'a1', field: 'address', aiSays: '1502 Deer Park Ave', sourceSays: MW.address, status: 'match' },
+      { answerId: 'a1', field: 'services', aiSays: 'free parking', sourceSays: MW.services, status: 'not stated' },
+    ],
+    sources: [], entities: [],
+  };
+  assert.equal(buildIssues({ report }).length, 0);
+  report.aiFacts.push({ answerId: 'a1', field: 'price', aiSays: '$1.99/lb', sourceSays: MW.price, status: 'differs' });
+  assert.deepEqual(buildIssues({ report }).map((i) => i.title), ['AI states your price differently than your website']);
+});
+
+test('parseScanRequest keeps the owner facts and aliases', async () => {
+  const { parseScanRequest } = await import('../../../src/admin/scan-core.js');
+  const p = parseScanRequest({ business: { name: 'Mega Wash & Dry', trade: 'laundromat', town: 'North Babylon', facts: { ...MW, junk: 'x', phone: '' }, aliases: ['Mega Wash'] } });
+  assert.ok(p.ok);
+  assert.deepEqual(p.params.business.facts, MW);
+  assert.deepEqual(p.params.business.aliases, ['Mega Wash']);
+  const none = parseScanRequest({ business: { name: 'X', trade: 'laundromat', town: 'Y', facts: 'nope' } });
+  assert.equal(none.params.business.facts, undefined);
+});

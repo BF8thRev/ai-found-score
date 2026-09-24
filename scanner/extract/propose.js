@@ -44,7 +44,7 @@ export const PROPOSAL_SCHEMA = {
         required: ['field', 'quote'],
         properties: {
           field: { type: 'string', enum: FACT_FIELDS },
-          quote: { type: 'string', description: 'The shortest exact span of the answer that states this fact, copied character for character.' },
+          quote: { type: 'string', description: 'The shortest exact span of the answer that states this fact, copied character for character. An address quote must contain a street number and street name, or a ZIP code; a vague location ("near the border", "off the highway") is not an address.' },
         },
       },
     },
@@ -58,6 +58,9 @@ export const EXTRACT_SYSTEM = [
   'businesses: every specific, named local business the answer presents as a provider (not directories, review sites or apps unless the answer offers them as the provider). List each business once, in order of first appearance, using the exact spelling at that first appearance, with its 0-based character offset in the answer.',
   '',
   'ownerFacts: only facts the answer states about the TARGET business (hours, phone, price, address, services). Each quote must be an exact substring of the answer. If the answer does not name the target business or states nothing about it, return an empty list.',
+  '- address: only a quote that contains a street number and street name (e.g. "1502 Main St") or a ZIP code. Vague location phrases ("on the town border", "near the train station", "in the village") are not addresses: leave them out.',
+  '- hours: opening hours or days. price: amounts with their units. services: what the business offers. phone: a phone number.',
+  '- At most one quote per field: the most specific one.',
 ].join('\n');
 
 export function buildProposalRequest({ answerText, business, model, effort = 'low' }) {

@@ -17,7 +17,8 @@
 //   POST /api/admin/scan      -> start a background scan (Cloudflare Workflow) -> { scanId, instanceId, statusUrl }
 //   GET  /api/admin/scan/:id  -> scan status + progress
 //   everything else           -> static assets (public/) via env.ASSETS; HTML and /llms.txt get the
-//                                assistant names and counts filled in from ACTIVE_ENGINES (serveAsset)
+//                                assistant names and counts filled in from ACTIVE_ENGINES (serveAsset),
+//                                and HTML gets local examples from the visitor's request.cf (src/lib/geo.js)
 //
 // Also exports ScanWorkflow (src/scan-workflow.js), bound as SCAN_WORKFLOW in wrangler.jsonc.
 
@@ -35,6 +36,7 @@ import { validateReport } from '../shared/report-v2.js';
 import { resolveKeys, enginesConfigured, ACTIVE_ENGINES } from '../scanner/config.js';
 import { engineCopy, copyTokens, fillTokens, copyFor } from './lib/engines-copy.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
+import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
 
 // The background scan runner (Cloudflare Workflows entrypoint; binding SCAN_WORKFLOW).
 export { ScanWorkflow } from './scan-workflow.js';
@@ -472,7 +474,11 @@ async function handleStripeWebhook(request, env) {
 //   <meta … content="…" data-copy="…{{AI_LIST}}…">  content = the template filled in
 //   <script type="application/ld+json">…{{AI_LIST}}…</script>  tokens filled in
 //   /llms.txt                              tokens filled in
+//   data-geo-*                             the visitor's town/state/ZIP and example questions (src/lib/geo.js)
 // Tokens: see copyTokens(). Only text/html responses and /llms.txt are touched.
+// HTML personalised from the visitor's location is Cache-Control: private and its ETag carries a hash
+// of that location, so no shared cache hands one visitor's town to another and a 304 never crosses towns.
+// The location is only used to fill the page: never logged or stored.
 
 const COPY = engineCopy(ACTIVE_ENGINES);
 const TOKENS = copyTokens(COPY);
@@ -493,7 +499,10 @@ async function serveAsset(env, request, path, method) {
   // The Turnstile site key goes into the page, so it is part of the tag too: a page cached
   // before the key was set (or changed) is not answered with a stale 304.
   const siteKey = turnstileSiteKey(env);
-  const tag = COPY_TAG + (siteKey ? `-ts.${siteKey.slice(-8).replace(/[^A-Za-z0-9_-]/g, '')}` : '');
+  // The visitor's town (src/lib/geo.js), from the original request so a dev ?geo= survives the pretty-URL rewrite.
+  const geo = geoForRequest(request);
+  const personal = geo.source === 'ip';
+  const tag = COPY_TAG + (siteKey ? `-ts.${siteKey.slice(-8).replace(/[^A-Za-z0-9_-]/g, '')}` : '') + geoTag(geo);
   // Our ETag = asset ETag + tag; hand the asset server the ETag it knows.
   const inm = req.headers.get('If-None-Match');
   if (inm && inm.includes(tag)) {
@@ -509,6 +518,8 @@ async function serveAsset(env, request, path, method) {
   const tagged = (r) => {
     const etag = r.headers.get('ETag');
     if (etag && !etag.includes(tag)) r.headers.set('ETag', etag.replace(/"$/, `${tag}"`));
+    // A page with this visitor's town in it is for this browser only (never a shared/edge cache).
+    if (personal && isHtml) r.headers.set('Cache-Control', 'private, max-age=0, must-revalidate');
     return r;
   };
   if (!res.body || res.status === 304 || req.method === 'HEAD') return tagged(new Response(res.body, res));
@@ -517,7 +528,7 @@ async function serveAsset(env, request, path, method) {
     out.headers.delete('Content-Length');
     return tagged(out);
   }
-  return tagged(copyRewriter(siteKey).transform(res));
+  return tagged(addGeoHandlers(copyRewriter(siteKey), geo).transform(res));
 }
 
 function copyRewriter(siteKey) {

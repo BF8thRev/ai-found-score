@@ -82,6 +82,16 @@ export function memorySupabase() {
       }
       return /return=representation/.test(prefer) ? json(out.map((r) => structuredClone(r)), 201) : new Response(null, { status: 201 });
     }
+    if (method === 'PATCH') {
+      const prefer = String(init.headers?.Prefer || init.headers?.prefer || '');
+      let body;
+      try { body = JSON.parse(init.body); } catch { return new Response('bad json', { status: 400 }); }
+      const hit = rows(table).filter((r) => [...u.searchParams].every(([k, v]) =>
+        ['select', 'order', 'limit', 'on_conflict'].includes(k) || matches(r, k, v)));
+      const now = new Date().toISOString();
+      for (const r of hit) Object.assign(r, structuredClone(body), { updated_at: now });
+      return /return=representation/.test(prefer) ? json(hit.map((r) => structuredClone(r))) : new Response(null, { status: 204 });
+    }
     return new Response(`memory-supabase: ${method} not supported`, { status: 405 });
   }
 

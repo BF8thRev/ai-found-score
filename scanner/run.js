@@ -7,7 +7,7 @@
 // subrequests per invocation). Node on the owner's PC has no such limits and no hosting cost.
 //
 //   node scanner/run.js --business path.json [--engines chatgpt,claude,gemini] [--runs 1]
-//                       [--token <reportToken>] [--notes "..."] [--resume <scanId>]
+//                       [--token <reportToken>] [--notes "..."] [--resume <scanId> [--rebuild]]
 //                       [--estimate] [--yes] [--dry-run]
 //
 // Keys: .dev.vars in the repo root (KEY=value, git-ignored) overlaid by process.env.
@@ -29,7 +29,7 @@ import { proposeForAnswer } from './extract/propose.js';
 import { validateReport } from '../shared/report-v2.js';
 import {
   canStore, ensureBusiness, upsertScan, rawRow, saveRaw, usageRow, saveUsage, stableUuid, isUuid,
-  saveReport, findReportByScan, getBaseline, getRawById, getScan,
+  saveReport, updateReport, findReportByScan, getBaseline, getRawById, getScan,
 } from './store.js';
 import {
   parseScanRequest, newReportToken, scanJobs, compactCall, isTransientEngineError, isTransientExtractError,
@@ -48,7 +48,7 @@ const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // ---------------------------------------------------------------------------
 
 export const USAGE = `Usage: node scanner/run.js --business path.json [--engines ${ACTIVE_ENGINES.join(',')}] [--runs ${DEFAULT_RUNS}]
-                          [--token <reportToken>] [--notes "..."] [--resume <scanId>]
+                          [--token <reportToken>] [--notes "..."] [--resume <scanId> [--rebuild]]
                           [--estimate] [--yes] [--dry-run]
 
   --business  JSON file: name, trade, address, town, state, zip, phone, website, nearbyTown?, id?
@@ -57,12 +57,14 @@ export const USAGE = `Usage: node scanner/run.js --business path.json [--engines
   --token     report token to publish under (default: a fresh random one)
   --notes     note stored on the scans row (shown on /admin)
   --resume    continue a scan by id: calls already stored ok are reused, not paid again
+  --rebuild   with --resume: re-extract every answer (paid, recorded in scan_usage) and replace
+              the report already saved for that scan (it must still pass validation)
   --estimate  print the plan and cost estimate, then exit
   --yes       don't ask "Proceed? [y/N]"
   --dry-run   recorded fixtures + in-memory Supabase: no network, no keys, no cost`;
 
 export function parseArgs(argv) {
-  const a = { business: null, engines: null, runs: null, token: null, notes: null, resume: null, estimate: false, yes: false, dryRun: false, help: false };
+  const a = { business: null, engines: null, runs: null, token: null, notes: null, resume: null, rebuild: false, estimate: false, yes: false, dryRun: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const next = () => {
@@ -76,12 +78,14 @@ export function parseArgs(argv) {
     else if (k === '--token') a.token = next();
     else if (k === '--notes') a.notes = next();
     else if (k === '--resume') a.resume = next().trim().toLowerCase();
+    else if (k === '--rebuild') a.rebuild = true;
     else if (k === '--estimate') a.estimate = true;
     else if (k === '--yes' || k === '-y') a.yes = true;
     else if (k === '--dry-run') a.dryRun = true;
     else if (k === '--help' || k === '-h') a.help = true;
     else throw new Error(`unknown argument: ${k}\n\n${USAGE}`);
   }
+  if (a.rebuild && !a.resume) throw new Error('--rebuild needs --resume <scanId>');
   return a;
 }
 
@@ -119,6 +123,7 @@ export function planScan({ business, engines, runs, env }) {
  * @param {string}   o.reportToken
  * @param {string}   [o.scanId]        a new uuid, or the scan to resume
  * @param {boolean}  [o.resume]        reuse scan_raw rows already stored ok for this scanId
+ * @param {boolean}  [o.rebuild]       replace the report already saved for this scan (else it is kept)
  * @param {string}   [o.notes]
  * @param {object}   o.env
  * @param {Function} [o.fetchImpl]
@@ -129,7 +134,7 @@ export function planScan({ business, engines, runs, env }) {
  */
 export async function runLocalScan({
   business, engines, skippedEngines = [], runs, reportToken, scanId = globalThis.crypto.randomUUID(),
-  resume = false, notes = null, env, fetchImpl = globalThis.fetch, log = () => {}, retryDelayMs = 20_000, sleep = defaultSleep,
+  resume = false, rebuild = false, notes = null, env, fetchImpl = globalThis.fetch, log = () => {}, retryDelayMs = 20_000, sleep = defaultSleep,
 }) {
   if (!canStore(env)) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY are required: a local scan writes everything to Supabase');
   if (!isUuid(scanId)) throw new Error('scanId must be a uuid');
@@ -144,6 +149,8 @@ export async function runLocalScan({
   try {
     // ---- setup (Workflow step "setup") -------------------------------------------------
     const previous = resume ? await getScan(env, scanId, opts) : null;
+    // ensureBusiness returns the input business (facts, aliases, town...) with the stored row's
+    // id and gaps filled; never the bare DB row, which has no facts.
     business = await ensureBusiness(env, { ...business }, opts);
     const questions = buildQuestions(business).map(({ id, intent, text }) => ({ id, intent, text }));
     const fullQuestions = Object.fromEntries(buildQuestions(business).map((q) => [q.id, q]));
@@ -179,7 +186,7 @@ export async function runLocalScan({
           reused++;
           const c = callFromStoredRaw({ ...prev, engine: job.engine, run: job.run }, q);
           progress(c, 'stored, not re-asked');
-          return c;
+          return { ...c, reused: true };
         }
         // A failed row from last time is overwritten by this attempt.
         if (prev) replace = true;
@@ -253,13 +260,19 @@ export async function runLocalScan({
     });
     const validation = publishGate(report, validateReport(report));
     let saved = false;
+    let replaced = false;
     let storeError = null;
     let savedToken = report.id;
     if (validation.ok) {
       for (let attempt = 1; attempt <= SAVE_RETRIES + 1; attempt++) {
         try {
           const existing = await findReportByScan(env, scanId, opts);
-          if (existing) savedToken = existing.report_token || savedToken;
+          if (existing && rebuild) {
+            // Replace in place: same row, same token, so the live link shows the rebuilt report.
+            savedToken = existing.report_token || savedToken;
+            await updateReport(env, existing.id, { report: { ...report, id: savedToken } }, opts);
+            replaced = true;
+          } else if (existing) savedToken = existing.report_token || savedToken;
           else await saveReport(env, { scanId, businessId: business.id, reportToken: report.id, report }, opts);
           saved = true;
           storeError = null;
@@ -303,6 +316,7 @@ export async function runLocalScan({
       reportToken: build.reportToken,
       reportUrl: saved ? `${REPORT_BASE_URL}${encodeURIComponent(build.reportToken)}` : null,
       reportSaved: saved,
+      reportReplaced: replaced,
       reportValid: build.valid,
       validationErrors: build.errors,
       storeError,
@@ -320,6 +334,8 @@ export async function runLocalScan({
       engineCostUsd: totals.engine_cost_usd,
       extractCostUsd: totals.extract_cost_usd,
       costUsd: totals.total_cost_usd,
+      // What this run spent: engine calls made now (reused answers were paid earlier) + extraction.
+      runCostUsd: round6(calls.filter((c) => !c.reused).reduce((a, c) => a + (Number(c.costUsd) || 0), 0) + totals.extract_cost_usd),
       errors: totals.errors,
       warnings,
       finishedAt,
@@ -342,7 +358,7 @@ export async function runLocalScan({
 const usd = (n) => `$${(Number(n) || 0).toFixed(4)}`;
 const engineName = (e) => ENGINE_NAMES[e] || e;
 
-export function formatPlan({ business, plan, requested, runs, env, dryRun, resume, scanId, reportToken, envFile }) {
+export function formatPlan({ business, plan, requested, runs, env, dryRun, resume, rebuild = false, scanId, reportToken, envFile }) {
   const configured = enginesConfigured(env);
   const lines = [];
   lines.push(`Business: ${business.name} (${business.trade}, ${business.town}${business.state ? `, ${business.state}` : ''})`);
@@ -356,6 +372,7 @@ export function formatPlan({ business, plan, requested, runs, env, dryRun, resum
   const parts = [...Object.entries(est.perEngine).map(([e, c]) => `${engineName(e)} ${usd(c)}`), `extraction ${usd(est.extract)}`];
   lines.push(`Estimated cost: ${usd(est.total)} = ${parts.join(' + ')}`);
   if (resume) lines.push('  (resume: calls already stored ok are reused and not paid again; every answer is extracted again)');
+  if (rebuild) lines.push('  (rebuild: the report already saved for this scan is replaced if the new one passes validation)');
   lines.push(`Report token: ${reportToken}`);
   return lines.join('\n');
 }
@@ -370,7 +387,8 @@ export function formatSummary(s, { dryRun = false } = {}) {
   if (s.enginesSkipped.length) L.push(`  Not run (no key): ${s.enginesSkipped.map(engineName).join(', ')}`);
   L.push(`  Extraction      ${usd(s.extractCostUsd)}`);
   L.push(`  Total           ${usd(s.costUsd)}`);
-  if (s.reportSaved) L.push(`Report: ${dryRun ? '(would be) ' : ''}${s.reportUrl}`);
+  L.push(`  This run        ${usd(s.runCostUsd)}`);
+  if (s.reportSaved) L.push(`Report${s.reportReplaced ? ' (replaced)' : ''}: ${dryRun ? '(would be) ' : ''}${s.reportUrl}`);
   else L.push(`Report NOT saved${s.reportValid ? ` (store error: ${s.storeError})` : ' (failed validation)'}.`);
   if (s.validationErrors.length) {
     L.push('Validation errors:');
@@ -444,7 +462,7 @@ export async function main(argv = process.argv.slice(2)) {
   const scanId = args.resume || globalThis.crypto.randomUUID();
   const plan = planScan({ business: p.business, engines: p.engines, runs: p.runs, env });
 
-  console.error(formatPlan({ business: p.business, plan, requested: p.engines, runs: p.runs, env, dryRun: args.dryRun, resume: !!args.resume, scanId, reportToken, envFile }));
+  console.error(formatPlan({ business: p.business, plan, requested: p.engines, runs: p.runs, env, dryRun: args.dryRun, resume: !!args.resume, rebuild: args.rebuild, scanId, reportToken, envFile }));
   const blockers = [
     !plan.engines.length && 'no requested engine has a key',
     !plan.keys.extractor && 'ANTHROPIC_API_KEY is missing: answers could not be extracted, so no report could publish',
@@ -467,7 +485,7 @@ export async function main(argv = process.argv.slice(2)) {
 
   const summary = await runLocalScan({
     business: p.business, engines: plan.engines, skippedEngines: plan.skipped, runs: p.runs, reportToken,
-    scanId, resume: !!args.resume, notes: p.notes, env, fetchImpl, log: (m) => console.error(m),
+    scanId, resume: !!args.resume, rebuild: args.rebuild, notes: p.notes, env, fetchImpl, log: (m) => console.error(m),
     ...(args.dryRun ? { retryDelayMs: 0 } : {}),
   });
   console.log(formatSummary(summary, { dryRun: args.dryRun }));

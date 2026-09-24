@@ -469,6 +469,11 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .rq-email h3, .rq-email .rq-sub { margin-bottom: 0; }
 .request .rq-email .btn { grid-column: auto; }
 .request-next > .status:empty { display: none; }
+/* Example questions in "How it works" (index.html; the Worker fills in the visitor's town). */
+.example-q { margin-top: 32px; max-width: 760px; }
+.example-q p { color: var(--muted); font-size: 17px; margin: 0 0 14px; }
+.example-q .rq-list li { border: 1px solid var(--line); }
+.request .geo-hint[hidden] { display: none; }
 @media (max-width: 520px) {
   .request { padding: 28px 16px; border-radius: 18px; }
   .rq-block { padding: 18px 14px; }

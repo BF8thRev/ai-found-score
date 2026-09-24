@@ -155,6 +155,30 @@ export async function saveReport(env, { scanId, businessId, reportToken, report 
 }
 
 /**
+ * Replace the report on an existing scan_results row (a rebuilt report for the same scan and
+ * token). Updated in place, so the report link keeps working and no duplicate row appears.
+ * Throws on failure.
+ */
+export async function updateReport(env, rowId, { report }, { fetchImpl = fetch } = {}) {
+  if (rowId == null || rowId === '') throw new Error('updateReport: row id is required');
+  const { base, headers } = supa(env);
+  const patch = {
+    report,
+    scanned_at: report?.generatedAt || new Date().toISOString(),
+    named_by_ai: report?.totals ? report.totals.namedYou > 0 : null,
+  };
+  const res = await fetchImpl(`${base}/scan_results?id=eq.${encodeURIComponent(rowId)}`, {
+    method: 'PATCH',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`scan_results update failed: ${res.status} ${await failText(res)}`);
+  const rows = await res.json();
+  if (!rows.length) throw new Error(`scan_results update matched no row (id ${rowId})`);
+  return rows[0];
+}
+
+/**
  * The previous v2 scan's { generatedAt, totals } for a business, or null.
  * Pass `excludeScanId` / `beforeIso` to skip the scan being built right now.
  */

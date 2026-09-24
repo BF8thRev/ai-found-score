@@ -20,6 +20,7 @@ import { computeTotals, pickHeadline, validateReport } from '../../shared/report
 import { proposeForAnswer } from './propose.js';
 import { verifyAnswer, factStatus, ownerFact } from './verify.js';
 import { groupEntities } from './entities.js';
+import { normalizeName } from './normalize.js';
 import { buildSources } from './sources.js';
 import { buildIssues } from './issues.js';
 
@@ -54,6 +55,49 @@ export function formatWindow(times, timeZone = 'America/New_York') {
   const tz = timeZone === 'America/New_York' ? 'ET' : timeZone;
   if (a.hm === b.hm && a.ap === b.ap) return `${a.hm}${a.ap} ${tz}`;
   return a.ap === b.ap ? `${a.hm}–${b.hm}${b.ap} ${tz}` : `${a.hm}${a.ap}–${b.hm}${b.ap} ${tz}`;
+}
+
+/** Most fact cards the report shows. */
+export const MAX_FACTS = 8;
+const STATUS_ORDER = { differs: 0, match: 1, 'not stated': 2 };
+
+const tokens = (s) => new Set(normalizeName(String(s || '').replace(/\//g, ' ')).split(' ').filter(Boolean));
+
+/**
+ * How specific a quote is: how many of the owner's own words for the field it states
+ * ("1502 Deer Park Ave in North Babylon, NY" beats "1502 Deer Park Ave"). Without owner facts,
+ * how many numbers it carries.
+ */
+export function factSpecificity(f) {
+  const a = tokens(f.aiSays);
+  if (f.sourceSays) {
+    const b = tokens(f.sourceSays);
+    return [...a].filter((w) => b.has(w)).length;
+  }
+  return [...a].filter((w) => /\d/.test(w)).length;
+}
+
+/**
+ * pickFacts(facts, engineOf) → the facts the report keeps, in page order.
+ * One fact per (field, engine): differs beats match beats not stated, then the most specific
+ * quote (factSpecificity), then the shorter quote, then first seen. Then differs first, then
+ * match, capped at MAX_FACTS. `not stated` facts are kept only when nothing else was checkable.
+ */
+export function pickFacts(facts, engineOf = new Map(), max = MAX_FACTS) {
+  const best = new Map();
+  facts.forEach((f, i) => {
+    const key = `${f.field}|${engineOf.get(f.answerId) || f.answerId}`;
+    const cur = best.get(key);
+    const spec = factSpecificity(f);
+    const better = !cur
+      || (STATUS_ORDER[f.status] - STATUS_ORDER[cur.f.status]
+        || cur.spec - spec
+        || f.aiSays.length - cur.f.aiSays.length) < 0;
+    if (better) best.set(key, { f, i, spec });
+  });
+  const kept = [...best.values()].sort((a, b) => STATUS_ORDER[a.f.status] - STATUS_ORDER[b.f.status] || a.i - b.i);
+  const checked = kept.filter((x) => x.f.status !== 'not stated');
+  return (checked.length ? checked : kept).slice(0, max).map((x) => x.f);
 }
 
 /**
@@ -163,21 +207,17 @@ export async function buildReport({
   // Sources (citations from the APIs only) + directory page checks.
   const sources = await buildSources({ answers, business, fetchImpl, maxFetch });
 
-  // AI facts vs the owner's own website/listings. differs first, then match.
-  const statusOrder = { differs: 0, match: 1, 'not stated': 2 };
-  const aiFacts = factsRaw
-    .map((f) => {
-      const fromSite = business.facts && business.facts[f.field] != null && business.facts[f.field] !== '';
-      const sourceSays = ownerFact(f.field, business, listings);
-      return {
-        answerId: f.answerId, field: f.field, aiSays: f.aiSays, sourceSays,
-        sourceFrom: sourceSays == null ? null : fromSite || ['phone', 'address'].includes(f.field) ? 'website' : 'listing',
-        status: factStatus(f.field, f.aiSays, sourceSays),
-      };
-    })
-    .map((f, i) => ({ f, i }))
-    .sort((a, b) => statusOrder[a.f.status] - statusOrder[b.f.status] || a.i - b.i)
-    .map(({ f }) => f);
+  // AI facts vs the owner's own website/listings.
+  const engineOf = new Map(answers.map((a) => [a.id, a.engine]));
+  const aiFacts = pickFacts(factsRaw.map((f) => {
+    const fromSite = business.facts && business.facts[f.field] != null && business.facts[f.field] !== '';
+    const sourceSays = ownerFact(f.field, business, listings);
+    return {
+      answerId: f.answerId, field: f.field, aiSays: f.aiSays, sourceSays,
+      sourceFrom: sourceSays == null ? null : fromSite || ['phone', 'address'].includes(f.field) ? 'website' : 'listing',
+      status: factStatus(f.field, f.aiSays, sourceSays),
+    };
+  }), engineOf);
 
   // Method (always present).
   const methodEngines = {};

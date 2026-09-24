@@ -14,9 +14,23 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const clean = (v, max) => String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
 
+/** Owner facts a report can check AI answers against (same fields as the extractor). */
+export const OWNER_FACT_FIELDS = ['hours', 'phone', 'price', 'address', 'services'];
+
+/** { hours?, phone?, price?, address?, services? } as trimmed strings, or null when none. */
+export function cleanFacts(facts) {
+  if (!facts || typeof facts !== 'object' || Array.isArray(facts)) return null;
+  const out = {};
+  for (const k of OWNER_FACT_FIELDS) {
+    const v = facts[k] == null ? '' : clean(facts[k], 500);
+    if (v) out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /**
  * Validate a scan request (admin API JSON body or the dashboard form, already mapped).
- * body: { business: { id?, name, trade, town, state?, zip?, phone?, website?, address? },
+ * body: { business: { id?, name, trade, town, state?, zip?, phone?, website?, address?, facts?, aliases? },
  *         engines?: string[], runs?: number, questions?: number (limit, 1..5), reportToken?,
  *         trigger?: 'admin'|'request'|'recheck', notes? }
  * → { ok: true, params } | { ok: false, error }
@@ -37,6 +51,14 @@ export function parseScanRequest(body, { knownEngines = ENGINE_IDS } = {}) {
     address: clean(b.address, 200) || null,
   };
   if (b.nearbyTown) business.nearbyTown = clean(b.nearbyTown, 60);
+  // The owner's own facts (from their website) are what the report checks AI answers against;
+  // dropping them here made every fact "not on your site". Aliases feed owner matching.
+  const facts = cleanFacts(b.facts);
+  if (facts) business.facts = facts;
+  if (Array.isArray(b.aliases)) {
+    const aliases = b.aliases.map((a) => clean(a, 160)).filter(Boolean).slice(0, 10);
+    if (aliases.length) business.aliases = aliases;
+  }
   if (!business.name || !business.trade || !business.town) {
     return { ok: false, error: 'business.name, business.trade and business.town are required' };
   }

@@ -127,6 +127,10 @@
       <div class="card"><div class="num">2</div><h3>We run <span data-search-count>15</span> searches</h3><p><span data-ai-count="Word">Three</span> AI assistants, <span data-question-count="word">five</span> customer questions, public data only.</p></div>
       <div class="card"><div class="num">3</div><h3>Read it on your phone</h3><p>What AI said, who it named, and what to fix first.</p></div>
     </div>
+    <div class="example-q">
+      <p>For example, a plumber in <span data-geo-town>Massapequa</span>, <span data-geo-state>NY</span> gets these <span data-question-count="word">five</span> questions, typed into every assistant:</p>
+      <ol class="rq-list" data-geo-questions="plumbing"><li>What&#39;s the best plumber in Massapequa, NY?</li><li>I need an emergency plumber near Seaford tonight</li><li>Who can replace a water heater in Massapequa NY?</li><li>Plumber with good reviews near Seaford, NY</li><li>Affordable plumber near 11758</li></ol>
+    </div>
   </div>
 </section>
 
@@ -262,9 +266,10 @@
             <option value="laundromat">Laundromat</option>
           </select>
         </label>
-        <label>Town <input name="town" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa"></label>
-        <label>ZIP <input name="zip" type="text" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758"></label>
-        <input name="state" type="hidden" value="NY">
+        <label>Town <input name="town" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
+        <label>ZIP <input name="zip" type="text" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
+        <p class="form-note geo-hint" data-geo-hint hidden>We guessed <span data-geo-town>Massapequa</span>, <span data-geo-state>NY</span> from your connection, just for the examples. Type your own town and ZIP (another state? type it as &ldquo;Town, ST&rdquo;).</p>
+        <input name="state" type="hidden" value="NY" data-geo-value="state">
         <label><span>Website <small class="opt">(optional)</small></span> <input name="website" type="text" maxlength="160" autocomplete="url" placeholder="yourbusiness.com"></label>
         <label><span>Phone <small class="opt">(optional)</small></span> <input name="phone" type="tel" maxlength="30" autocomplete="tel" placeholder="(516) 555-0142"></label>
         <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
@@ -343,6 +348,7 @@
   // Free-report flow: business details (no email) -> show the exact questions ->
   // optional email, attached to the same request by the id the first POST returns.
   var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  var STATES = 'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY'.split(' ');
   // Fallback list if /api/questions fails; the Worker fills data-ai-names from ACTIVE_ENGINES.
   var namesEl = document.querySelector('[data-ai-names]');
   var ENGINES = ((namesEl && namesEl.getAttribute('data-ai-names')) || 'ChatGPT|Claude|Gemini').split('|');
@@ -453,6 +459,9 @@
     e.preventDefault();
     var data = {};
     new FormData(form).forEach(function (v, k) { data[k] = String(v).trim(); });
+    // "Stamford, CT" -> town + state. The hidden state is only a guess from the visitor's connection.
+    var ts = /^(.+?)\s*,\s*([A-Za-z]{2})$/.exec(data.town || '');
+    if (ts && STATES.indexOf(ts[2].toUpperCase()) >= 0) { data.town = ts[1]; data.state = ts[2].toUpperCase(); }
     if (!data.business_name || !data.trade || !data.town || !/^\d{5}$/.test(data.zip)) {
       show(status, 'error', 'Please fill in your business name, what you do, your town, and a 5-digit ZIP.'); return;
     }

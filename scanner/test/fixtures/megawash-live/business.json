@@ -1,0 +1,17 @@
+{
+  "name": "Mega Wash & Dry",
+  "trade": "laundromat",
+  "address": "1502 Deer Park Ave",
+  "town": "North Babylon",
+  "state": "NY",
+  "zip": "11703",
+  "nearbyTown": "Deer Park",
+  "phone": "(631) 254-0914",
+  "website": "megawashanddry.com",
+  "facts": {
+    "hours": "Open 24 Hours Monday - Sunday",
+    "price": "$2.25/lb, 20 lb minimum",
+    "address": "1502 Deer Park Ave, North Babylon, NY 11703",
+    "services": "wash/dry/fold pickup and delivery, 200+ Speed Queen machines, up to 80 lb washers, free drying"
+  }
+}
