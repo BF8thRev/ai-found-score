@@ -82,6 +82,7 @@ async function handleHealth(env) {
     supabaseKey: !!env.SUPABASE_ANON_KEY,
     supabaseKeyType: keyType(env.SUPABASE_ANON_KEY),
     stripeWebhookSecret: !!env.STRIPE_WEBHOOK_SECRET,
+    stripeWebhookSecretTest: !!env.STRIPE_WEBHOOK_SECRET_TEST,
     database: 'not checked',
   };
   if (out.supabaseUrl && out.supabaseKey) {
@@ -339,9 +340,15 @@ async function handleStripeWebhook(request, env) {
   const rawBody = await request.text();
   const signature = request.headers.get('Stripe-Signature');
 
+  // Live endpoint secret first; the optional sandbox endpoint secret lets
+  // test-mode checkouts run against production without swapping secrets.
   let ok = false;
+  let viaTestSecret = false;
   try {
     ok = await verifyStripeSignature(rawBody, signature, env.STRIPE_WEBHOOK_SECRET);
+    if (!ok && env.STRIPE_WEBHOOK_SECRET_TEST) {
+      viaTestSecret = ok = await verifyStripeSignature(rawBody, signature, env.STRIPE_WEBHOOK_SECRET_TEST);
+    }
   } catch (e) {
     console.error('[webhook] signature check threw', e);
   }
@@ -354,6 +361,10 @@ async function handleStripeWebhook(request, env) {
     event = JSON.parse(rawBody);
   } catch {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  // A sandbox secret may only ever vouch for sandbox events.
+  if (viaTestSecret && event.livemode !== false) {
+    return Response.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
   // A checkout counts once the money is in: card payments are 'paid' at
