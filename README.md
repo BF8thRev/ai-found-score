@@ -101,6 +101,8 @@ npm test           # scanner, extractor and outreach tests (node --test) + sampl
 | `SUPABASE_SERVICE_KEY` | Scanner writes (`scan_raw`, `scan_results`, `scans`, `scan_usage`) and every `/admin` read | Worker secret. Never sent to the browser |
 | `SCANNER_DRY_RUN` | Local testing only: `1` answers scans from recorded fixtures (localhost requests only) | Never set on Cloudflare |
 | `STRIPE_WEBHOOK_SECRET_TEST` | `POST /api/stripe-webhook` | Optional. Signing secret of the Stripe **sandbox** webhook; accepted only for `livemode: false` events. Sandbox payments are stored with `payments.livemode = false` and excluded from `channel_funnel`. Delete once live testing is done |
+| `TURNSTILE_SITE_KEY` | Free-report form bot check (`src/lib/turnstile.js`) | Public. In `wrangler.jsonc` `vars`; the Worker writes it into the homepage. See **Bot protection** |
+| `TURNSTILE_SECRET_KEY` | `POST /api/request` Siteverify | Worker secret: `npx wrangler secret put TURNSTILE_SECRET_KEY`. See **Bot protection** |
 
 For local dev, create `.dev.vars` (git-ignored):
 
@@ -109,6 +111,27 @@ SUPABASE_URL=https://bahmemiydzpotfrxmlzw.supabase.co
 SUPABASE_ANON_KEY=
 STRIPE_WEBHOOK_SECRET=
 ```
+
+## Bot protection
+
+The free-report form (`POST /api/request`) is checked with Cloudflare Turnstile (invisible unless Cloudflare wants a click). The Worker verifies each new request with Siteverify (action `free_report`, hostname must be the site's own) before saving it; attaching an email to an already-verified request needs no second check. `POST /api/request` and `GET /api/questions` are also limited to 20 calls a minute per IP (the `REQUEST_LIMITER` rate-limit binding in `wrangler.jsonc`); over that the page shows "Too many tries…".
+
+**Until both keys below are set, the check is off**: the page shows no widget, the Worker saves requests as before and logs one warning. `GET /api/health` shows `"turnstile": true` once it is on.
+
+Owner steps:
+
+1. Cloudflare dashboard → **Turnstile** → **Add widget**. Hostnames `aifoundscore.com` and `www.aifoundscore.com` (add `localhost` only if you want to test the real widget locally). Widget mode **Managed**.
+2. Copy the **site key** into `TURNSTILE_SITE_KEY` in `wrangler.jsonc` `vars` (or send it to whoever deploys). It is public.
+3. Store the **secret key** as a Worker secret (it never goes in a file): `npx wrangler secret put TURNSTILE_SECRET_KEY`
+4. Deploy, then check `https://aifoundscore.com/api/health` shows `"turnstile": true`.
+
+Local dev uses Cloudflare's test keys (always pass), without touching `.dev.vars`:
+
+```bash
+npx wrangler dev --var TURNSTILE_SITE_KEY:1x00000000000000000000AA --var TURNSTILE_SECRET_KEY:1x0000000000000000000000000000000AA
+```
+
+Without JavaScript the widget can't run, so once the check is on, the no-JS form fallback lands on the "email us" notice.
 
 ## Deploy to Cloudflare
 

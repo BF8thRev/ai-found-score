@@ -5,9 +5,11 @@
 //   GET  /api/report/[id]     -> report JSON; fix details withheld until paid
 //   POST /api/visit           -> report-page view beacon (arm looked up from token)
 //   POST /api/lead            -> "Email me this report"
-//   POST /api/request         -> landing-page free-report request (email optional; returns id)
+//   POST /api/request         -> landing-page free-report request (email optional; returns id);
+//                                Turnstile-checked + per-IP rate limit (src/lib/report-request.js)
 //                                or {request_id, email} to attach an email to that request
 //   GET  /api/questions       -> the 5 questions we'd ask for ?trade=&town=&zip=&state=, plus the active assistants
+//                                (per-IP rate limit)
 //   POST /api/stripe-webhook  -> Stripe webhook, verified signature, writes payment
 //   GET|POST /unsubscribe, /stop -> email or postcard opt-out
 //   /admin, /admin/*          -> business dashboard (session cookie or Bearer ADMIN_TOKEN); src/admin/routes.js
@@ -20,10 +22,13 @@
 // Also exports ScanWorkflow (src/scan-workflow.js), bound as SCAN_WORKFLOW in wrangler.jsonc.
 
 import {
-  recordPayment, recordUnsubscribe, recordReportRequest, attachReportRequestEmail, recordVisit, recordLead,
+  recordPayment, recordUnsubscribe, recordVisit, recordLead,
   getReport, getReportLink, isReportUnlocked,
 } from './lib/db.js';
 import { buildQuestions, normalizeTrade } from '../scanner/questions.js';
+import { handleReportRequest } from './lib/report-request.js';
+import { turnstileConfigured, turnstileSiteKey } from './lib/turnstile.js';
+import { rateLimit } from './lib/rate-limit.js';
 import { verifyStripeSignature } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
@@ -57,11 +62,11 @@ export default {
     }
 
     if (url.pathname === '/api/request' && request.method === 'POST') {
-      return handleReportRequest(request, url, env);
+      return (await rateLimit(env, request, 'request')) || handleReportRequest(request, url, env);
     }
 
     if (url.pathname === '/api/questions' && request.method === 'GET') {
-      return handleQuestions(url);
+      return (await rateLimit(env, request, 'questions')) || handleQuestions(url);
     }
 
     if (url.pathname === '/api/visit' && request.method === 'POST') {
@@ -117,6 +122,8 @@ async function handleHealth(env) {
     anthropicApiKey: !!String(env.ANTHROPIC_API_KEY || '').trim(),
     supabaseServiceKey: !!resolveKeys(env).supabaseServiceKey,
     adminToken: !!String(env.ADMIN_TOKEN || '').trim(),
+    // Site key + secret both set; false means free-report requests are not bot-checked.
+    turnstile: turnstileConfigured(env),
     database: 'not checked',
   };
   if (out.supabaseUrl && out.supabaseKey) {
@@ -318,86 +325,7 @@ function handleQuestions(url) {
   }, { headers: { 'Cache-Control': 'public, max-age=300' } });
 }
 
-// Free-report request from the landing page form. Accepts JSON (fetch) or a
-// plain form post (no-JS fallback). Email is optional: the page asks for it
-// only after the owner has seen the questions.
-//   {business_name, trade, town, zip, state?, website?, phone?, email?} -> new row, returns {ok, id}
-//   {request_id, email, ...same fields}                                  -> attaches the email to that row;
-//     if the attach can't be done (row missing, first save failed) and the business fields are present,
-//     saves a fresh row with the email instead, so the email is never lost.
-async function handleReportRequest(request, url, env) {
-  const ct = request.headers.get('Content-Type') || '';
-  const isJson = ct.includes('application/json');
-  let data = {};
-  try {
-    if (isJson) data = await request.json();
-    else {
-      const form = await request.formData();
-      data = Object.fromEntries(form.entries());
-    }
-  } catch {
-    return isJson
-      ? Response.json({ ok: false, error: 'Bad request' }, { status: 400 })
-      : Response.redirect(new URL('/?request=error#request', url).toString(), 303);
-  }
-
-  if (!data || typeof data !== 'object') data = {};
-  const clean = (v, max) => String(v ?? '').trim().slice(0, max);
-  const fail = (status, error) => (isJson
-    ? Response.json({ ok: false, error }, { status })
-    : Response.redirect(new URL('/?request=error#request', url).toString(), 303));
-  const okResponse = (id) => (isJson
-    ? Response.json({ ok: true, id: id ?? null })
-    : Response.redirect(new URL('/?request=ok#request', url).toString(), 303));
-
-  // Honeypot: real people never fill the hidden field.
-  if (clean(data.company_url, 10)) return okResponse(null);
-
-  const email = clean(data.email, 160).toLowerCase();
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
-  if (email && !emailOk) return fail(422, 'Please enter a valid email.');
-
-  // Step 2: attach an email to the request saved in step 1.
-  const requestId = clean(data.request_id, 36).toLowerCase();
-  if (requestId) {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(requestId)) return fail(422, 'Bad request');
-    if (!emailOk) return fail(422, 'Please enter a valid email.');
-    try {
-      if (await attachReportRequestEmail(env, { id: requestId, email })) return okResponse(requestId);
-    } catch (e) {
-      console.error('[request] email attach failed', e);
-    }
-    // Couldn't attach: fall through and save a fresh row with the email, if we have the details.
-  }
-
-  const rawTrade = clean(data.trade, 40);
-  const zip = clean(data.zip, 10);
-  const state = clean(data.state, 2).toUpperCase() || 'NY';
-  const req = {
-    id: crypto.randomUUID(),
-    businessName: clean(data.business_name, 120),
-    town: clean(data.town, 60),
-    zip: zip || null,
-    state: /^[A-Z]{2}$/.test(state) ? state : 'NY',
-    email: emailOk ? email : null,
-    trade: normalizeTrade(rawTrade) || rawTrade || null,
-    website: clean(data.website, 160) || null,
-    phone: clean(data.phone, 30) || null,
-    userAgent: request.headers.get('User-Agent') || null,
-  };
-  if (!req.businessName || !req.town) {
-    return fail(422, requestId ? 'Could not save your email. Try again.' : 'Please fill in your business name and town.');
-  }
-  if (zip && !/^\d{5}$/.test(zip)) return fail(422, 'Please enter a 5-digit ZIP.');
-
-  try {
-    await recordReportRequest(env, req);
-  } catch (e) {
-    console.error('[request] write failed', e);
-    return fail(500, 'Could not save your request.');
-  }
-  return okResponse(req.id);
-}
+// POST /api/request lives in src/lib/report-request.js (Turnstile-checked).
 
 // One-click unsubscribe. Every way in writes the same suppression row:
 //   GET  /unsubscribe?t=<report token>          link in the email footer
@@ -540,6 +468,7 @@ async function handleStripeWebhook(request, env) {
 //   <span data-search-count>…</span>       "15" (same forms)
 //   <span data-question-count>…</span>     "5" (same forms)
 //   data-ai-names="…"                      "ChatGPT|Claude|Gemini" (for page scripts)
+//   data-turnstile-sitekey=""               TURNSTILE_SITE_KEY, only when Turnstile is fully configured
 //   <meta … content="…" data-copy="…{{AI_LIST}}…">  content = the template filled in
 //   <script type="application/ld+json">…{{AI_LIST}}…</script>  tokens filled in
 //   /llms.txt                              tokens filled in
@@ -561,11 +490,15 @@ async function serveAsset(env, request, path, method) {
     if (path) { u.pathname = path; u.search = ''; }
     req = new Request(u.toString(), { method: method || request.method, headers: request.headers });
   }
-  // Our ETag = asset ETag + COPY_TAG; hand the asset server the ETag it knows.
+  // The Turnstile site key goes into the page, so it is part of the tag too: a page cached
+  // before the key was set (or changed) is not answered with a stale 304.
+  const siteKey = turnstileSiteKey(env);
+  const tag = COPY_TAG + (siteKey ? `-ts.${siteKey.slice(-8).replace(/[^A-Za-z0-9_-]/g, '')}` : '');
+  // Our ETag = asset ETag + tag; hand the asset server the ETag it knows.
   const inm = req.headers.get('If-None-Match');
-  if (inm && inm.includes(COPY_TAG)) {
+  if (inm && inm.includes(tag)) {
     const headers = new Headers(req.headers);
-    headers.set('If-None-Match', inm.split(COPY_TAG).join(''));
+    headers.set('If-None-Match', inm.split(tag).join(''));
     req = new Request(req, { headers });
   }
   const res = await env.ASSETS.fetch(req);
@@ -575,7 +508,7 @@ async function serveAsset(env, request, path, method) {
 
   const tagged = (r) => {
     const etag = r.headers.get('ETag');
-    if (etag && !etag.includes(COPY_TAG)) r.headers.set('ETag', etag.replace(/"$/, `${COPY_TAG}"`));
+    if (etag && !etag.includes(tag)) r.headers.set('ETag', etag.replace(/"$/, `${tag}"`));
     return r;
   };
   if (!res.body || res.status === 304 || req.method === 'HEAD') return tagged(new Response(res.body, res));
@@ -584,10 +517,10 @@ async function serveAsset(env, request, path, method) {
     out.headers.delete('Content-Length');
     return tagged(out);
   }
-  return tagged(copyRewriter().transform(res));
+  return tagged(copyRewriter(siteKey).transform(res));
 }
 
-function copyRewriter() {
+function copyRewriter(siteKey) {
   const fill = (kind, attr) => ({
     element(el) {
       const text = copyFor(kind, el.getAttribute(attr), COPY);
@@ -601,6 +534,8 @@ function copyRewriter() {
     .on('[data-search-count]', fill('search', 'data-search-count'))
     .on('[data-question-count]', fill('question', 'data-question-count'))
     .on('[data-ai-names]', { element(el) { el.setAttribute('data-ai-names', COPY.names.join('|')); } })
+    // Turnstile widget slot(s): the page script loads the widget only when this is non-empty.
+    .on('[data-turnstile-sitekey]', { element(el) { el.setAttribute('data-turnstile-sitekey', siteKey || ''); } })
     .on('meta[data-copy]', {
       element(el) {
         el.setAttribute('content', fillTokens(decodeAttr(el.getAttribute('data-copy')), TOKENS));

@@ -246,6 +246,7 @@
           <li>Email only if you want the link sent to you</li>
         </ul>
       </div>
+      <div class="request-col" id="request-col">
       <form id="request-form" method="post" action="/api/request" novalidate>
         <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="Harborview Plumbing &amp; Heating"></label>
         <label class="full">What you do
@@ -271,6 +272,10 @@
         <p class="status" id="request-status" role="status"></p>
         <p class="form-note">No email needed. We only read public information about your business. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
       </form>
+        <!-- Turnstile bot check (invisible unless Cloudflare needs a click). The Worker fills in the site key;
+             empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
+        <div class="ts-box" id="ts-request" data-turnstile-sitekey=""></div>
+      </div>
 
       <div class="request-next" id="request-next" hidden>
         <div class="rq-block" id="rq-questions" tabindex="-1">
@@ -285,6 +290,7 @@
           <h3>Where should we send your report?</h3>
           <p class="rq-sub">Optional. We use it only to send your private report link, usually within one business day.</p>
           <label><span>Email <small class="opt">(optional)</small></span> <input name="email" type="email" maxlength="160" autocomplete="email" placeholder="you@yourbusiness.com"></label>
+          <div class="ts-box" id="ts-email"></div>
           <button class="btn" type="submit">Send my report here</button>
           <p class="status" id="email-status" role="status"></p>
           <p class="form-note">Rather not? That's fine. Email <a href="mailto:hello@aifoundscore.com?subject=My%20report%20link" style="color:#DCE6F4">hello@aifoundscore.com</a> with your business name whenever you want the link. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
@@ -353,15 +359,71 @@
   var biz = null;          // what the owner typed, reused by the email step
   var requestId = null;    // id of the saved report_requests row
   var converted = false;   // report_request pushed once
+  var savedReq = null;     // the first save, so the email step never races it
 
   function show(el, kind, html) { el.className = 'status ' + kind; el.innerHTML = html; }
   function esc(t) { var d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; }
   function push(ev) { if (window.dataLayer) window.dataLayer.push(ev); }
   function postJson(url, body) {
     return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok === true, body: j }; }); })
-      .catch(function () { return { ok: false, body: {} }; });
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok === true, status: r.status, body: j }; }); })
+      .catch(function () { return { ok: false, status: 0, body: {} }; });
   }
+
+  // Cloudflare Turnstile. The Worker writes the site key into #ts-request only when the check is
+  // configured; empty = no widget and no token (the Worker then doesn't check either).
+  // Tokens are single-use: a widget hands out its token once, then resets for the next one.
+  var TS_BOX = document.getElementById('ts-request');
+  var TS_KEY = (TS_BOX && TS_BOX.getAttribute('data-turnstile-sitekey')) || '';
+  var tsApi = null;
+  function loadTurnstile() {
+    if (!TS_KEY) return Promise.resolve(null);
+    if (tsApi) return tsApi;
+    tsApi = new Promise(function (resolve) {
+      window.onAfsTurnstile = function () { resolve(window.turnstile || null); };
+      var sc = document.createElement('script');
+      sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onAfsTurnstile';
+      sc.async = true; sc.defer = true;
+      sc.onerror = function () { resolve(null); };
+      document.head.appendChild(sc);
+    });
+    return tsApi;
+  }
+  function tsWidget(box) {
+    var w = { id: null, api: null, token: '', dead: !TS_KEY, waiters: [] };
+    var col = document.getElementById('request-col');
+    function live(on) { box.classList.toggle('ts-live', on); if (box === TS_BOX && col) col.classList.toggle('ts-shown', on); }
+    function settle() { var q = w.waiters; w.waiters = []; q.forEach(function (f) { f(); }); }
+    if (!w.dead) loadTurnstile().then(function (api) {
+      if (!api) { w.dead = true; settle(); return; }
+      w.api = api;
+      w.id = api.render(box, {
+        sitekey: TS_KEY, action: 'free_report', appearance: 'interaction-only', size: 'flexible',
+        callback: function (t) { w.token = t; live(false); settle(); },
+        'expired-callback': function () { w.token = ''; },
+        'before-interactive-callback': function () { live(true); },
+        'after-interactive-callback': function () { live(false); },
+        'error-callback': function () { live(true); }
+      });
+    });
+    // Resolves with a fresh token, or '' if none arrives within ms (the Worker then says why).
+    w.take = function (ms) {
+      return new Promise(function (resolve) {
+        function give() {
+          var t = w.token; w.token = '';
+          if (t && w.api && w.id != null) { try { w.api.reset(w.id); } catch (e) {} }
+          resolve(t);
+        }
+        if (w.token || w.dead) return give();
+        var timer = setTimeout(function () { w.waiters = w.waiters.filter(function (f) { return f !== onReady; }); give(); }, ms);
+        function onReady() { clearTimeout(timer); give(); }
+        w.waiters.push(onReady);
+      });
+    };
+    return w;
+  }
+  var tsRequest = tsWidget(TS_BOX || document.createElement('div'));
+  var tsEmail = null;      // second widget, only if the email step has to save the whole request
   function markConverted() {
     if (converted) return;
     converted = true;
@@ -399,13 +461,22 @@
 
     var qs = new URLSearchParams({ trade: data.trade, town: data.town, zip: data.zip, state: data.state || 'NY' });
     var questions = fetch('/api/questions?' + qs.toString())
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) {
+        if (r.status === 429) return r.json().catch(function () { return {}; }).then(function (j) { return { limited: j.error || 'Too many tries. Wait a minute and try again.' }; });
+        return r.ok ? r.json() : null;
+      })
       .catch(function () { return null; });
-    var saved = postJson('/api/request', data);
+    // The questions don't wait for the bot check; only the save does.
+    var saved = savedReq = tsRequest.take(30000).then(function (token) {
+      if (token) data['cf-turnstile-response'] = token;
+      return postJson('/api/request', data);
+    });
 
     // The questions show even if the save failed: the owner still sees what we'd ask.
     questions.then(function (res) {
-      renderQuestions(res);
+      var limited = res && res.limited;
+      renderQuestions(limited ? null : res);
+      if (limited) document.getElementById('rq-sub').innerHTML = '<strong>' + esc(limited) + '</strong> Your questions are five plain questions a customer in ' + esc(biz.town) + ' would ask, and every one is in your report.';
       form.hidden = true;
       next.hidden = false;
       box.classList.add('done');
@@ -418,7 +489,12 @@
         requestId = res.body.id;
         markConverted();
       } else {
-        show(saveNote, 'error', 'We couldn\'t save your request just now. Add your email below and we\'ll try again, or email ' + HELLO + ' with your business name and town.');
+        // 403/503 = bot check, 429 = rate limit: the Worker's message says what to do.
+        var why = (res.status === 403 || res.status === 429 || res.status === 503) && res.body && res.body.error
+          ? esc(res.body.error) + ' ' : 'We couldn\'t save your request just now. ';
+        show(saveNote, 'error', why + 'Add your email below and we\'ll try again, or email ' + HELLO + ' with your business name and town.');
+        // The email step will then save the whole request, so it needs its own bot check.
+        if (TS_KEY && !tsEmail) tsEmail = tsWidget(document.getElementById('ts-email'));
       }
     });
   });
@@ -432,10 +508,17 @@
     }
     var btn = emailForm.querySelector('button'); btn.disabled = true; btn.textContent = 'Saving…';
     // With an id the Worker attaches the email to that request; without one
-    // (first save failed) it saves the whole request again, email included.
-    var body = Object.assign({}, biz, { email: email });
-    if (requestId) body.request_id = requestId;
-    postJson('/api/request', body).then(function (res) {
+    // (first save failed) it saves the whole request again, email included, which
+    // needs a fresh bot-check token from the email step's own widget.
+    Promise.resolve(savedReq).then(function () {
+      var body = Object.assign({}, biz, { email: email });
+      delete body['cf-turnstile-response'];
+      if (requestId) { body.request_id = requestId; return body; }
+      if (!tsEmail) return body;
+      return tsEmail.take(30000).then(function (token) { if (token) body['cf-turnstile-response'] = token; return body; });
+    }).then(function (body) {
+      return postJson('/api/request', body);
+    }).then(function (res) {
       if (res.ok) {
         if (res.body.id) requestId = res.body.id;
         markConverted();

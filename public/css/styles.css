@@ -474,3 +474,9 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
   .rq-block { padding: 18px 14px; }
   .rq-list li { font-size: 15.5px; padding-left: 44px; }
 }
+
+/* ---------- Turnstile bot check (index.html) ---------- */
+/* Invisible unless Cloudflare asks for a click; the page script adds .ts-live while it does. */
+.ts-box:not(.ts-live) { height: 0; overflow: hidden; }
+.ts-box.ts-live { margin-top: 14px; }
+.request.done .request-col:not(.ts-shown) { display: none; }
