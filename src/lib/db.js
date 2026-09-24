@@ -14,7 +14,7 @@
 //   payments:     id uuid, business_id uuid, arm text, tier text,
 //                 amount_cents int4, stripe_session_id text, paid_at timestamptz
 //
-// Added by supabase/setup.sql: page_visits.arm, payments.report_token,
+// Added by supabase/setup.sql: page_visits.arm, payments.report_token, payments.livemode,
 // report_links, leads, unsubscribes, report_requests, report_unlocked().
 //
 // RLS is enabled on all tables. The anon key used by this Worker may:
@@ -159,7 +159,7 @@ async function supaGet(env, table, query) {
  * Write one row to the payments table via the Supabase REST API.
  *
  * @param {object} env - Worker env (SUPABASE_URL, SUPABASE_ANON_KEY)
- * @param {object} payment - {businessId, reportToken, arm, tier, amountCents, stripeSessionId}
+ * @param {object} payment - {businessId, reportToken, arm, tier, amountCents, stripeSessionId, livemode}
  * @returns {Promise<object>}
  */
 export async function recordPayment(env, payment) {
@@ -170,6 +170,7 @@ export async function recordPayment(env, payment) {
     tier: payment.tier ?? 'unknown',
     amount_cents: payment.amountCents ?? null,
     stripe_session_id: payment.stripeSessionId ?? null,
+    livemode: payment.livemode ?? true,
     paid_at: new Date().toISOString(),
   };
 

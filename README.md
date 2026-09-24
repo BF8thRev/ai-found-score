@@ -55,6 +55,7 @@ npm run dev        # serves at http://localhost:8787
 | `SUPABASE_URL` | `src/lib/db.js` | In `wrangler.jsonc` `vars` (not secret). Don't set it in the dashboard: `wrangler deploy` replaces dashboard Text vars with the config file |
 | `SUPABASE_ANON_KEY` | `src/lib/db.js` | The project's **publishable** key (`sb_publishable_...`, Supabase → Project Settings → API Keys). Add as a Worker secret |
 | `STRIPE_WEBHOOK_SECRET` | `POST /api/stripe-webhook` | **Not yet available — add when the Stripe webhook is created** |
+| `STRIPE_WEBHOOK_SECRET_TEST` | `POST /api/stripe-webhook` | Optional. Signing secret of the Stripe **sandbox** webhook; accepted only for `livemode: false` events. Sandbox payments are stored with `payments.livemode = false` and excluded from `channel_funnel`. Delete once live testing is done |
 
 For local dev, create `.dev.vars` (git-ignored):
 

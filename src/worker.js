@@ -395,6 +395,7 @@ async function handleStripeWebhook(request, env) {
       stripePaymentIntent: session.payment_intent ?? null,
       customerEmail: session.customer_details?.email ?? null,
       status: 'paid',
+      livemode: event.livemode !== false,
     };
     const result = await recordPayment(env, payment);
     console.log('[webhook] payment recorded', JSON.stringify(result));

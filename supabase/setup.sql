@@ -82,6 +82,8 @@ create policy "worker insert" on public.payments for insert to anon with check (
 -- and the report token, so every metric can be cut by channel.
 alter table public.page_visits add column if not exists arm text;
 alter table public.payments    add column if not exists report_token text;
+-- false for Stripe sandbox purchases; the funnel ignores them.
+alter table public.payments    add column if not exists livemode boolean not null default true;
 
 -- ---------------------------------------------------------------------------
 -- report_links: one row per recipient, written by the randomize job.
@@ -189,8 +191,8 @@ select
   count(*)                                                                         as recipients,
   count(*) filter (where exists (select 1 from public.page_visits v where v.report_token = l.report_token)) as visited,
   count(*) filter (where exists (select 1 from public.leads le where le.report_token = l.report_token))     as leads,
-  count(*) filter (where exists (select 1 from public.payments p where p.report_token = l.report_token))    as paying,
-  coalesce(sum((select sum(p.amount_cents) from public.payments p where p.report_token = l.report_token)), 0) / 100.0 as revenue_usd
+  count(*) filter (where exists (select 1 from public.payments p where p.report_token = l.report_token and p.livemode)) as paying,
+  coalesce(sum((select sum(p.amount_cents) from public.payments p where p.report_token = l.report_token and p.livemode)), 0) / 100.0 as revenue_usd
 from public.report_links l
 group by l.arm;
 
