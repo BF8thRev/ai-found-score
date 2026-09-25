@@ -589,11 +589,22 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .tier .price.planned small { margin-right: 4px; }
 .trust-after { font-size: 18px; font-weight: 700; color: var(--navy); margin: 28px 0 0; }
 
-/* Site copy v2: hero sample card miss line, lost-money line, AI Defense note */
-.ra-miss { align-self: flex-start; margin: 2px 0 0; font-size: 14.5px; color: var(--ink); }
+/* Site copy v2: lighter hero with the sample's "who AI named" card, lost-call band, ladder */
+.hero-grid .hero-copy h1 { font-size: clamp(32px, 4.2vw, 52px); }
+.hero-grid .h1-accent { margin-top: 6px; }
+.ra-card .ra-user { margin-left: auto; }
+.ra-k { margin: 18px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ra-names { margin: 0; padding-left: 22px; font-size: 16px; font-weight: 600; color: var(--navy); line-height: 1.8; }
+.ra-names li:first-child { color: #145A38; }
+.ra-miss { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 16px; font-weight: 600; color: var(--ink); }
 .ra-tag.miss { background: #FBE3E1; color: #9B2C22; }
-.lost-line { max-width: 760px; margin: 28px auto 0; padding: 16px 20px; border-left: 4px solid var(--amber); background: #fff; border-radius: 8px; font-size: 17px; font-weight: 600; color: var(--navy); text-align: left; }
+.lost-band { background: var(--navy); color: #fff; padding: 28px 0; }
+.lost-line { max-width: 820px; margin: 0 auto; font-size: clamp(18px, 2.2vw, 22px); font-weight: 700; line-height: 1.4; text-align: center; }
+#pricing .tier-list { flex: 1; }
+.tier .tier-tagline { flex: 0 0 auto; margin: 4px 0 10px; font-size: 17px; font-weight: 700; color: var(--navy); }
+.tier .tier-when { flex: 0 0 auto; }
+.tier .tier-guarantee { flex: 0 0 auto; margin: 6px 0 0; padding: 12px 14px; border-radius: 10px; background: #E7F5EE; color: #145A38; font-size: 15px; font-weight: 700; line-height: 1.4; }
+.tier .tier-guarantee.soft { background: var(--wash); color: var(--muted); font-weight: 600; }
+.tier .tier-guarantee + .tier-list { margin-top: 14px; }
 .ladder-note { max-width: 760px; margin: 22px auto 0; font-size: 14.5px; color: var(--muted); font-style: italic; }
-.tier-list.grow { flex: 1; }
-.btn-secondary.big { font-size: 18px; padding: 17px 30px; }
-@media (max-width: 520px) { .hero-grid .btn-secondary.big { width: 100%; text-align: center; padding: 16px 20px; } }
+.lost-band + .stats-band { padding-top: 56px; }

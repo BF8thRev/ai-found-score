@@ -57,30 +57,38 @@
   <div class="wrap">
     <div class="hero-grid">
       <div class="hero-copy">
-        <span class="eyebrow">Free AI visibility report for local service businesses</span>
-        <h1>Your customers stopped Googling.</h1>
-        <p class="lede">They ask AI who to call now. We ask the AI assistants your customers use the exact questions they'd ask — and show you every answer, word for word. Free.</p>
+        <h1>Your customers stopped Googling. <span class="h1-accent">AI is sending your calls to someone else.</span></h1>
+        <p class="lede">We ask AI what your customers ask, and show you who it names instead of you. Free.</p>
         <div class="cta-row">
-          <a class="btn big" href="#request">See what AI says about my business</a>
-          <a class="btn-secondary big" href="/report/sample-001">See a sample report</a>
+          <a class="btn big" href="#request">Show me who's getting my calls</a>
         </div>
-        <div class="trust-line"><span>No email needed to see your questions</span><span>No sales call</span><span>Ready in about a day</span></div>
+        <p class="hero-alt"><a href="/report/sample-001">See a sample report</a></p>
         <p class="proof-line" id="proof-line" hidden></p>
       </div>
-      <!-- The sample report's own headline answer, quoted verbatim from src/mock/sample-v2.js (a1).
-           Fictional business and competitors; labelled as a sample. -->
+      <!-- From the sample report's headline answer (src/mock/sample-v2.js, a1): who the assistant named,
+           in order. Fictional business and competitors; labelled as a sample. -->
       <div class="real-answer" data-sample-quote>
         <figure class="ra-card">
-          <figcaption class="ra-label">Sample report · who AI named instead of you</figcaption>
-          <div class="ra-chat">
-            <p class="ra-bubble ra-user">What's the best plumber in Massapequa, NY?</p>
-            <p class="ra-bubble ra-ai">Here are some well-reviewed plumbers in Massapequa, NY:<br><br>1. <mark class="ra-hit first">Tidewater Plumbing Co.</mark><span class="ra-tag first">named first</span> – Long-running local company with strong reviews for repairs and remodels.<br>2. <mark class="ra-hit also">Kessler Bros. Plumbing</mark> – Family-owned, known for clear pricing.<br>3. <mark class="ra-hit also">Sunrise Pipe &amp; Heat</mark> – Handles plumbing plus boiler and heating work.<br>4. <mark class="ra-hit also">Blue Point Flow Plumbing</mark> – Smaller shop that customers describe as responsive.<br><br>Check recent reviews and confirm licensing in Nassau County before you hire.</p>
-            <p class="ra-miss"><strong>Harborview Plumbing &amp; Heating</strong> <span class="ra-tag miss">not named</span></p>
-          </div>
+          <figcaption class="ra-label">Sample report</figcaption>
+          <p class="ra-bubble ra-user">What's the best plumber in Massapequa, NY?</p>
+          <p class="ra-k">AI named</p>
+          <ol class="ra-names">
+            <li>Tidewater Plumbing Co. <span class="ra-tag first">first</span></li>
+            <li>Kessler Bros. Plumbing</li>
+            <li>Sunrise Pipe &amp; Heat</li>
+            <li>Blue Point Flow Plumbing</li>
+          </ol>
+          <p class="ra-miss">Harborview Plumbing &amp; Heating <span class="ra-tag miss">not named</span></p>
         </figure>
-        <p class="ra-caption">Illustrative sample: a made-up plumber, named in 9 of 15 answers. <a href="/report/sample-001">See the full sample report &rarr;</a></p>
+        <p class="ra-caption">A made-up business. <a href="/report/sample-001">See the full sample &rarr;</a></p>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="lost-band">
+  <div class="wrap">
+    <p class="lost-line">Someone asked for an emergency plumber in <span data-geo-town>Massapequa</span> tonight. AI named Tidewater — not you. That's a $400+ call you never knew you lost.</p>
   </div>
 </section>
 
@@ -134,7 +142,6 @@
         <p>Your hours, prices, and phone number as the AI states them, checked against your listings.</p>
       </div>
     </div>
-    <p class="lost-line">Someone asked for an emergency plumber in <span data-geo-town>Massapequa</span> tonight. AI named Tidewater — not you. That's a $400+ call you never knew you lost.</p>
     <div class="cta-row" style="margin-top:28px"><a class="btn-secondary" href="/report/mega-wash-and-dry">See a real report</a></div>
   </div>
 </section>
@@ -159,47 +166,51 @@
   <div class="wrap">
     <h2>The report is free. If you want it handled, here's the ladder.</h2>
     <p class="intro">Each step earns the next one. We don't sell ongoing protection until we've proven we can find real threats.</p>
-    <div class="tiers">
+    <div class="tiers ladder">
       <div class="tier">
         <span class="tier-tag soon">Free</span>
         <h3>AI Visibility Snapshot</h3>
         <div class="price">Free</div>
-        <ul class="tier-list grow">
-          <li>3 AI assistants asked, 3 customer questions</li>
-          <li>The verdict: named or not — and who got named instead</li>
-          <li>The full source checklist, with the rest locked: <em>&ldquo;5 more assistants and 8 more sources checked in the Full Audit&rdquo;</em></li>
+        <p class="tier-tagline">Find out if AI is sending your calls somewhere else.</p>
+        <ul class="tier-list">
+          <li><strong>Named or not.</strong> See whether AI names you — and who it names instead.</li>
+          <li><strong>Straight from the source.</strong> 3 AI assistants, 3 real customer questions, every answer word for word.</li>
+          <li><strong>See what's left to check.</strong> The Full Audit covers 5 more assistants and 8 more sources.</li>
         </ul>
-        <a class="btn-secondary" href="#request">Get my free snapshot</a>
+        <p class="tier-guarantee soft">If AI already names you, you'll know that too.</p>
+        <a class="btn-secondary" data-offer="free_snapshot" href="#request">Get my free snapshot</a>
       </div>
       <div class="tier featured">
         <span class="tier-tag">&#9733; Most popular</span>
         <h3>Full AI Visibility Audit</h3>
         <div class="price">$99 <small>one-time</small></div>
+        <p class="tier-tagline">Know exactly who's taking your calls — and why.</p>
         <ul class="tier-list">
-          <li data-assistant-list><strong>8+ AI assistants, each named:</strong> ChatGPT, Claude, Gemini, Perplexity, Grok, Copilot, Meta AI, Google AI Mode</li>
-          <li><strong>Every question asked 3 times</strong> — &ldquo;named in 2 of 3 tries,&rdquo; because AI answers change</li>
-          <li><strong>Every source checked and listed:</strong> Google, Apple, Bing, Yelp, Facebook, plus every site the AI cited</li>
-          <li><strong>Your 0–100 AI Found Score</strong>, with the full breakdown</li>
-          <li>Every answer quoted word for word, the competitor gap sheet, and your 5-minute fix checklist</li>
-          <li>Delivered in 24 hours</li>
+          <li data-assistant-list><strong>Every competitor AI names.</strong> How often, and how often first, across 8+ AI assistants: ChatGPT, Claude, Gemini, Perplexity, Grok, Copilot, Meta AI, Google AI Mode.</li>
+          <li><strong>Why they win.</strong> Every site the AI trusted — Google, Apple, Bing, Yelp, Facebook, plus every site it cited — and whether you're on it.</li>
+          <li><strong>Not a fluke.</strong> Every question asked 3 times: &ldquo;named in 2 of 3 tries,&rdquo; because AI answers change.</li>
+          <li><strong>One number to watch.</strong> Your 0–100 AI Found Score, with the full breakdown.</li>
+          <li><strong>What to fix first.</strong> Your 5-minute fix checklist, the competitor gap sheet, and every answer quoted word for word.</li>
         </ul>
-        <p class="tier-promise">Guarantee: if the audit doesn't show you something you didn't know, it's free.</p>
-        <a class="btn" data-tier="xray" href="#">Get the full audit</a>
+        <p class="tier-when">Delivered in 24 hours.</p>
+        <p class="tier-guarantee">If the audit doesn't show you something you didn't know, it's free.</p>
+        <a class="btn" data-offer="full_audit" href="#request">Get the full audit</a>
       </div>
       <div class="tier">
         <span class="tier-tag soon">Done for you</span>
         <h3>Be the Answer</h3>
         <div class="price">$499 <small>one-time</small></div>
+        <p class="tier-tagline">We fix it. You run your business.</p>
+        <p class="tier-guarantee">The Answer Guarantee: everything we can reach is accurate in 30 days, or we keep working free until it is.</p>
         <ul class="tier-list">
-          <li>Everything in the Full Audit</li>
-          <li>Every correction submitted everywhere it's possible without your password</li>
-          <li>The 5-minute checklist for the two items needing you — we verify they're done</li>
-          <li>Google profile rewrite, AI citation kit, review QR cards</li>
-          <li><strong>12 months of on-demand full re-scans</strong> (up to one a month) — check our work anytime</li>
-          <li>Done in 14 days, with before-and-after proof</li>
+          <li><strong>You don't lift a finger.</strong> We submit every correction we can reach. No passwords needed.</li>
+          <li><strong>Two things need you, and they're quick.</strong> We hand you the 5-minute checklist and check they're done.</li>
+          <li><strong>We make AI's job easy.</strong> Google profile rewrite, AI citation kit, review QR cards.</li>
+          <li><strong>Proof, not promises.</strong> Done in 14 days, with before-and-after proof.</li>
+          <li><strong>Check our work all year.</strong> 12 months of on-demand full re-scans, up to one a month.</li>
+          <li>Everything in the Full Audit.</li>
         </ul>
-        <p class="tier-promise">The Answer Guarantee: everything we can reach is accurate in 30 days, or we keep working free until it is.</p>
-        <a class="btn-secondary" href="#request">Be the answer</a>
+        <a class="btn-secondary" data-offer="be_the_answer" href="#request">Have it handled</a>
       </div>
     </div>
     <p class="ladder-note">AI Defense ($99/mo, one trade per town) — ongoing threat monitoring, drift repair, and a monthly Threat Report — is offered to customers after delivery. Never sold cold.</p>
@@ -212,10 +223,10 @@
   <div class="wrap">
     <h2>What you can count on</h2>
     <div class="cards four">
-      <div class="card"><h3>Nothing guessed</h3><p>Every number comes from the scan. Nothing guessed, nothing &ldquo;typical.&rdquo;</p></div>
-      <div class="card"><h3>Good news is free</h3><p>If AI named you and your listings agree, the report says so — and it's free.</p></div>
-      <div class="card"><h3>Public data only</h3><p>We never touch your accounts. Public data only.</p></div>
-      <div class="card"><h3>Proof first</h3><p>We don't sell you a monthly plan before we've proven anything.</p></div>
+      <div class="card"><h3>Check every word.</h3><p>Every answer is quoted exactly, with the question and the date. Type it in yourself.</p></div>
+      <div class="card"><h3>Every number is real.</h3><p>Every number comes from your scan. Nothing guessed, nothing &ldquo;typical.&rdquo;</p></div>
+      <div class="card"><h3>Good news is free.</h3><p>If AI names you and your listings agree, the report says so — and it costs nothing.</p></div>
+      <div class="card"><h3>Proof before any plan.</h3><p>We work from public data only, and we don't offer a monthly plan until we've shown you real threats.</p></div>
     </div>
   </div>
 </section>
@@ -492,7 +503,9 @@
   function markConverted() {
     if (converted) return;
     converted = true;
-    push({ event: 'report_request', trade: biz.trade });
+    var offer = '';
+    try { offer = sessionStorage.getItem('afs_offer') || ''; } catch (err) {}
+    push({ event: 'report_request', trade: biz.trade, offer: offer });
   }
 
   // Proof line under the hero: shown only once the Worker has enough real reports (/api/proof).

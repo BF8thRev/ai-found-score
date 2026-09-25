@@ -49,8 +49,11 @@ test('only the plans on the ladder are offered', () => {
     assert.ok(!/Full Year|\$69\b|\$199\b|full listing build/i.test(text), `${f} mentions a plan that is off sale`);
   }
   const index = read('index.html');
-  assert.ok(index.includes('data-tier="xray"'));
-  assert.ok(!/data-tier="(snapshot|before_after|full_year|listing_fix)"/.test(index));
+  // Checkout isn't wired on the homepage: the ladder's buttons are tracked offers that start the free report.
+  for (const o of ['free_snapshot', 'full_audit', 'be_the_answer']) {
+    assert.match(index, new RegExp(`data-offer="${o}" href="#request"`));
+  }
+  assert.ok(!/data-tier=/.test(index), 'homepage buttons should not start a checkout');
   for (const f of PAGES) {
     const text = read(f);
     assert.ok(!/\$29\b|\$59\b|Monthly monitoring/i.test(text), `${f} mentions a retired plan`);
