@@ -73,7 +73,7 @@ test('no banned words in page copy', () => {
 
 test('hero links the real report; the sample stays reachable from the nav', () => {
   const index = read('index.html');
-  assert.match(index, /class="hero-alt"><a href="\/report\/mega-wash-and-dry">See a real report/);
+  assert.match(index, /class="sc-link"><a href="\/report\/mega-wash-and-dry">See what you get/);
   assert.match(index, /href="\/report\/sample-001">Sample report</);
   assert.ok(!/lost-band|stopped Googling/.test(index), 'the made-up lost-call strip and the "stopped Googling" claim are gone');
 });

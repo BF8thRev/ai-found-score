@@ -104,6 +104,7 @@ export function renderShowcase(p) {
   </div>
   <p class="sc-q" data-sc-q>${escapeHtml(a.question)}</p>
   <p class="sc-a" data-sc-a>${answerHtml(a)}</p>
+  <p class="sc-link"><a href="/report/mega-wash-and-dry">See what you get: a real full report &rarr;</a></p>
 </figure>
 <p class="sc-caption">If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
 <p class="sc-note">Businesses shown are named by AI, not by us. <a href="mailto:hello@aifoundscore.com?subject=Remove%20from%20homepage%20answer">Ask us to remove one</a>.</p>

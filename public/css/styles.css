@@ -543,7 +543,11 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .hero-grid .proof-line { margin-left: 0; }
 .real-answer { min-width: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.hero-micro { margin: 12px 0 0; font-size: 14.5px; color: var(--muted); }
+.hero-cta { display: inline-flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.hero-micro { margin: 0; font-size: 14px; color: var(--muted); text-align: center; letter-spacing: .01em; }
+.sc-link { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14.5px; }
+.sc-link a { color: var(--blue); font-weight: 600; text-decoration: none; }
+.sc-link a:hover { text-decoration: underline; }
 /* Real AI answer card: plain and neutral, no assistant look-alike. */
 .sc-card {
   margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px 20px;
@@ -573,6 +577,7 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
   .hero { padding-top: 56px; }
   .hero-grid .hero-copy h1 { font-size: 31px; }
   .hero-grid .lede { font-size: 17.5px; }
+  .hero-cta { display: flex; }
   .hero-grid .btn.big { width: 100%; text-align: center; padding: 16px 20px; }
   .sc-q, .sc-a { font-size: 15px; }
   .sc-card { padding: 16px; }
@@ -622,3 +627,48 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .tiers.ladder .tier-list { flex: 1 0 auto; }
 @media (max-width: 860px) { .tiers.ladder { gap: 28px; } .tiers.ladder .tier-tagline { min-height: 0; } }
 .lost-band + .stats-band { padding-top: 56px; }
+
+/* ---------- request form v5: trade tiles, website, tidy layout ---------- */
+.request { align-items: start; }
+.request-intro { padding-top: 8px; }
+.request .intro { font-size: 18px; line-height: 1.55; }
+.request ul li { padding: 5px 0; font-size: 15.5px; }
+.request form { gap: 18px 14px; }
+.request label { font-size: 14.5px; color: #fff; }
+.request input::placeholder { color: #8A96A8; }
+.request form > .full { grid-column: 1 / -1; }
+.trade-pick { border: 0; margin: 0; padding: 0; min-width: 0; }
+.trade-pick legend { font-size: 14.5px; font-weight: 600; color: #fff; padding: 0; margin: 0 0 8px; }
+.trade-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 1040px) { .trade-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.trade-grid label { display: block; position: relative; cursor: pointer; }
+.trade-grid input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.trade-grid span {
+  display: flex; align-items: center; justify-content: center; text-align: center; min-height: 48px; padding: 8px 6px;
+  border-radius: 10px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .06);
+  color: #fff; font-size: 14px; font-weight: 600; line-height: 1.2; transition: background .12s, border-color .12s;
+}
+.trade-grid label:hover span { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .4); }
+.trade-grid input:checked + span { background: #fff; color: var(--navy); border-color: #7FD3A3; box-shadow: 0 0 0 2px #7FD3A3; }
+.trade-grid input:checked + span::before { content: "✓"; color: var(--green); font-weight: 800; margin-right: 6px; }
+.trade-grid input:focus-visible + span { outline: 3px solid rgba(31, 111, 235, .6); outline-offset: 2px; }
+.site-field { display: grid; gap: 8px; }
+.request label.check { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 14px; color: #C8D6E8; cursor: pointer; }
+.request label.check input { width: 18px; height: 18px; padding: 0; margin: 0; accent-color: #7FD3A3; }
+.request input:disabled { background: rgba(255, 255, 255, .55); }
+.request .form-note { text-align: center; }
+.request .form-note a { color: #DCE6F4; }
+@media (max-width: 860px) {
+  .request form > .full { grid-column: auto; }
+}
+.field-found { margin: -6px 0 0; font-size: 14.5px; font-weight: 600; color: #7FD3A3; }
+.field-found[hidden], #town-field[hidden], .trade-pick[hidden] { display: none; }
+.link-btn { background: none; border: 0; padding: 0; margin-left: 6px; font: inherit; font-weight: 500; color: #C8D6E8; text-decoration: underline; cursor: pointer; }
+.site-more summary { cursor: pointer; font-size: 14.5px; font-weight: 600; color: #C8D6E8; list-style: none; }
+.site-more summary::-webkit-details-marker { display: none; }
+.site-more summary::before { content: "+ "; }
+.site-more[open] summary::before { content: "\2212  "; }
+.site-more input { margin-top: 8px; }
+/* Ladder taglines: quiet on the side plans, brand blue on the featured one, so prices lead. */
+.tiers.ladder .tier-tagline { font-weight: 600; color: var(--muted); }
+.tiers.ladder .tier.featured .tier-tagline { color: var(--blue); font-weight: 700; }

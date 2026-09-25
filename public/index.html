@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/styles.css?v=5">
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Organization", "name": "AI Found Score", "url": "https://aifoundscore.com/", "logo": "https://aifoundscore.com/img/logo.svg", "email": "hello@aifoundscore.com", "address": {"@type": "PostalAddress", "streetAddress": "120 Terminal Drive", "addressLocality": "Plainview", "addressRegion": "NY", "postalCode": "11803", "addressCountry": "US"}, "description": "Free AI visibility and listing consistency reports for local businesses."}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "name": "AI Found Score", "url": "https://aifoundscore.com/"}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Service", "name": "AI Found Score report", "serviceType": "AI visibility and business listing audit", "provider": {"@type": "Organization", "name": "AI Found Score"}, "areaServed": {"@type": "Country", "name": "US"}, "description": "Asks the AI assistants local customers use the questions they ask, and shows every answer word for word: who got named, who got named first, and which websites the AI cited. Each report lists exactly which assistants were asked and when.", "offers": [{"@type": "Offer", "name": "Snapshot", "price": "0", "priceCurrency": "USD"}, {"@type": "Offer", "name": "AI Visibility Audit", "price": "99", "priceCurrency": "USD", "description": "Every major AI assistant, every question asked 3 times, what AI gets wrong about you and what to fix first."}, {"@type": "Offer", "name": "Be the Answer", "price": "499", "priceCurrency": "USD", "description": "The AI Visibility Audit, then a new scan every month for 12 months with what changed and what to fix next."}]}</script>
@@ -59,11 +59,10 @@
       <div class="hero-copy">
         <h1>Your customers are asking AI now. <span class="h1-accent">Is it sending your calls to someone else?</span></h1>
         <p class="lede">Do you know what it tells them? We ask AI your customers&rsquo; questions and show you every word.</p>
-        <div class="cta-row">
+        <div class="hero-cta">
           <a class="btn big" href="#request">Show me who&rsquo;s getting my calls</a>
+          <p class="hero-micro">Free &middot; No email to start &middot; No sales call</p>
         </div>
-        <p class="hero-micro">Free. No email to start. No sales call.</p>
-        <p class="hero-alt"><a href="/report/mega-wash-and-dry">See a real report &rarr;</a></p>
         <p class="proof-line" id="proof-line" hidden></p>
       </div>
       <!-- Real AI answer card. The Worker replaces this with a stored answer for the visitor's town and
@@ -75,6 +74,7 @@
           <div class="sc-head"><figcaption class="sc-label">Real AI answer &middot; asked Sep 24, 2026</figcaption></div>
           <p class="sc-q">What's the best laundromat in North Babylon, NY?</p>
           <p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p>
+          <p class="sc-link"><a href="/report/mega-wash-and-dry">See what you get: the full Mega Wash &amp; Dry report &rarr;</a></p>
         </figure>
         <p class="sc-caption">If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
       </div>
@@ -278,41 +278,41 @@
 <section class="section" id="request">
   <div class="wrap">
     <div class="request">
-      <div>
+      <div class="request-intro">
         <h2>Check your business</h2>
-        <p class="intro">Do you know what AI tells your customers? Enter your business and we'll ask AI live. You'll see every word.</p>
+        <p class="intro">Tell us who you are. We&rsquo;ll ask AI one of your customers&rsquo; questions live and show you every word it says.</p>
         <ul>
-          <li>No sign-up, no card</li>
+          <li>Free. No sign-up, no card</li>
+          <li>No email to start</li>
           <li>Public data only, no logins</li>
-          <li>Email only if you want the full report</li>
         </ul>
       </div>
       <div class="request-col" id="request-col">
       <form id="request-form" method="post" action="/api/request" novalidate>
         <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="Harborview Plumbing &amp; Heating"></label>
-        <label class="full">What you do
-          <select name="trade" required>
-            <option value="">Choose one</option>
-            <option value="plumbing">Plumbing</option>
-            <option value="hvac">Heating &amp; cooling (HVAC)</option>
-            <option value="electrical">Electrical</option>
-            <option value="roofing">Roofing</option>
-            <option value="landscaping">Landscaping &amp; lawn care</option>
-            <option value="cleaning">House cleaning</option>
-            <option value="auto_repair">Auto repair</option>
-            <option value="laundromat">Laundromat</option>
-          </select>
-        </label>
-        <label>Town <input name="town" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
-        <label>ZIP <input name="zip" type="text" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
-        <p class="form-note geo-hint" data-geo-hint hidden>We guessed <span data-geo-town>Massapequa</span>, <span data-geo-state>NY</span> from your connection, just for the examples. Type your own town and ZIP (another state? type it as &ldquo;Town, ST&rdquo;).</p>
+        <label class="full">Website <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="yourbusiness.com or your Facebook page"></label>
+        <label class="full">ZIP code <input name="zip" type="text" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
+        <p class="full field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
+        <label class="full" id="town-field" hidden>Town <input name="town" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
         <input name="state" type="hidden" value="NY" data-geo-value="state">
-        <label><span>Website <small class="opt">(optional)</small></span> <input name="website" type="text" maxlength="160" autocomplete="url" placeholder="yourbusiness.com"></label>
-        <label><span>Phone <small class="opt">(optional)</small></span> <input name="phone" type="tel" maxlength="30" autocomplete="tel" placeholder="(516) 555-0142"></label>
+        <p class="full field-found" id="trade-found" hidden><span id="trade-name"></span> <button type="button" class="link-btn" id="trade-change">change</button></p>
+        <fieldset class="full trade-pick" id="trade-pick" hidden>
+          <legend>What do you do?</legend>
+          <div class="trade-grid">
+            <label><input type="radio" name="trade" value="plumbing" required><span>Plumbing</span></label>
+            <label><input type="radio" name="trade" value="hvac"><span>Heating &amp; AC</span></label>
+            <label><input type="radio" name="trade" value="electrical"><span>Electrical</span></label>
+            <label><input type="radio" name="trade" value="roofing"><span>Roofing</span></label>
+            <label><input type="radio" name="trade" value="landscaping"><span>Landscaping</span></label>
+            <label><input type="radio" name="trade" value="cleaning"><span>House cleaning</span></label>
+            <label><input type="radio" name="trade" value="auto_repair"><span>Auto repair</span></label>
+            <label><input type="radio" name="trade" value="laundromat"><span>Laundromat</span></label>
+          </div>
+        </fieldset>
         <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
         <button class="btn" type="submit">Show me who&rsquo;s getting my calls</button>
         <p class="status" id="request-status" role="status"></p>
-        <p class="form-note">Free. No email to start. No sales call. We only read public information about your business. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
+        <p class="form-note">No sales call. We only read public information about your business. <a href="/privacy">Privacy</a></p>
       </form>
         <!-- Turnstile bot check (invisible unless Cloudflare needs a click). The Worker fills in the site key;
              empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
@@ -639,9 +639,21 @@
     // "Stamford, CT" -> town + state. The hidden state is only a guess from the visitor's connection.
     var ts = /^(.+?)\s*,\s*([A-Za-z]{2})$/.exec(data.town || '');
     if (ts && STATES.indexOf(ts[2].toUpperCase()) >= 0) { data.town = ts[1]; data.state = ts[2].toUpperCase(); }
-    if (!data.business_name || !data.trade || !data.town || !/^\d{5}$/.test(data.zip)) {
-      show(status, 'error', 'Please fill in your business name, what you do, your town, and a 5-digit ZIP.'); return;
+    // The town comes from the ZIP; if that lookup is still running, finish it first.
+    if (!data.town && /^\d{5}$/.test(data.zip)) {
+      lookupZip();
+      if (zipPending) { zipPending.then(function () { form.requestSubmit(); }); return; }
     }
+    var missing = [];
+    if (!data.business_name) missing.push('your business name');
+    if (!/^\S+\.\S+$/.test(data.website || '')) missing.push('your website (or your Facebook or Yelp page)');
+    if (!/^\d{5}$/.test(data.zip)) missing.push('a 5-digit ZIP');
+    else if (!data.town) { missing.push('your town'); showTownField(); }
+    if (!data.trade) { missing.push('what you do'); showTradeGrid(); }
+    if (missing.length) {
+      show(status, 'error', 'Please add ' + missing.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'); return;
+    }
+    status.className = 'status'; status.textContent = '';
     biz = data;
     var btn = form.querySelector('button'); btn.disabled = true; btn.textContent = 'One moment…';
 
@@ -703,18 +715,96 @@
     });
   });
 
-  // Trade from the link (?trade=plumbing) or the hero card's picker pre-fills the form, until the
-  // owner picks one themselves.
-  var tradeSelect = form.elements.trade;
-  var tradeTouched = false;
-  tradeSelect.addEventListener('change', function () { tradeTouched = true; });
+  // ---- Fewer fields: the town comes from the ZIP, the trade from the business name ----
+  // Both show as "Massapequa, NY · change" / "Plumbing · change"; the full inputs appear only when
+  // we can't tell or the owner taps change.
+  var zipFound = el('zip-found'), townField = el('town-field');
+  var tradeFound = el('trade-found'), tradePick = el('trade-pick');
+  var tradeGrid = form.querySelector('.trade-grid');
+  var TRADE_LABEL = { plumbing: 'Plumbing', hvac: 'Heating & AC', electrical: 'Electrical', roofing: 'Roofing', landscaping: 'Landscaping', cleaning: 'House cleaning', auto_repair: 'Auto repair', laundromat: 'Laundromat' };
+  // First match wins (plumbing before heating: "Plumbing & Heating" is a plumber), on the name in lower case.
+  var TRADE_WORDS = [
+    ['laundromat', /laund|wash (?:&|and) (?:dry|fold)|washateria|coin wash|wash ?house/],
+    ['auto_repair', /auto|motor|mechanic|collision|tire|transmission|brake|car care|garage|muffler|lube/],
+    ['plumbing', /plumb|drain|sewer|rooter|pipe/],
+    ['hvac', /hvac|heating|cooling|air cond|\bair\b|furnace|climate|comfort/],
+    ['electrical', /electric|wiring|\bamp/],
+    ['roofing', /roof|gutter|siding/],
+    ['landscaping', /landscap|lawn|garden|tree|yard|mow|irrigation|sprinkler|hardscap/],
+    ['cleaning', /clean|maid|janitor|housekeep|sparkl|shine/],
+  ];
+  function guessTrade(name) {
+    var n = String(name || '').toLowerCase();
+    for (var i = 0; i < TRADE_WORDS.length; i++) if (TRADE_WORDS[i][1].test(n)) return TRADE_WORDS[i][0];
+    return '';
+  }
+  var tradeSource = '';   // '' | 'preset' (link / hero card) | 'guess' | 'picked'
+  var gridOpen = false;
+  function currentTrade() { var r = tradeGrid.querySelector('input:checked'); return r ? r.value : ''; }
+  function setTrade(v, source) {
+    var r = tradeGrid.querySelector('input[value="' + String(v).replace(/[^a-z_]/g, '') + '"]');
+    if (!r) return;
+    r.checked = true;
+    tradeSource = source;
+    paintTrade();
+  }
+  function paintTrade() {
+    var t = currentTrade();
+    var nameLong = String(form.elements.business_name.value || '').trim().length >= 3;
+    tradeFound.hidden = gridOpen || !t;
+    tradePick.hidden = !gridOpen && (!!t || !nameLong);
+    if (t) el('trade-name').textContent = 'Trade: ' + TRADE_LABEL[t] + ' ✓';
+  }
+  function showTradeGrid() { gridOpen = true; paintTrade(); }
+  el('trade-change').addEventListener('click', function () { showTradeGrid(); var r = tradeGrid.querySelector('input:checked') || tradeGrid.querySelector('input'); r.focus(); });
+  tradeGrid.addEventListener('change', function () { tradeSource = 'picked'; });
+  form.elements.business_name.addEventListener('input', function () {
+    if (tradeSource !== 'picked') {
+      var g = guessTrade(this.value);
+      if (g) setTrade(g, 'guess');
+      else if (tradeSource === 'guess') { var r = tradeGrid.querySelector('input:checked'); if (r) r.checked = false; tradeSource = ''; }
+    }
+    paintTrade();
+  });
   var TRADE_ALIASES = { plumber: 'plumbing', roofer: 'roofing', electrician: 'electrical', landscaper: 'landscaping', cleaner: 'cleaning', mechanic: 'auto_repair' };
+  // Trade from the link (?trade=plumbing) or the hero card's picker, until the name says otherwise.
   function presetTrade(v) {
     v = String(v || '').toLowerCase();
     v = TRADE_ALIASES[v] || v;
-    if (tradeTouched || !v) return;
-    for (var i = 0; i < tradeSelect.options.length; i++) if (tradeSelect.options[i].value === v) { tradeSelect.value = v; return; }
+    if (!v || tradeSource === 'picked' || tradeSource === 'guess') return;
+    setTrade(v, 'preset');
   }
+
+  var zipInput = form.elements.zip, townInput = form.elements.town, stateInput = form.elements.state;
+  var zipPending = null, zipAsked = '';
+  function showTownField() { zipFound.hidden = true; townField.hidden = false; }
+  function lookupZip() {
+    var z = String(zipInput.value || '').trim();
+    if (!/^\d{5}$/.test(z) || z === zipAsked) return;
+    zipAsked = z;
+    townInput.value = '';
+    var p = fetch('/api/zip?zip=' + z).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (j) {
+      if (zipAsked !== z) return;
+      var place = j && j.ok && j.places && j.places[0];
+      if (place) {
+        townInput.value = place.town;
+        stateInput.value = place.state;
+        el('zip-town').textContent = place.town + ', ' + place.state + ' ✓';
+        zipFound.hidden = false;
+        townField.hidden = true;
+      } else {
+        showTownField();
+      }
+    });
+    zipPending = p.then(function () { if (zipPending === p2) zipPending = null; });
+    var p2 = zipPending;
+  }
+  zipInput.addEventListener('input', function () {
+    this.value = this.value.replace(/\D/g, '').slice(0, 5);
+    if (this.value.length === 5) lookupZip();
+    else { zipAsked = ''; zipFound.hidden = true; }
+  });
+  el('zip-change').addEventListener('click', function () { showTownField(); townInput.focus(); townInput.select(); });
 
   // Hero card (src/lib/showcase.js): the picker swaps in that trade's stored answer for the same town.
   (function () {
@@ -723,7 +813,7 @@
     if (!pick || !dataEl) { presetTrade(new URLSearchParams(location.search).get('trade')); return; }
     var sc;
     try { sc = JSON.parse(dataEl.textContent); } catch (err) { return; }
-    presetTrade(pick.value);
+    presetTrade(new URLSearchParams(location.search).get('trade'));
     pick.addEventListener('change', function () {
       var a = sc && sc.answers && sc.answers[pick.value];
       if (!a) return;

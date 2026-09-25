@@ -110,7 +110,6 @@ test('static index.html reads correctly for the default town', () => {
   assert.match(INDEX, /name="town"[^>]*placeholder="Massapequa"[^>]*data-geo-placeholder="town"/);
   assert.match(INDEX, /name="zip"[^>]*placeholder="11758"[^>]*data-geo-placeholder="zip"/);
   assert.match(INDEX, /name="state" type="hidden" value="NY" data-geo-value="state"/);
-  assert.match(INDEX, /data-geo-hint hidden/);
 });
 
 // ---- HTMLRewriter (Miniflare) ----------------------------------------------------------------
@@ -164,7 +163,6 @@ test('HTMLRewriter: US request shows the visitor\'s town everywhere', async () =
   assert.match(html, /name="town"[^>]*placeholder="Hicksville"/);
   assert.match(html, /name="zip"[^>]*placeholder="11801"/);
   assert.match(html, /name="state" type="hidden" value="NY"/);
-  assert.match(html, /<p class="form-note geo-hint" data-geo-hint>We guessed <span data-geo-town>Hicksville<\/span>/);
   // The hero's sample card quotes the (fictional, Massapequa) sample report verbatim: it stays as is.
   const page = html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<div class="real-answer" data-sample-quote>[\s\S]*?<\/figure>/, '');
   assert.ok(!/Massapequa|11758/.test(page), 'default town left in the page');
@@ -177,12 +175,11 @@ test('HTMLRewriter: another state sets the hidden state and the town', async () 
   assert.match(html, /Who can replace a water heater in Stamford CT\?/);
 });
 
-test('HTMLRewriter: non-US request gets the default page, hint stays hidden', async () => {
+test('HTMLRewriter: non-US request gets the default page', async () => {
   const html = await render({ country: 'GB', city: 'London', regionCode: 'ENG', postalCode: 'SW1A' });
   assert.ok(!html.includes('London'));
   assert.match(html, /a plumber in <span data-geo-town>Massapequa<\/span>, <span data-geo-state>NY<\/span>/);
   assert.match(html, /What&#39;s the best plumber in Massapequa, NY\?/);
-  assert.match(html, /data-geo-hint hidden/);
   assert.match(html, /name="state" type="hidden" value="NY"/);
 });
 
@@ -191,7 +188,6 @@ test('HTMLRewriter: a malicious city string never reaches the page', async () =>
   const html = await render({ ...US, city: evil, postalCode: '"><b>' });
   assert.ok(!html.includes('alert(1)'));
   assert.match(html, /placeholder="Massapequa"/);
-  assert.match(html, /data-geo-hint hidden/);
   // And a clean-but-odd city with an apostrophe is escaped in the attribute and the list.
   const odd = await render({ ...US, city: "Coeur d'Alene", regionCode: 'ID', postalCode: '83814' });
   assert.match(odd, /What&#39;s the best plumber in Coeur d&#39;Alene, ID\?/);
