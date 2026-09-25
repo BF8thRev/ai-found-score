@@ -207,14 +207,14 @@ function blurred(text) {
   return `<p class="locked-text" aria-hidden="true">${escapeHtml(text)}</p><p class="locked-note">🔒 In the full report</p>`;
 }
 
-// The one paid tier on sale: the $49 AI Visibility X-Ray (tier key `xray`). Only rendered when
+// The one paid tier on sale: the $49 AI Visibility Audit (tier key `xray`, kept from its old X-Ray name). Only rendered when
 // tierOn('xray') and the report has at least MIN_FIX_ITEMS fixes (the refund promise).
 const XRAY = {
-  name: 'AI Visibility X-Ray',
+  name: 'AI Visibility Audit',
   price: '$49 one-time',
   what: 'Everything in this report unlocked: every fix step by step with copy-paste text, the competitor gap sheet, and your fix checklist.',
   promise: 'If we can’t show you 3 things to fix, it’s free.',
-  button: 'Get the X-Ray — $49',
+  button: 'Get my audit — $49',
 };
 
 function unlockPanel() {

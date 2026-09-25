@@ -52,7 +52,8 @@ function timingSafeEqual(a, b) {
  */
 export const TIER_BY_CENTS = Object.freeze({
   2900: 'snapshot',       // retired: $29 Fix steps
-  4900: 'xray',           // $49 AI Visibility X-Ray (one-time)
+  4900: 'xray',           // $49 AI Visibility Audit (one-time; tier key kept from the X-Ray)
+  6800: 'xray',           // $49 Audit + $19 30-day re-check add-on (the re-check is done by hand; see /admin amount)
   5900: 'before_after',   // retired: $59 Fix it and re-check
   6900: 'full_year',      // retired: $69 Full Year
   19900: 'listing_fix',   // retired: $199 Full listing build

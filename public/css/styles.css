@@ -672,3 +672,4 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 /* Ladder taglines: quiet on the side plans, brand blue on the featured one, so prices lead. */
 .tiers.ladder .tier-tagline { font-weight: 600; color: var(--muted); }
 .tiers.ladder .tier.featured .tier-tagline { color: var(--blue); font-weight: 700; }
+.tiers.ladder .tier-anchor { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: var(--green); }

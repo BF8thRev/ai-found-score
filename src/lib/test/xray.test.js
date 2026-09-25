@@ -15,6 +15,7 @@ test('TIER_BY_CENTS: 4900 is the X-Ray; retired tiers still record', () => {
   assert.equal(TIER_BY_CENTS[2900], 'snapshot');
   assert.equal(TIER_BY_CENTS[5900], 'before_after');
   assert.equal(tierForSession({ amount_total: 4900 }), 'xray');
+  assert.equal(tierForSession({ amount_total: 6800 }), 'xray', '$49 audit + $19 re-check add-on');
   assert.equal(tierForSession({ amount_total: 4900, metadata: { tier: 'overhaul' } }), 'overhaul');
   assert.equal(tierForSession({ amount_total: 1234 }), 'unknown');
 });
