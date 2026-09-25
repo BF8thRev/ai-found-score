@@ -10,7 +10,7 @@
 // Pure: no I/O. addGeoHandlers() takes the HTMLRewriter instance to extend, so the Worker and
 // the tests (Miniflare) share it.
 
-import { buildQuestions } from '../../scanner/questions.js';
+import { freeQuestions } from '../../scanner/questions.js';
 import { US_STATES } from '../../scanner/config.js';
 
 /** The example the static HTML is written for (Long Island, where the first batch is). */
@@ -111,7 +111,7 @@ export function nearbyTown(town, state) {
 /** The homepage's example questions for this geo: the scanner's own templates, same as /api/questions. */
 export function exampleQuestions(geo, trade = EXAMPLE_TRADE) {
   const g = geo || DEFAULT_GEO;
-  return buildQuestions({ trade, town: g.town, state: g.state, zip: g.zip, nearbyTown: nearbyTown(g.town, g.state) });
+  return freeQuestions({ trade, town: g.town, state: g.state, zip: g.zip, nearbyTown: nearbyTown(g.town, g.state) });
 }
 
 /** Short stable tag for the ETag ('' for the default page), so a 304 never crosses towns. */
@@ -138,7 +138,7 @@ function escapeHtml(s) {
  *   <span data-geo-zip>11758</span>              ZIP (element removed if we have none)
  *   <input data-geo-placeholder="town|zip">      placeholder = town / ZIP (ZIP: "5 digits" if none)
  *   <input data-geo-value="state">               value = state code (the form's hidden state)
- *   <ol data-geo-questions="plumbing">           the five example questions, as <li>s
+ *   <ol data-geo-questions="plumbing">           the three example questions, as <li>s
  *   <p data-geo-hint hidden>                     shown only when the location came from the visitor
  * Text goes in as text (escaped by HTMLRewriter); the question list is escaped here.
  */

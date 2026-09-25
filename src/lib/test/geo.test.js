@@ -9,7 +9,7 @@ import {
   DEFAULT_GEO, cleanTown, cleanZip, cleanState, geoFromCf, devGeoOverride, geoForRequest,
   nearbyTown, exampleQuestions, geoTag,
 } from '../geo.js';
-import { buildQuestions } from '../../../scanner/questions.js';
+import { buildQuestions, FREE_QUESTION_COUNT } from '../../../scanner/questions.js';
 
 const INDEX = readFileSync(new URL('../../../public/index.html', import.meta.url), 'utf8');
 const US = { country: 'US', city: 'Hicksville', region: 'New York', regionCode: 'NY', postalCode: '11801', latitude: '40.76', longitude: '-73.52', timezone: 'America/New_York' };
@@ -80,12 +80,13 @@ test('geoForRequest: request.cf, never client headers; bots get the default', ()
   assert.equal(geoForRequest(req('http://localhost:8787/?geo=Deer Park,NY', { cf: US })).town, 'Deer Park');
 });
 
-test('example questions come from the scanner templates; neighbouring town on Long Island', () => {
+test('example questions are the free scan\'s own questions; neighbouring town on Long Island', () => {
   assert.equal(nearbyTown('North Babylon', 'NY'), 'Deer Park');
   assert.equal(nearbyTown('North Babylon', 'NJ'), '');
   assert.equal(nearbyTown('Albany', 'NY'), '');
   const g = geoFromCf(US);
-  assert.deepEqual(exampleQuestions(g), buildQuestions({ trade: 'plumbing', town: 'Hicksville', state: 'NY', zip: '11801', nearbyTown: 'Plainview' }));
+  assert.deepEqual(exampleQuestions(g), buildQuestions({ trade: 'plumbing', town: 'Hicksville', state: 'NY', zip: '11801', nearbyTown: 'Plainview' }).slice(0, FREE_QUESTION_COUNT));
+  assert.equal(exampleQuestions(g).length, 3);
   const tx = geoFromCf({ country: 'US', city: 'Austin', regionCode: 'TX', postalCode: '78701' });
   assert.equal(exampleQuestions(tx)[0].text, "What's the best plumber in Austin, TX?");
   assert.equal(exampleQuestions(tx)[1].text, 'I need an emergency plumber near Austin tonight');
@@ -159,19 +160,21 @@ test('HTMLRewriter: US request shows the visitor\'s town everywhere', async () =
   assert.equal(list, exampleQuestions(geoFromCf(US)).map((q) => `<li>${q.text.replace(/'/g, '&#39;')}</li>`).join(''));
   assert.match(list, /What&#39;s the best plumber in Hicksville, NY\?/);
   assert.match(list, /near Plainview tonight/);
-  assert.match(list, /Affordable plumber near 11801/);
+  assert.ok(!/Affordable plumber/.test(list), 'the free scan asks three questions, not the price one');
   assert.match(html, /name="town"[^>]*placeholder="Hicksville"/);
   assert.match(html, /name="zip"[^>]*placeholder="11801"/);
   assert.match(html, /name="state" type="hidden" value="NY"/);
   assert.match(html, /<p class="form-note geo-hint" data-geo-hint>We guessed <span data-geo-town>Hicksville<\/span>/);
-  assert.ok(!/Massapequa|11758/.test(html.replace(/<script[\s\S]*?<\/script>/g, '')), 'default town left in the page');
+  // The hero's sample card quotes the (fictional, Massapequa) sample report verbatim: it stays as is.
+  const page = html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<div class="real-answer" data-sample-quote>[\s\S]*?<\/figure>/, '');
+  assert.ok(!/Massapequa|11758/.test(page), 'default town left in the page');
 });
 
-test('HTMLRewriter: another state sets the hidden state; no ZIP → town-based question', async () => {
+test('HTMLRewriter: another state sets the hidden state and the town', async () => {
   const html = await render({ country: 'US', city: 'Stamford', regionCode: 'CT', postalCode: '' });
   assert.match(html, /name="state" type="hidden" value="CT"/);
   assert.match(html, /name="zip"[^>]*placeholder="5 digits"/);
-  assert.match(html, /Affordable plumber near Stamford CT/);
+  assert.match(html, /Who can replace a water heater in Stamford CT\?/);
 });
 
 test('HTMLRewriter: non-US request gets the default page, hint stays hidden', async () => {
