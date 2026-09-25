@@ -674,3 +674,15 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .tiers.ladder .tier-tagline { font-weight: 600; color: var(--muted); }
 .tiers.ladder .tier.featured .tier-tagline { color: var(--blue); font-weight: 700; }
 .tiers.ladder .tier-anchor { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: var(--green); }
+/* Ladder v6: grouped $499 contents, free-tier upsell line, loss line. */
+.tiers.ladder .tier-group { margin: 14px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--navy); }
+.tiers.ladder .tier-group + .tier-list { margin-top: 4px; margin-bottom: 0; }
+.tiers.ladder .tier-list + .tier-promise { margin-top: 14px; }
+.tiers.ladder .tier-more { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--wash-2); font-size: 14.5px; font-weight: 600; color: var(--navy); line-height: 1.4; }
+.lost-note { font-size: clamp(18px, 2vw, 21px); font-weight: 700; color: var(--navy); line-height: 1.45; max-width: 760px; margin: -6px 0 26px; }
+.tiers.ladder .tier-stack { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); font-style: italic; }
+/* Every ladder paragraph and list takes its natural height; the button's margin-top:auto pins it to the bottom. */
+.tiers.ladder .tier > p, .tiers.ladder .tier > .tier-list { flex: 0 0 auto; }
+.tiers.ladder .tier-more { margin-top: 14px; }
+.tiers.ladder .tier-promise + a { margin-top: auto; }
+.tiers.ladder .tier-promise { margin-bottom: 20px; }
