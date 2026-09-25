@@ -170,6 +170,60 @@ function runSection(d, { watch = [], engineIds, flash, activeIds = ACTIVE_ENGINE
 </section>`;
 }
 
+// Free-report requests (src/lib/auto-scan.js): queued ones wait for "Run now" (AUTO_SCAN off, a cap
+// was hit, or the start failed); failed ones need a person. The owner's link shows "in progress" meanwhile.
+function requestsSection(d, errors, { flash = '' } = {}) {
+  const rows = d.requestScans || [];
+  const why = (notes) => { const m = String(notes || '').match(/queued: ([\w-]+)/); return m ? m[1] : ''; };
+  return `<section id="requests">
+  <h2>Free-report requests waiting</h2>
+  <p class="sub">Queued, running or failed request scans. “Run now” starts one scan (every engine with a key, 1 run); the daily caps don’t apply to it. The owner’s report link keeps working throughout.</p>
+  ${flash}
+  ${sectionError(errors, 'requestScans')}
+  ${rows.length ? `<div class="tw"><table>
+    <thead><tr><th>Business</th><th>Requested</th><th>Status</th><th>Report link</th><th></th></tr></thead>
+    <tbody>${rows.map((s) => {
+      const tone = s.status === 'running' ? 'neutral' : s.status === 'failed' ? 'bad' : 'warn';
+      const reason = s.status === 'queued' ? why(s.notes) : '';
+      const err = s.status === 'failed' && Array.isArray(s.errors) && s.errors[0] ? `<div class="small">${esc(String(s.errors[0].error || '').slice(0, 160))}</div>` : '';
+      return `<tr>
+        <td>${esc(s.business_name || '—')}</td>
+        <td class="small">${esc(shortTime(s.created_at))}</td>
+        <td>${toneBadge(tone, s.status)}${reason ? `<div class="small">${esc(reason)}</div>` : ''}${err}</td>
+        <td>${s.report_token ? `<a href="/report/${esc(encodeURIComponent(s.report_token))}" target="_blank" rel="noopener">Open</a>` : '—'}</td>
+        <td>${s.status === 'running' ? '' : `<form method="post" action="/admin/scan/run"><input type="hidden" name="id" value="${esc(s.id)}"><button type="submit">Run now</button></form>`}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>` : (errors.requestScans ? '' : '<p class="small">Nothing waiting.</p>')}
+</section>`;
+}
+
+// Refund requests (supabase/v4_ladder.sql). No public form yet. Refunds are made by a person in Stripe;
+// the link searches the Stripe dashboard for the payment (by email, else by report token).
+export function stripeSearchUrl(r) {
+  return `https://dashboard.stripe.com/search?query=${encodeURIComponent(r?.email || r?.report_token || '')}`;
+}
+
+function refundsSection(d, errors) {
+  const rows = d.refunds || [];
+  return `<section id="refunds">
+  <h2>Refund requests</h2>
+  <p class="sub">“If we can’t show you 3 things to fix, it’s free.” Check the report, refund the payment in Stripe, then set the row’s status (open → refunded or declined) in Supabase.</p>
+  ${sectionError(errors, 'refunds')}
+  ${rows.length ? `<div class="tw"><table>
+    <thead><tr><th>When</th><th>Email</th><th>Reason</th><th>Status</th><th>Report</th><th>Payment</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr>
+      <td class="small">${esc(shortTime(r.created_at))}</td>
+      <td>${esc(r.email || '—')}</td>
+      <td class="small">${esc(String(r.reason || '').slice(0, 300))}</td>
+      <td>${toneBadge(r.status === 'open' ? 'warn' : r.status === 'refunded' ? 'good' : 'neutral', r.status || 'open')}</td>
+      <td>${r.report_token ? `<a href="/report/${esc(encodeURIComponent(r.report_token))}" target="_blank" rel="noopener">Open</a>` : '—'}</td>
+      <td>${r.email || r.report_token ? `<a href="${esc(stripeSearchUrl(r))}" target="_blank" rel="noopener">Find in Stripe</a>` : '—'}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>` : (errors.refunds ? '' : '<p class="small">No refund requests.</p>')}
+</section>`;
+}
+
 function scansSection(d, errors) {
   const rows = d.scans || [];
   return `<section id="scans">
@@ -303,17 +357,19 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
 </div></header>
 <main class="adm wrap">
   <nav class="adm-nav" aria-label="Sections">
-    <a href="#money">Money</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a>
+    <a href="#money">Money</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
     <a href="#funnel">Funnel</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
   </nav>
   ${notConfigured}
   ${moneySection(d, errors, now)}
+  ${requestsSection(d, errors, { flash: flashHtml(flash.requests) })}
   ${runSection(d, { watch, engineIds, flash: flashHtml(flash.run), activeIds })}
   ${scansSection(d, errors)}
   ${enginesSection(d, errors)}
   ${funnelSection(d, errors)}
   ${gatesSection(d, errors)}
   ${activitySection(d, errors)}
+  ${refundsSection(d, errors)}
   ${expensesSection(d, errors, { flash: flashHtml(flash.expense), now })}
 </main>
 <script src="/admin/admin.js" defer></script>

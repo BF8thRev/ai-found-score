@@ -82,7 +82,7 @@ export function listingNames(html) {
   return names;
 }
 
-/** checkDirectoryPage(html, business) → { youListed, youPosition, topListed, listingsRead } */
+/** checkDirectoryPage(html, business) → { youListed, youPosition, topListed, listingsRead, listed } */
 export function checkDirectoryPage(html, business) {
   const names = listingNames(html);
   const owner = normalizeName(business.name);
@@ -99,6 +99,8 @@ export function checkDirectoryPage(html, business) {
     youPosition: idx === -1 ? null : idx + 1,
     topListed: names[0] || null,
     listingsRead: names.length,
+    // The listing names read on the page, in order (data, never copy): the X-Ray gap sheet uses them.
+    listed: names.slice(0, 30),
   };
 }
 

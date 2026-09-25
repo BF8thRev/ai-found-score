@@ -5,10 +5,16 @@
 // and how to fix each issue — descriptions, steps and copy-paste text — are removed here, so
 // they are never in the page for anyone to un-blur.
 // v2: sections 1-7 and 9-11 are the free report; section 8's descriptions, steps and
-// copyText are the paid part ($29 Fix steps).
+// copyText, plus the X-Ray sections (competitor gap sheet, fix checklist), are the paid part:
+// the $49 AI Visibility X-Ray (tier `xray`). Any recorded payment for the token unlocks all of it.
+
+import { xraySections } from '../../shared/report-v2.js';
 
 /** The fields of an issue that survive locking. Everything else (description, steps, copyText, …) is dropped. */
 export const LOCKED_ISSUE_FIELDS = ['kind', 'severity', 'title'];
+
+/** What a locked report carries for the X-Ray sections: only that they exist. */
+export const LOCKED_XRAY = Object.freeze({ locked: true });
 
 function lockIssue(i) {
   const out = { locked: true };
@@ -20,13 +26,16 @@ function lockIssue(i) {
 /** lockReport(report) → a copy with the paid details removed and locked: true. Never mutates. */
 export function lockReport(r) {
   if (r.version === 2) {
+    // Anything paid that a stored report might carry is dropped, never passed through.
+    const { xray, gapSheet, checklist, ...rest } = r;
     return {
-      ...r,
+      ...rest,
       locked: true,
       // Anything that isn't a clean match keeps only its platform and status.
       listings: (r.listings || []).map((l) =>
         l.status === 'match' ? l : { platform: l.platform, status: l.status, locked: true }),
       issues: (r.issues || []).map(lockIssue),
+      xray: { ...LOCKED_XRAY },
     };
   }
   return {
@@ -38,8 +47,11 @@ export function lockReport(r) {
   };
 }
 
-/** The body served for a report: unlocked v2 reports say locked: false; locked ones go through lockReport. */
+/**
+ * The body served for a report. Unlocked v2 reports say locked: false and carry the X-Ray
+ * sections (built from the report's own data); locked ones go through lockReport.
+ */
 export function reportBody(report, unlocked) {
   if (!unlocked) return lockReport(report);
-  return report.version === 2 ? { ...report, locked: false } : report;
+  return report.version === 2 ? { ...report, locked: false, xray: xraySections(report) } : report;
 }

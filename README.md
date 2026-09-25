@@ -49,6 +49,20 @@ The sender (email and Lob jobs) must check `unsubscribes` by email and by `repor
 - **Money rules:** spent = metered API cost (`scan_raw` + `scan_usage`) + expenses except `api_topup`; earned = `payments` where `livemode`; API credit top-ups are shown as cash out but not added to spent (the metered cost already counts what they paid for).
 - **Local dry run:** put `ADMIN_TOKEN=<anything>` and `SCANNER_DRY_RUN=1` in `.dev.vars`, run `npm run dev`, sign in at `http://localhost:8787/admin` and start a scan. Engine answers come from `scanner/test/fixtures/engines/`, the extractor is canned, nothing is stored and nothing costs money. The flag is ignored unless the request comes from localhost; never set it on Cloudflare.
 
+## Free-report requests: automatic scans (AUTO_SCAN)
+
+Code: `src/lib/auto-scan.js` (called from `src/lib/report-request.js`). Needs [`supabase/v4_ladder.sql`](supabase/v4_ladder.sql) applied first, and `SUPABASE_SERVICE_KEY`.
+
+- Every new request that passes Turnstile gets a report link at once: `POST /api/request` returns `{ ok, id, report_url: "/report/<token>" }` (token: 22 random characters, `[A-Za-z0-9_-]`), and a `scans` row (`trigger` `request`) is written for it. `report_url` is `null` when no link could be made (bot check not configured, no service key, a database error); the request is saved either way. A no-JS form post is redirected to the link.
+- **`AUTO_SCAN=on`**: the Worker starts a `ScanWorkflow` for it right away (every engine with a key, 1 run, 5 questions). Anything else (unset, `off`): the row is `queued` and waits for **Run now** in `/admin` (section "Free-report requests waiting").
+- **Brakes** (a request that trips one is queued, never dropped; the owner keeps the link): same business name + ZIP within 7 days → the existing link is returned and nothing new runs; per-IP `REQUEST_LIMITER` (bucket `autoscan`); daily caps over today's (UTC) automatic scans, `AUTO_SCAN_DAILY_MAX` (default 25) and `AUTO_SCAN_DAILY_USD` (default 20). The caps use reserve-then-verify (the row is written with its estimated cost first, then today's rows are re-read), so racing requests can't overshoot.
+- **The report page while it's being made:** `GET /api/report/<token>` answers `202 {"status":"running"|"queued"}` until the report is saved; `/report/<token>` shows "We're asking the AI assistants now…" (or the queued wording) and re-checks every 30 seconds. A failed scan or a report that didn't pass the guardrails shows as queued: it waits for a person (Run now makes a fresh scan under the same link).
+- **Local test:** `npx wrangler dev --var SCANNER_DRY_RUN:1 --var AUTO_SCAN:on --var TURNSTILE_SITE_KEY:1x00000000000000000000AA --var TURNSTILE_SECRET_KEY:1x0000000000000000000000000000000AA`, then POST the form with `cf-turnstile-response: XXXX.DUMMY.TOKEN.XXXX`. The scan answers from the fixtures, nothing is stored, and the link shows "in progress" until the workflow finishes (then "isn't ready yet", since a dry run stores no report).
+
+## Refund requests
+
+`refund_requests` (`supabase/v4_ladder.sql`; id, report_token, email, reason, created_at, status open | refunded | declined; service key only) backs the X-Ray promise "If we can't show you 3 things to fix, it's free." There is no public form yet. `/admin` lists the rows with a "Find in Stripe" link (dashboard search by email, else report token). Refunds are made by a person in Stripe; then set the row's status in Supabase.
+
 ## Running scans from your PC (Free plan)
 
 On the Workers Free plan a full scan can't run on Cloudflare (10 ms CPU, 50 subrequests per invocation). Until that changes, run scans from Node on your own PC: `scanner/run.js` does exactly what the Workflow does (same `scans` / `scan_raw` / `scan_usage` / `scan_results` rows, same row ids, same report gate), so `/admin` and `/report/<token>` show the results as if the Workflow had run. No hosting cost; you pay only the API calls.
@@ -100,6 +114,8 @@ npm test           # scanner, extractor and outreach tests (node --test) + sampl
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `PERPLEXITY_API_KEY`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD` | Scanner engines + extractor (`scanner/config.js`, which also accepts common alternate names) | Worker secrets |
 | `SUPABASE_SERVICE_KEY` | Scanner writes (`scan_raw`, `scan_results`, `scans`, `scan_usage`) and every `/admin` read | Worker secret. Never sent to the browser |
 | `SCANNER_DRY_RUN` | Local testing only: `1` answers scans from recorded fixtures (localhost requests only) | Never set on Cloudflare |
+| `AUTO_SCAN` | `on` starts a scan for every verified free-report request (`src/lib/auto-scan.js`) | Plain var. Unset/`off` = requests are queued for Run now in `/admin`. Apply `supabase/v4_ladder.sql` first |
+| `AUTO_SCAN_DAILY_MAX`, `AUTO_SCAN_DAILY_USD` | Daily caps on automatic scans (count, dollars; UTC day) | Optional plain vars; defaults 25 and 20 |
 | `STRIPE_WEBHOOK_SECRET_TEST` | `POST /api/stripe-webhook` | Optional. Signing secret of the Stripe **sandbox** webhook; accepted only for `livemode: false` events. Sandbox payments are stored with `payments.livemode = false` and excluded from `channel_funnel`. Delete once live testing is done |
 | `TURNSTILE_SITE_KEY` | Free-report form bot check (`src/lib/turnstile.js`) | Public. In `wrangler.jsonc` `vars`; the Worker writes it into the homepage. See **Bot protection** |
 | `TURNSTILE_SECRET_KEY` | `POST /api/request` Siteverify | Worker secret: `npx wrangler secret put TURNSTILE_SECRET_KEY`. See **Bot protection** |
@@ -170,8 +186,8 @@ Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` 
 
 ## Wiring checklist (the things filled in later)
 
-1. **Supabase.** Run `supabase/setup.sql`, then `supabase/scan_v2.sql`, then `supabase/admin_v3.sql`. Add `SUPABASE_ANON_KEY` as a Worker secret.
-2. **Stripe payment links.** Paste the four real links into `STRIPE_LINKS` in `public/js/config.js` (keys: `snapshot`, `before_after`, `full_year`, `listing_fix`). On each Payment Link in the Stripe dashboard, set the after-payment redirect to `https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}`. No metadata is needed: the webhook takes the tier from the amount paid (`TIER_BY_CENTS` in `src/worker.js`; update it if prices change). Business and arm come from the report token: the report page appends `client_reference_id=<report token>` and the webhook looks the rest up. Report tokens must be letters, digits, `-` or `_` (Stripe's rule for `client_reference_id`).
+1. **Supabase.** Run `supabase/setup.sql`, then `supabase/scan_v2.sql`, then `supabase/admin_v3.sql`, then `supabase/v4_ladder.sql`. Add `SUPABASE_ANON_KEY` as a Worker secret.
+2. **Stripe payment links.** Paste the four real links into `STRIPE_LINKS` in `public/js/config.js` (keys: `snapshot`, `before_after`, `full_year`, `listing_fix`). On each Payment Link in the Stripe dashboard, set the after-payment redirect to `https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}`. No metadata is needed: the webhook takes the tier from the amount paid (`TIER_BY_CENTS` in `src/lib/stripe.js`: 4900 → `xray`, the $49 AI Visibility X-Ray; the retired $29/$59/$69/$199 keys stay so an old payment still records; update it if prices change). Any recorded payment for a report token unlocks that whole report, X-Ray sections included. Business and arm come from the report token: the report page appends `client_reference_id=<report token>` and the webhook looks the rest up. Report tokens must be letters, digits, `-` or `_` (Stripe's rule for `client_reference_id`).
 3. **Stripe webhook.** Endpoint `https://aifoundscore.com/api/stripe-webhook`, events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Store its signing secret (`whsec_...`) as the runtime secret `STRIPE_WEBHOOK_SECRET`. Only paid checkouts are recorded.
 4. **Postcards.** QR code and printed URL both point at `https://aifoundscore.com/r/<short_code>`; opt-out line: `aifoundscore.com/stop` + the same code.
 

@@ -3,7 +3,9 @@
 // Unpaid reports arrive with `locked: true` and the fix details already
 // removed server-side; this page only draws the blurred stand-ins.
 // `version: 2` reports use renderV2 (the searched-answers report); anything
-// else is a legacy v1 report and renders exactly as it always has.
+// else is a legacy v1 report. A free-report request whose report is still being made gets a
+// 202 {status} and renders the "in progress" page (renderPending), which re-checks every 30 s.
+// The only paid tier offered is the $49 AI Visibility X-Ray (tier `xray`, see XRAY below).
 document.addEventListener('DOMContentLoaded', async () => {
   const id = window.location.pathname.split('/').filter(Boolean).pop() || 'sample-001';
   const root = document.getElementById('report-root');
@@ -12,6 +14,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   let report;
   try {
     const res = await fetch('/api/report/' + encodeURIComponent(id) + (preview ? '?preview=' + encodeURIComponent(preview) : ''));
+    // A free-report request whose scan is queued or running: 202 {status}. Show "in progress".
+    if (res.status === 202) {
+      const j = await res.json().catch(() => ({}));
+      renderPending(root, id, j.status === 'queued' ? 'queued' : 'running');
+      return;
+    }
     if (!res.ok) throw new Error(res.status === 404 ? 'not found' : res.status === 503 ? 'not ready' : 'error');
     report = await res.json();
   } catch (e) {
@@ -58,12 +66,57 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+// ---------- A report that is still being made (free-report request) ----------
+// GET /api/report/<token> answers 202 {status: 'running'|'queued'} until the report is saved.
+// Re-checks every 30 seconds and reloads once the report (or anything other than 202) is there.
+const PENDING_POLL_MS = 30000;
+const PENDING_COPY = {
+  running: {
+    h: 'We’re asking the AI assistants now.',
+    p: 'This page updates when your report is ready — bookmark it.',
+  },
+  queued: {
+    h: 'Your report is in line.',
+    p: 'We’ll ask the AI assistants soon. This page updates when your report is ready — bookmark it.',
+  },
+};
+
+function renderPending(root, token, status) {
+  const c = PENDING_COPY[status] || PENDING_COPY.running;
+  document.title = 'AI Found Score — your report is on its way';
+  root.innerHTML = `
+    <div class="wrap page-msg r2-pending" data-status="${escapeHtml(status)}">
+      <p class="r2-pending-mark" aria-hidden="true"></p>
+      <h1>${escapeHtml(c.h)}</h1>
+      <p>${escapeHtml(c.p)}</p>
+      <p class="fine" role="status">We check again every 30 seconds. You can close this page and come back to the same link.</p>
+      ${leadForm('top')}
+    </div>`;
+  root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', (e) => submitLead(e, token)));
+  const check = async () => {
+    try {
+      const res = await fetch('/api/report/' + encodeURIComponent(token), { cache: 'no-store' });
+      if (res.status === 202) {
+        const j = await res.json().catch(() => ({}));
+        const next = j.status === 'queued' ? 'queued' : 'running';
+        if (next !== status) { renderPending(root, token, next); return; }
+      } else {
+        location.reload();
+        return;
+      }
+    } catch { /* offline for a moment: try again next time */ }
+    setTimeout(check, PENDING_POLL_MS);
+  };
+  setTimeout(check, PENDING_POLL_MS);
+}
+
 // ---------- v1 (legacy, no `version`): rendered exactly as before ----------
 function renderV1(root, report) {
 
   const b = report.business;
   const locked = !!report.locked;
-  const paid = !locked && !report.sample; // real report that's been unlocked
+  // The $49 X-Ray, only on a locked report with enough fixes to keep the refund promise.
+  const xrayOk = locked && report.issues.filter((i) => i && i.title).length >= MIN_FIX_ITEMS && tierOn('xray');
   const named = report.aiResults.filter((r) => r.named).length;
   const total = report.aiResults.length;
   const badListings = report.listings.filter((l) => l.status === 'mismatch');
@@ -132,7 +185,7 @@ function renderV1(root, report) {
               ? blurred('Why this costs you calls, and the exact steps to fix it, written so anyone on your team can do it.')
               : `<p>${escapeHtml(issue.description)}</p>`}
           </div>`).join('')}
-        ${locked && tierOn('snapshot') ? unlockPanel() : ''}
+        ${xrayOk ? unlockPanel() : ''}
       </section>
 
       <section class="report-section">
@@ -140,22 +193,7 @@ function renderV1(root, report) {
         <p>${escapeHtml(report.summary)}</p>
       </section>
 
-      ${paid ? (tierOn('before_after') ? `
-      <div class="cta-band">
-        <h2>Want it handled?</h2>
-        <p>We fix your listings on all five sites, re-scan, and show you the before and after.</p>
-        <p><a class="btn" data-tier="before_after" href="#">Fix it for me — $59</a></p>
-        ${tierLinks(['full_year', 'listing_fix'])}
-        <p class="fine"><a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
-      </div>` : '') : `
-      <div class="cta-band">
-        ${tierOn('snapshot') ? `
-        <h2>See exactly what to fix</h2>
-        <p>Every issue explained, with step-by-step fixes you can hand to anyone. One payment of $29. No subscription.</p>
-        <p><a class="btn big" data-tier="snapshot" href="#">Unlock the full report — $29</a></p>` : '<h2>Want it handled?</h2>'}
-        ${tierLinks(['before_after', 'full_year', 'listing_fix'], 'Rather we do it? ')}
-        <p class="fine">Secure checkout by Stripe. One-time payment. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
-      </div>`}
+      ${xrayOk ? xrayOffer() : ''}
 
       ${report.sample ? '' : leadForm('bottom')}
     </div>`;
@@ -168,11 +206,32 @@ function blurred(text) {
   return `<p class="locked-text" aria-hidden="true">${escapeHtml(text)}</p><p class="locked-note">🔒 In the full report</p>`;
 }
 
+// The one paid tier on sale: the $49 AI Visibility X-Ray (tier key `xray`). Only rendered when
+// tierOn('xray') and the report has at least MIN_FIX_ITEMS fixes (the refund promise).
+const XRAY = {
+  name: 'AI Visibility X-Ray',
+  price: '$49 one-time',
+  what: 'Everything in this report unlocked: every fix step by step with copy-paste text, the competitor gap sheet, and your fix checklist.',
+  promise: 'If we can’t show you 3 things to fix, it’s free.',
+  button: 'Get the X-Ray — $49',
+};
+
 function unlockPanel() {
   return `
     <div class="unlock-panel">
-      <p><strong>The fix steps are in the full report.</strong> Every fix, step by step, with copy-paste text for your Google profile. If we can’t show you 3 things you can fix, you get your money back.</p>
-      <a class="btn" data-tier="snapshot" href="#">Get the fix steps — $29</a>
+      <p><strong>The fix steps are in the ${XRAY.name}.</strong> ${XRAY.what} ${XRAY.promise}</p>
+      <a class="btn" data-tier="xray" href="#">${XRAY.button}</a>
+    </div>`;
+}
+
+// The offer band. `lead` is an optional first sentence (edge states: named everywhere, nothing missing).
+function xrayOffer(lead = '') {
+  return `
+    <div class="cta-band r2-xray-offer">
+      <h2>${XRAY.name} — ${XRAY.price}.</h2>
+      <p>${lead ? `${lead} ` : ''}${XRAY.what} ${XRAY.promise}</p>
+      <p><a class="btn big" data-tier="xray" href="#">${XRAY.button}</a></p>
+      <p class="fine">Secure checkout by Stripe. One-time payment, no subscription. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
     </div>`;
 }
 
@@ -185,19 +244,6 @@ function isDemoReport(report) {
 // Tiers on sale (public/js/config.js OFFERED_TIERS). Without config.js, nothing is for sale.
 function tierOn(tier) {
   return typeof window.tierOffered === 'function' ? window.tierOffered(tier) : false;
-}
-
-const TIER_LINK = {
-  before_after: '<a data-tier="before_after" href="#">Fix it and re-check — $59</a>',
-  full_year: '<a data-tier="full_year" href="#">Full Year $69</a> (plus monthly re-checks)',
-  listing_fix: '<a data-tier="listing_fix" href="#">Full listing build $199</a>',
-  snapshot: '<a data-tier="snapshot" href="#">Fix steps — $29</a>',
-};
-
-// A "fine print" line of links to the offered tiers among `tiers`; '' when none is on sale.
-function tierLinks(tiers, prefix = '') {
-  const on = tiers.filter(tierOn).map((t) => TIER_LINK[t]);
-  return on.length ? `<p class="fine">${prefix}${on.join(' · ')}</p>` : '';
 }
 
 // Share + Save as PDF, and the copy buttons on fix steps. One delegated listener.
@@ -348,7 +394,7 @@ function escapeHtml(str) {
 // serve a report whose stored totals disagree).
 
 const ENGINE_NAMES = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_ai_mode: 'Google AI Mode', perplexity: 'Perplexity', claude: 'Claude' };
-// Mirror of MIN_FIX_ITEMS in shared/report-v2.js: the $29 tier needs this many fixes.
+// Mirror of MIN_FIX_ITEMS in shared/report-v2.js: the $49 X-Ray is offered only with this many fixes.
 const MIN_FIX_ITEMS = 3;
 // Preferred column order only. Columns come from the engines that actually
 // answered (plus method.engines order for anything not listed here).
@@ -465,8 +511,8 @@ function renderV2(root, report) {
   const lostAnswerIds = new Set(answers.filter((a) => !a.namedYou && a.ownerMatch !== 'unsure').map((a) => a.id));
   const cw = countWords(report);
   const fixCount = issues.filter((i) => i && i.title).length;
-  // The $29 tier is offered only with at least MIN_FIX_ITEMS fixes (the refund promise).
-  const snapshotOk = locked && !paid && fixCount >= MIN_FIX_ITEMS && tierOn('snapshot');
+  // The $49 X-Ray is offered only on a locked report with at least MIN_FIX_ITEMS fixes (the refund promise).
+  const xrayOk = locked && !paid && fixCount >= MIN_FIX_ITEMS && tierOn('xray');
   const ownDomain = String(b.website || '').replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase();
 
   // Engines in column order: known engines that answered, then any others.
@@ -509,8 +555,9 @@ function renderV2(root, report) {
     sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     factsV2({ report, b, aById }),
     listingsV2({ listings, badListings }),
-    issuesV2({ issues, locked, snapshotOk }),
-    offerV2({ paid, locked, allNamed, noFixes, missingSources, badListings, cw, fixCount, snapshotOk }),
+    issuesV2({ issues, locked, xrayOk }),
+    xrayV2({ report, aById, cw, N }),
+    offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }),
     answersV2({ questions, answers }),
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
     report.sample ? '' : leadForm('bottom'),
@@ -818,7 +865,7 @@ function copyBlocksV2(items) {
 
 // 8. What to fix: titles free; descriptions, steps and copy text locked until paid
 // (removed server-side, src/lib/lock.js).
-function issuesV2({ issues, locked, snapshotOk }) {
+function issuesV2({ issues, locked, xrayOk }) {
   if (!issues.length) return '';
   return `
     <section class="report-section">
@@ -834,75 +881,91 @@ function issuesV2({ issues, locked, snapshotOk }) {
               (issue.steps || []).length ? `<ol class="r2-steps">${issue.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}${
               copyBlocksV2(issue.copyText)}`}
         </div>`).join('')}
-      ${snapshotOk ? unlockPanel() : ''}
+      ${xrayOk ? unlockPanel() : ''}
     </section>`;
 }
 
-// 9. Offer: names the specific sites the fix covers. Only tiers in OFFERED_TIERS (config.js);
-// the $29 Fix steps only with at least MIN_FIX_ITEMS fixes (snapshotOk).
-function offerV2({ paid, locked, allNamed, noFixes, missingSources, badListings, cw, fixCount, snapshotOk }) {
-  const legal = '<p class="fine">Secure checkout by Stripe. One-time payment. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>';
-  const refund = '<p class="fine">If we can’t show you 3 things you can fix, you get your money back.</p>';
-  const monitoring = '<p class="fine">Monthly monitoring is coming.</p>';
-  // Named in every answer, or no listing to fix and no cited site missing you: the $29 Fix steps
-  // (the baseline fixes still apply), and a quiet note that monitoring is coming.
+// 8b. The X-Ray sections: competitor gap sheet + fix checklist. Built by the Worker from this
+// report's own data (shared/report-v2.js xraySections) and sent only when unlocked; a locked
+// report carries just `xray: {locked: true}`, so only the titles and a blurred stand-in show.
+function xrayV2({ report, aById, cw, N }) {
+  const x = report.xray;
+  if (!x) return '';
+  if (x.locked) {
+    return `
+    <section class="report-section r2-xray">
+      <h2>Competitor gap sheet</h2>
+      <div class="issue-card">${blurred('Each business AI named over you, how often it was named and named first, and the sites AI cited that list them and not you.')}</div>
+      <h2 class="r2-xray-h2">Your fix checklist</h2>
+      <div class="issue-card">${blurred('Every fix in this report as a checklist you can tick off as you go.')}</div>
+    </section>`;
+  }
+  const gap = x.gapSheet || { competitors: [] };
+  const comps = (gap.competitors || []).filter((c) => c && c.name);
+  const proof = (ids) => {
+    const links = (ids || []).filter((id) => aById[id]).slice(0, 8)
+      .map((id) => { const a = aById[id]; const lbl = INTENT_LABELS[a.intent] ? ` (${INTENT_LABELS[a.intent]})` : ''; return `<a href="#ans-${escapeHtml(id)}" data-open="${escapeHtml(id)}">${escapeHtml(engineName(a.engine) + lbl)}</a>`; });
+    return links.length ? `<p class="r2-muted">Read the answers: ${links.join(' · ')}</p>` : '';
+  };
+  const anyGap = comps.some((c) => (c.sources || []).length);
+  const cards = comps.map((c) => {
+    const srcs = (c.sources || []).filter((s) => s && s.domain);
+    return `
+      <div class="listing-card r2-gap">
+        <h3>${escapeHtml(c.name)}</h3>
+        <p>Named in ${num(c.named)} of ${num(N)} ${cw.unit}${num(c.first) ? `, first in ${num(c.first)}` : ', never first'}.</p>
+        ${srcs.length
+          ? `<p><strong>Sites AI cited that list them and not you:</strong></p>
+             <ul class="r2-gap-list">${srcs.map((s) => `<li><a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${num(s.position) ? ` <span class="r2-muted">(listed #${num(s.position)})</span>` : ''}</li>`).join('')}</ul>`
+          : '<p class="r2-muted">We found no sites AI cited that list them and not you.</p>'}
+        ${proof(c.answerIds)}
+      </div>`;
+  }).join('');
+  const checkedNote = num(gap.sourcesChecked) === 0
+    ? 'None of the sites AI cited could be read for their listings, so no gaps could be checked.'
+    : anyGap ? '' : 'We found no sites AI cited that list them and not you.';
+  const checklist = (x.checklist || []).filter((i) => i && i.title);
+  const checkKey = 'afs_check_' + String(report.id || '');
+  let ticked = {};
+  try { ticked = JSON.parse(localStorage.getItem(checkKey) || '{}') || {}; } catch { ticked = {}; }
+  // Saved ticks live only in this browser (localStorage); wired once the page is in the DOM.
+  setTimeout(() => {
+    document.querySelectorAll('input[data-check]').forEach((box) => box.addEventListener('change', () => {
+      try {
+        const cur = JSON.parse(localStorage.getItem(checkKey) || '{}') || {};
+        cur[box.dataset.check] = box.checked;
+        localStorage.setItem(checkKey, JSON.stringify(cur));
+      } catch { /* storage blocked: the ticks just don't persist */ }
+    }));
+  }, 0);
+  return `
+    <section class="report-section r2-xray">
+      <h2>Competitor gap sheet</h2>
+      <p class="sub">${comps.length
+        ? `Every business AI named in at least 2 of the ${num(N)} ${cw.unit}, and the sites AI cited that list them and not you.`
+        : `No other business was named in 2 or more of the ${num(N)} ${cw.unit}, so there is no competitor gap to show.`}</p>
+      ${checkedNote && comps.length ? `<p class="r2-note">${escapeHtml(checkedNote)}</p>` : ''}
+      ${cards}
+      <h2 class="r2-xray-h2">Your fix checklist</h2>
+      <p class="sub">${checklist.length} ${plural(checklist.length, 'fix', 'fixes')}, in order. Ticks are saved in this browser.</p>
+      <ul class="r2-check">${checklist.map((i, n) => {
+        const k = escapeHtml(`${n}:${i.title}`.slice(0, 120));
+        return `<li><label><input type="checkbox" data-check="${k}"${ticked[`${n}:${i.title}`.slice(0, 120)] ? ' checked' : ''}> <span>${escapeHtml(i.title)}</span></label></li>`;
+      }).join('')}</ul>
+    </section>`;
+}
+
+// 9. Offer: the $49 AI Visibility X-Ray, the only tier on sale (OFFERED_TIERS in config.js has 'xray').
+// Only on a locked report with at least MIN_FIX_ITEMS fixes (xrayOk; the refund promise). Edge states
+// (named in every answer, or nothing missing) offer it too: the baseline fixes still apply.
+// Sample and showcase reports never link to Stripe (isDemoReport, at the top of this file).
+function offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }) {
+  if (!xrayOk) return '';
   if (allNamed || noFixes) {
     const lead = allNamed ? `Every ${cw.one} named you.` : 'We found no listing to fix and no cited site missing you.';
-    if (tierOn('full_year')) {
-      return `
-      <div class="cta-band">
-        <h2>Keep it this way</h2>
-        <p>${lead} We run the same ${cw.sameSearches} every month for a year and email you when a competitor starts getting named over you.</p>
-        <p><a class="btn" data-tier="full_year" href="#">Full Year — $69</a></p>
-        ${snapshotOk ? tierLinks(['snapshot']) : ''}
-        <p class="fine">No subscription. We can’t promise what AI will say. We can show you exactly what changed.</p>
-        ${legal}
-      </div>`;
-    }
-    if (snapshotOk) {
-      return `
-      <div class="cta-band">
-        <h2>Keep it this way</h2>
-        <p>${lead} There are still ${fixCount} things you can do to keep your details clear and consistent: every one step by step, with copy-paste text for your Google profile.</p>
-        <p><a class="btn big" data-tier="snapshot" href="#">Get the fix steps — $29</a></p>
-        ${refund}
-        ${monitoring}
-        ${legal}
-      </div>`;
-    }
-    return `
-      <div class="cta-band">
-        <h2>Keep it this way</h2>
-        <p>${lead}</p>
-        ${monitoring}
-      </div>`;
+    return xrayOffer(`${lead} There are still ${num(fixCount)} things you can do to keep your details clear and consistent.`);
   }
-  if (!tierOn('before_after')) {
-    if (!snapshotOk) return '';
-    return `
-    <div class="cta-band">
-      <h2>See exactly what to fix</h2>
-      <p>Every fix, step by step, with copy-paste text for your Google profile. One payment of $29. No subscription.</p>
-      <p><a class="btn big" data-tier="snapshot" href="#">Get the fix steps — $29</a></p>
-      ${refund}
-      ${legal}
-    </div>`;
-  }
-  const sites = [...new Set(missingSources.map((s) => s.domain))];
-  const platforms = badListings.map((l) => l.platform);
-  const parts = [];
-  if (sites.length) parts.push(`get you onto ${listJoin(sites.map(escapeHtml))}`);
-  if (platforms.length) parts.push(`fix your ${listJoin(platforms.map(escapeHtml))} ${plural(platforms.length, 'listing', 'listings')}`);
-  const listedLine = sites.length ? ' You’ll be listed on every site we name, or you get your money back.' : '';
-  return `
-    <div class="cta-band">
-      <h2>${sites.length ? 'Get onto the sites AI is reading' : 'Fix what AI is reading'}</h2>
-      <p>We ${parts.join(' and ')}, then run the same ${cw.sameSearches} again in 30 days and show you both results.${listedLine}</p>
-      <p><a class="btn big" data-tier="before_after" href="#">Fix it and re-check — $59</a></p>
-      ${tierLinks([...(snapshotOk ? ['snapshot'] : []), 'full_year', 'listing_fix'])}
-      <p class="fine">No sales call. We can’t promise what AI will say. We can show you exactly what changed.</p>
-      ${legal}
-    </div>`;
+  return xrayOffer();
 }
 
 // Answer text with business names bolded at their stored positions.

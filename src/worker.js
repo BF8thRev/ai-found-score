@@ -2,10 +2,12 @@
 //
 // Routes:
 //   GET  /r/[code]            -> printed short code (postcard) -> 302 to /report/[token]
-//   GET  /api/report/[id]     -> report JSON; fix details withheld until paid
+//   GET  /api/report/[id]     -> report JSON; fix details + X-Ray sections withheld until paid;
+//                                202 {status:'running'|'queued'} while a free-report request's scan is pending
 //   POST /api/visit           -> report-page view beacon (arm looked up from token)
 //   POST /api/lead            -> "Email me this report"
-//   POST /api/request         -> landing-page free-report request (email optional; returns id);
+//   POST /api/request         -> landing-page free-report request (email optional; returns id + report_url;
+//                                AUTO_SCAN=on starts its scan at once, src/lib/auto-scan.js);
 //                                Turnstile-checked + per-IP rate limit (src/lib/report-request.js)
 //                                or {request_id, email} to attach an email to that request
 //   GET  /api/questions       -> the 5 questions we'd ask for ?trade=&town=&zip=&state=
@@ -32,10 +34,11 @@ import { buildQuestions, normalizeTrade } from '../scanner/questions.js';
 import { handleReportRequest } from './lib/report-request.js';
 import { turnstileConfigured, turnstileSiteKey } from './lib/turnstile.js';
 import { rateLimit } from './lib/rate-limit.js';
-import { verifyStripeSignature } from './lib/stripe.js';
+import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
-import { lockReport } from './lib/lock.js';
+import { reportBody } from './lib/lock.js';
+import { pendingReportStatus } from './lib/auto-scan.js';
 import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
@@ -73,7 +76,7 @@ export default {
       return (await rateLimit(env, request, 'request'))
         || handleReportRequest(request, url, env, dry
           // Local dry run: nothing is written to Supabase.
-          ? { previewDryRun: true, recordReportRequest: async () => console.log('[dry-run] request not saved') }
+          ? { previewDryRun: true, scanDryRun: true, dryEnv: dryRunEnv(env), recordReportRequest: async () => console.log('[dry-run] request not saved') }
           : {});
     }
 
@@ -111,7 +114,7 @@ export default {
       try { id = decodeURIComponent(url.pathname.slice('/api/report/'.length)); } catch {
         return Response.json({ error: 'Report not found' }, { status: 404 });
       }
-      return handleGetReport(id, url, env);
+      return handleGetReport(id, url, env, previewDryRun(env, url));
     }
 
     // Pretty-URL rewrites. Serve the clean-URL asset paths directly.
@@ -191,10 +194,25 @@ async function handleShortCode(url, env) {
   return Response.redirect(new URL(dest, url).toString(), 302);
 }
 
-async function handleGetReport(id, url, env) {
+// A free-report request's link works before its report exists: while its scan is queued or
+// running the answer is 202 {status: 'running'|'queued'} (src/lib/auto-scan.js pendingReportStatus),
+// and report.js shows the "in progress" page, re-checking every 30 s.
+function pendingResponse(status) {
+  return Response.json({ status }, { status: 202, headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' } });
+}
+
+async function handleGetReport(id, url, env, dryRun = false) {
   const isSample = id.startsWith('sample-');
   let report;
   let unlocked = true;
+  // Local dry run: request scans live only in this isolate (no database), so check them first.
+  if (dryRun && !isSample) {
+    const st = await pendingReportStatus(env, id, { dryRun: true });
+    if (st === 'running' || st === 'queued') return pendingResponse(st);
+    if (st === 'dry-run-complete') {
+      return Response.json({ error: 'Report not ready' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    }
+  }
   try {
     report = await getReport(env, id, MOCK_REPORTS);
     if (report && !isSample) {
@@ -211,6 +229,8 @@ async function handleGetReport(id, url, env) {
     return Response.json({ error: 'Could not load report' }, { status: 500 });
   }
   if (!report) {
+    const st = isSample ? null : await pendingReportStatus(env, id);
+    if (st) return pendingResponse(st);
     return Response.json({ error: 'Report not found' }, { status: 404 });
   }
   // Serve gate: a v2 report that fails the guardrails is never shown.
@@ -224,17 +244,17 @@ async function handleGetReport(id, url, env) {
       });
     }
   }
-  const body = unlocked
-    ? (report.version === 2 ? { ...report, locked: false } : report)
-    : lockReport(report);
+  // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
+  const body = reportBody(report, unlocked);
   return Response.json(body, {
     // Real reports change the moment they're paid for, so never cache them.
     headers: { 'Cache-Control': isSample ? 'public, max-age=300' : 'private, no-store' },
   });
 }
 
-// lockReport (src/lib/lock.js): issue descriptions, fix steps and copy-paste text are
-// withheld server-side until paid, so they are never in the page to un-blur.
+// lockReport (src/lib/lock.js): issue descriptions, fix steps, copy-paste text and the X-Ray
+// sections (competitor gap sheet, fix checklist) are withheld server-side until paid, so they
+// are never in the page to un-blur.
 
 // Link scanners (Outlook Safe Links, Proofpoint, Mimecast, ...) open every
 // link in an email. Counting them would inflate the email arm, so skip them.
@@ -387,9 +407,7 @@ async function handleUnsubscribe(request, url, env) {
   return oneClick ? new Response('Unsubscribed', { status: 200 }) : servePage('ok');
 }
 
-// Tier from the amount paid, so Payment Links need no metadata. Keep in
-// step with the prices on the site.
-const TIER_BY_CENTS = { 2900: 'snapshot', 5900: 'before_after', 6900: 'full_year', 19900: 'listing_fix' };
+// Tier from the amount paid: TIER_BY_CENTS in src/lib/stripe.js (4900 → 'xray', the $49 X-Ray).
 
 async function handleStripeWebhook(request, env) {
   const rawBody = await request.text();
@@ -443,7 +461,7 @@ async function handleStripeWebhook(request, env) {
       businessId: link?.business_id ?? session.metadata?.business_id ?? null,
       reportToken,
       arm: link?.arm ?? session.metadata?.arm ?? null,
-      tier: session.metadata?.tier ?? TIER_BY_CENTS[session.amount_total] ?? 'unknown',
+      tier: tierForSession(session),
       amountCents: session.amount_total ?? null,
       currency: session.currency ?? 'usd',
       stripeSessionId: session.id,

@@ -46,7 +46,7 @@ export function lintText(str) {
 // URLs, values read from pages), not our copy. They are skipped by the lint.
 const LINT_SKIP_TOP = new Set(['answers', 'entities', 'business', 'baseline', 'id', 'generatedAt']);
 const LINT_SKIP_KEYS = new Set([
-  'text', 'url', 'urls', 'domain', 'aiSays', 'sourceSays', 'name', 'aliases', 'topListed', 'quote', 'format',
+  'text', 'url', 'urls', 'domain', 'aiSays', 'sourceSays', 'name', 'aliases', 'topListed', 'listed', 'quote', 'format',
   'fields', 'answerId', 'answerIds', 'citedIn', 'entityId', 'questionId', 'id', 'askedAt',
   'model', 'api', 'error', 'checkError', 'rule', 'kind', 'status', 'severity', 'field', 'intent', 'engine', 'ownerMatch', 'sourceFrom',
 ]);
@@ -81,7 +81,7 @@ function dataStrings(report) {
   for (const f of report.aiFacts || []) { add(f && f.aiSays); add(f && f.sourceSays); }
   for (const e of report.entities || []) { add(e && e.name); (e && e.aliases || []).forEach(add); }
   for (const a of report.answers || []) for (const b of (a && a.businessesNamed) || []) add(b && b.name);
-  for (const s of report.sources || []) add(s && s.topListed);
+  for (const s of report.sources || []) { add(s && s.topListed); ((s && s.listed) || []).forEach(add); }
   for (const l of report.listings || []) for (const v of Object.values((l && l.fields) || {})) add(v);
   for (const d of report.ownerDescriptors || []) add(d && d.quote);
   // The owner's own details (name, address, website facts) fill the fix steps and copy text.
@@ -243,6 +243,98 @@ export function fixItems(report) {
 /** True when the $29 Fix steps tier may be offered for this report (≥ MIN_FIX_ITEMS fixes). */
 export function snapshotOffered(report) {
   return fixItems(report).length >= MIN_FIX_ITEMS;
+}
+
+/** True when the $49 AI Visibility X-Ray may be offered (same refund promise: ≥ MIN_FIX_ITEMS fixes). */
+export function xrayOffered(report) {
+  return fixItems(report).length >= MIN_FIX_ITEMS;
+}
+
+// ---------------------------------------------------------------------------
+// AI Visibility X-Ray ($49): the competitor gap sheet and the fix checklist.
+// Built at serve time from the report's own data only (answers, entities, sources, issues);
+// nothing is fetched or guessed. Withheld server-side until paid (src/lib/lock.js).
+// ---------------------------------------------------------------------------
+
+/** Business names compared loosely: case, punctuation, "&"/"and" and spacing don't matter. */
+export function normalizeBizName(s) {
+  return ` ${String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
+}
+
+// Same business: equal names, or one name contains the other as whole words ("Tidewater Plumbing"
+// in "Tidewater Plumbing Co."). The shorter one must be at least two words, so a bare trade word
+// like "Plumbing" never matches every plumber.
+function sameBiz(a, b) {
+  const x = normalizeBizName(a);
+  const y = normalizeBizName(b);
+  if (x.trim().length < 3 || y.trim().length < 3) return false;
+  if (x === y) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return short.trim().split(' ').length >= 2 && long.includes(short);
+}
+
+function ownDomain(report) {
+  return String((report && report.business && report.business.website) || '')
+    .replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase();
+}
+
+/**
+ * buildGapSheet(report) → { answers, competitors: [...], sourcesChecked }
+ *   competitors: every non-owner entity named in 2+ answers, proven by answer ids found in
+ *   report.answers (recounted here, never taken from the stored counts):
+ *   { id, name, named, first, answerIds, sources: [{ domain, url, position }] }
+ *   sources = cited sites (report.sources) that list that competitor (topListed, or a listing
+ *   name read on the page, `listed`) where the owner was checked and is NOT listed
+ *   (youListed === false). The owner's own site never counts. [] when none were found.
+ *   sourcesChecked = how many cited sites were read for listings at all (youListed not null).
+ */
+export function buildGapSheet(report) {
+  const answers = (report && report.answers) || [];
+  const byId = new Map(answers.map((a) => [a && a.id, a]));
+  const own = ownDomain(report);
+  const sources = ((report && report.sources) || []).filter((s) => s && s.domain !== own);
+  const competitors = [];
+  for (const e of (report && report.entities) || []) {
+    if (!e || !e.id || e.isYou) continue;
+    const named = [];
+    let first = 0;
+    for (const a of answers) {
+      const list = ((a && a.businessesNamed) || []).filter((b) => b && typeof b.pos === 'number')
+        .slice().sort((x, y) => x.pos - y.pos);
+      if (!list.some((b) => b.entityId === e.id && !b.isYou)) continue;
+      named.push(a.id);
+      if (list[0] && list[0].entityId === e.id) first++;
+    }
+    // Proof: at least 2 stored answers name it (the same bar as "Who AI names").
+    if (named.length < 2 || !named.every((id) => byId.has(id))) continue;
+    const names = [e.name, ...(e.aliases || [])].filter(Boolean);
+    const lists = (s) => [s.topListed, ...(Array.isArray(s.listed) ? s.listed : [])]
+      .some((n) => n && names.some((m) => sameBiz(n, m)));
+    const gap = sources
+      .filter((s) => s.youListed === false && lists(s))
+      .map((s) => {
+        const idx = Array.isArray(s.listed) ? s.listed.findIndex((n) => names.some((m) => sameBiz(n, m))) : -1;
+        const position = idx >= 0 ? idx + 1 : (s.topListed && names.some((m) => sameBiz(s.topListed, m)) ? 1 : null);
+        return { domain: s.domain, url: s.url, position };
+      });
+    competitors.push({ id: e.id, name: e.name, named: named.length, first, answerIds: named, sources: gap });
+  }
+  competitors.sort((a, b) => b.named - a.named || b.first - a.first || String(a.name).localeCompare(String(b.name)));
+  return {
+    answers: answers.length,
+    competitors,
+    sourcesChecked: sources.filter((s) => s.youListed === true || s.youListed === false).length,
+  };
+}
+
+/** buildFixChecklist(report) → [{ title, kind, severity }] — every fix title in order (baseline fixes included). */
+export function buildFixChecklist(report) {
+  return fixItems(report).map((i) => ({ title: i.title, kind: i.kind || null, severity: i.severity || null }));
+}
+
+/** The X-Ray sections for an unlocked v2 report. */
+export function xraySections(report) {
+  return { gapSheet: buildGapSheet(report), checklist: buildFixChecklist(report) };
 }
 
 /** Most "how AI describes you" phrases a report may carry. */

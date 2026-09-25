@@ -12,11 +12,17 @@
 // Turnstile is skipped (with one logged warning) until it is configured: see src/lib/turnstile.js.
 // A new row that passed Turnstile also gets {preview_token} when live previews are on
 // (src/lib/live-preview.js): the page uses it to ask one question live without a second check.
+// Every JSON success also carries {report_url}: "/report/<token>" once the request's scans row
+// exists (src/lib/auto-scan.js; scanned at once with AUTO_SCAN=on, else queued for /admin "Run now";
+// the same business name + ZIP within 7 days gets the same link back), or null when no link could
+// be made (bot check not configured, no service key, a database error). The request is saved either
+// way. A no-JS form post is redirected to the report link when there is one.
 
 import { recordReportRequest, attachReportRequestEmail } from './db.js';
 import { normalizeTrade } from '../../scanner/questions.js';
 import { turnstileConfigured, verifyTurnstile, warnUnconfiguredOnce, REQUEST_ACTION } from './turnstile.js';
 import { livePreviewStatus, signPreviewToken } from './live-preview.js';
+import { startRequestScan } from './auto-scan.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -28,7 +34,8 @@ export const BOT_CHECK_UNAVAILABLE = 'Our spam check didn\'t answer in time. Wai
  * @param {Request} request
  * @param {URL} url
  * @param {object} env
- * @param {object} [deps] injected in tests: {recordReportRequest, attachReportRequestEmail, fetchImpl}
+ * @param {object} [deps] injected in tests: {recordReportRequest, attachReportRequestEmail, fetchImpl,
+ *   startRequestScan}; the Worker passes {previewDryRun, scanDryRun, dryEnv} for a local dry run
  */
 export async function handleReportRequest(request, url, env, deps = {}) {
   const record = deps.recordReportRequest || recordReportRequest;
@@ -54,9 +61,12 @@ export async function handleReportRequest(request, url, env, deps = {}) {
   const fail = (status, error) => (isJson
     ? Response.json({ ok: false, error }, { status })
     : Response.redirect(new URL('/?request=error#request', url).toString(), 303));
-  const okResponse = (id, previewToken) => (isJson
-    ? Response.json({ ok: true, id: id ?? null, ...(previewToken ? { preview_token: previewToken } : {}) })
-    : Response.redirect(new URL('/?request=ok#request', url).toString(), 303));
+  const okResponse = (id, previewToken, reportUrl) => (isJson
+    ? Response.json({
+      ok: true, id: id ?? null, ...(previewToken ? { preview_token: previewToken } : {}),
+      ...(reportUrl !== undefined ? { report_url: reportUrl } : {}),
+    })
+    : Response.redirect(new URL(reportUrl || '/?request=ok#request', url).toString(), 303));
 
   // Honeypot: real people never fill the hidden field.
   if (clean(data.company_url, 10)) return okResponse(null);
@@ -131,5 +141,17 @@ export async function handleReportRequest(request, url, env, deps = {}) {
   if (verified && isJson && livePreviewStatus(env, { dryRun: !!deps.previewDryRun }).enabled) {
     previewToken = await signPreviewToken(env, req).catch(() => null);
   }
-  return okResponse(req.id, previewToken);
+  // The report link (and, with AUTO_SCAN=on, the scan itself). Only for a Turnstile-checked row.
+  let reportUrl = null;
+  if (verified) {
+    try {
+      const r = await (deps.startRequestScan || startRequestScan)(env, req, {
+        request, dryRun: !!deps.scanDryRun, dryEnv: deps.dryEnv, fetchImpl: deps.scanFetchImpl,
+      });
+      if (r && r.token) reportUrl = `/report/${encodeURIComponent(r.token)}`;
+    } catch (e) {
+      console.error('[request] report link failed', String(e?.message || e).slice(0, 200));
+    }
+  }
+  return okResponse(req.id, previewToken, reportUrl);
 }

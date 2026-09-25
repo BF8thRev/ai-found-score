@@ -5,16 +5,19 @@
 
 const STRIPE_LINKS = {
   // Keys are stable ids (analytics, webhook TIER_BY_CENTS); only the labels changed.
-  snapshot: 'https://buy.stripe.com/28E00c7bth016jS8WN6Vq00',       // Fix steps — $29 one-time (unlocks the fix steps)
-  before_after: 'https://buy.stripe.com/fZuaEQ8fx39b7nWf1b6Vq01',   // Fix it and re-check — $59 one-time
+  xray: '#',            // AI Visibility X-Ray — $49 one-time (paste the live Stripe Payment Link here)
+  // Off sale since the Sep 2026 offer ladder; keys kept so old analytics/webhook keys still resolve.
+  snapshot: '#',        // Fix steps (off sale; its Stripe link is kept out of the page source) — $29 one-time
+  before_after: '#',    // Fix it and re-check (off sale; its Stripe link is kept out of the page source) — $59 one-time
   full_year: '#',       // Full Year (off sale; its Stripe link is kept out of the page source) — $69 one-time
   listing_fix: '#',     // Full listing (off sale; its Stripe link is kept out of the page source) build — $199 one-time
 };
 
 // Tiers on sale right now. The report page never renders a button or link for a tier that
-// isn't listed here. Known: 'snapshot', 'before_after', 'full_year', 'listing_fix'.
-// Sep 2026: only Fix steps ($29) and Fix it and re-check ($59) are on sale.
-const OFFERED_TIERS = ['snapshot', 'before_after'];
+// isn't listed here. Known: 'xray', 'snapshot', 'before_after', 'full_year', 'listing_fix'.
+// Sep 2026 ladder: only the AI Visibility X-Ray ($49) is on sale. The $499 Front Door Overhaul
+// is shown as "coming soon" on the homepage with no checkout.
+const OFFERED_TIERS = ['xray'];
 window.OFFERED_TIERS = OFFERED_TIERS;
 window.tierOffered = (tier) => OFFERED_TIERS.includes(tier);
 

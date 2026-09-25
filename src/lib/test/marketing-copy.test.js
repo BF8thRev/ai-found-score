@@ -13,7 +13,11 @@ const PAGES = ['index.html', 'about.html', 'terms.html', 'refunds.html', 'privac
 const read = (f) => readFileSync(new URL(f, PUBLIC), 'utf8');
 
 // index.html quotes third-party usage figures (a cited stats band); that band is not our claim.
-const withoutStats = (html) => html.replace(/<section class="stats-band"[\s\S]*?<\/section>/, '');
+// The hero's "real answer" card is a labelled, dated verbatim quote (published with the owner's
+// permission), so it may name the assistant and the real report's search count.
+const withoutStats = (html) => html
+  .replace(/<section class="stats-band"[\s\S]*?<\/section>/, '')
+  .replace(/<div class="real-answer" data-real-quote>[\s\S]*?<\/figure>[\s\S]*?<\/p>\s*<\/div>/, '');
 const visible = (html) => html
   .replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ')
   .replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;|&#\d+;/g, ' ');
@@ -39,8 +43,12 @@ test('only the plans on sale are offered', () => {
     assert.ok(!/Full Year|\$69\b|\$199\b|full listing build/i.test(text), `${f} mentions a plan that is off sale`);
   }
   const index = read('index.html');
-  assert.ok(index.includes('data-tier="snapshot"') && index.includes('data-tier="before_after"'));
-  assert.ok(!/data-tier="(full_year|listing_fix)"/.test(index));
+  assert.ok(index.includes('data-tier="xray"'));
+  assert.ok(!/data-tier="(snapshot|before_after|full_year|listing_fix)"/.test(index));
+  for (const f of PAGES) {
+    const text = read(f);
+    assert.ok(!/\$29\b|\$59\b|Monthly monitoring|\$99\b/i.test(text), `${f} mentions a retired or unannounced plan`);
+  }
 });
 
 test('no banned words in page copy', () => {
@@ -52,6 +60,6 @@ test('no banned words in page copy', () => {
 
 test('real report is the primary example; sample stays reachable', () => {
   const index = read('index.html');
-  assert.match(index, /href="\/report\/mega-wash-and-dry">See a real report</);
-  assert.match(index, /href="\/report\/sample-001">or see a sample report</);
+  assert.match(index, /href="\/report\/mega-wash-and-dry">See a real report/);
+  assert.match(index, /href="\/report\/sample-001">Sample report</);
 });

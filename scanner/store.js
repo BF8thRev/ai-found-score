@@ -264,7 +264,9 @@ export async function sumUsageCost(env, scanId, { fetchImpl = fetch } = {}) {
 
 const SCAN_COLUMNS = ['id', 'business_id', 'business_name', 'report_token', 'status', 'engines', 'runs', 'questions',
   'started_at', 'finished_at', 'calls_total', 'calls_ok', 'engine_cost_usd', 'extract_cost_usd', 'total_cost_usd',
-  'named_you', 'first_you', 'answers', 'report_valid', 'errors', 'trigger', 'notes'];
+  'named_you', 'first_you', 'answers', 'report_valid', 'errors', 'trigger', 'notes',
+  // supabase/v4_ladder.sql: free-report requests (src/lib/auto-scan.js)
+  'request_key', 'business', 'est_cost_usd'];
 
 function scanPatch(patch) {
   const out = {};

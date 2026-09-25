@@ -20,7 +20,8 @@ async function get(env, s, path) {
     const text = (await res.text().catch(() => '')).slice(0, 300);
     // PostgREST's "relation does not exist" → the SQL hasn't been applied yet.
     if (res.status === 404 || /does not exist|PGRST205|schema cache/i.test(text)) {
-      throw new Error(`${path.split('?')[0]} not found — apply supabase/admin_v3.sql`);
+      const table = path.split('?')[0];
+      throw new Error(`${table} not found — apply ${table === 'refund_requests' ? 'supabase/v4_ladder.sql' : 'supabase/admin_v3.sql'}`);
     }
     throw new Error(`${path.split('?')[0]}: HTTP ${res.status} ${redact(env, text, 200)}`);
   }
@@ -38,6 +39,10 @@ const QUERIES = {
   requests: 'report_requests?select=business_name,town,trade,email,requested_at&order=requested_at.desc&limit=10',
   leads: 'leads?select=arm,status,created_at&order=created_at.desc&limit=10',
   payments: 'payments?select=tier,amount_cents,arm,livemode,paid_at&order=paid_at.desc&limit=10',
+  // Free-report request scans still waiting (queued), in progress (running) or needing a person (failed).
+  requestScans: 'scans?select=id,business_name,report_token,status,created_at,started_at,notes,errors&trigger=eq.request&status=in.(queued,running,failed)&order=created_at.desc&limit=30',
+  // Refund requests (supabase/v4_ladder.sql). Refunds themselves are done by a person in Stripe.
+  refunds: 'refund_requests?select=id,report_token,email,reason,status,created_at&order=created_at.desc&limit=30',
 };
 
 /**

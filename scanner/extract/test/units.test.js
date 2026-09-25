@@ -102,9 +102,9 @@ test('sources: citation normalization and directory page check', () => {
   assert.equal(normalizeCitation({ url: 'not a url' }), null);
   const html = `<script type="application/ld+json">{"@type":"ItemList","itemListElement":[
     {"position":2,"item":{"name":"Harbor Plumbing &amp; Heating"}},{"position":1,"item":{"name":"Zed Plumbing"}}]}</script>`;
-  assert.deepEqual(checkDirectoryPage(html, owner), { youListed: true, youPosition: 2, topListed: 'Zed Plumbing', listingsRead: 2 });
+  assert.deepEqual(checkDirectoryPage(html, owner), { youListed: true, youPosition: 2, topListed: 'Zed Plumbing', listingsRead: 2, listed: ['Zed Plumbing', 'Harbor Plumbing & Heating'] });
   const html2 = '<a class="business-name">Zed Plumbing</a><p>Call 516.555.0148</p>';
-  assert.deepEqual(checkDirectoryPage(html2, owner), { youListed: true, youPosition: null, topListed: 'Zed Plumbing', listingsRead: 1 });
+  assert.deepEqual(checkDirectoryPage(html2, owner), { youListed: true, youPosition: null, topListed: 'Zed Plumbing', listingsRead: 1, listed: ['Zed Plumbing'] });
 });
 
 const messagesBody = (over = {}) => ({

@@ -38,7 +38,8 @@
   <div class="wrap">
     <div class="check">✓</div>
     <h1>Payment received.</h1>
-    <p id="success-msg">Thanks. We’ll email your receipt and next steps. If you bought a fix plan, we start on your listings now.</p>
+    <p id="success-msg">Thanks. We’ll email your receipt and next steps.</p>
+    <p id="success-plan" hidden></p>
     <a class="btn-secondary" id="success-link" href="/">Home</a>
   </div>
 </section>
@@ -46,8 +47,23 @@
   // Coming back from Stripe checkout started on a report page: wait for the
   // webhook to land (usually a few seconds), then send them to the unlocked report.
   (function () {
+    // Plan names by tier key (?tier= from the Stripe redirect, or the saved checkout).
+    var TIER_LABEL = {
+      xray: 'AI Visibility X-Ray',
+      snapshot: 'Fix steps',
+      before_after: 'Fix it and re-check'
+    };
+    var TIER_NEXT = {
+      xray: 'Your X-Ray (fix steps, competitor gap sheet and fix checklist) arrives within 24 hours of purchase. If we can’t show you 3 things to fix, it’s free.'
+    };
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem('afs_checkout') || 'null'); } catch (e) {}
+    var tier = new URLSearchParams(location.search).get('tier') || (saved && saved.tier) || '';
+    if (TIER_LABEL[tier]) {
+      var plan = document.getElementById('success-plan');
+      plan.textContent = 'You bought: ' + TIER_LABEL[tier] + '. ' + (TIER_NEXT[tier] || '');
+      plan.hidden = false;
+    }
     if (!saved || !saved.token) return;
     var msg = document.getElementById('success-msg');
     var link = document.getElementById('success-link');
@@ -67,7 +83,7 @@
           } else if (++tries < 15) {
             setTimeout(poll, 2000);
           } else {
-            msg.textContent = 'Your payment went through. The report can take a minute to unlock. Open it below, and reload if it still shows blurred.';
+            msg.textContent = 'Your payment went through. The report can take a little while to unlock. Open it below, and reload if it still shows blurred.';
           }
         })
         .catch(function () { if (++tries < 15) setTimeout(poll, 2000); });

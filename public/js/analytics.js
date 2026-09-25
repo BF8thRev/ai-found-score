@@ -35,8 +35,9 @@
   }
 
   // --- Conversion events ---
-  var TIER_PRICE = { snapshot: 29, before_after: 59, full_year: 69, listing_fix: 199 };
+  var TIER_PRICE = { xray: 49, snapshot: 29, before_after: 59, full_year: 69, listing_fix: 199 };
   var CTA_ID = {
+    xray: 'xray_49',
     snapshot: 'snapshot_29',
     before_after: 'before_after_59',
     full_year: 'full_year_69',

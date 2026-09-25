@@ -44,3 +44,21 @@ function timingSafeEqual(a, b) {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+/**
+ * Tier from the amount paid, so Payment Links need no metadata. Keep in step with the prices on
+ * the site. On sale (Sep 2026): the $49 AI Visibility X-Ray (`xray`). Retired tiers keep their
+ * keys so an old or stray payment is still recorded under the right name.
+ */
+export const TIER_BY_CENTS = Object.freeze({
+  2900: 'snapshot',       // retired: $29 Fix steps
+  4900: 'xray',           // $49 AI Visibility X-Ray (one-time)
+  5900: 'before_after',   // retired: $59 Fix it and re-check
+  6900: 'full_year',      // retired: $69 Full Year
+  19900: 'listing_fix',   // retired: $199 Full listing build
+});
+
+/** The tier for a Checkout Session: explicit metadata first, then the amount paid. */
+export function tierForSession(session) {
+  return session?.metadata?.tier ?? TIER_BY_CENTS[session?.amount_total] ?? 'unknown';
+}

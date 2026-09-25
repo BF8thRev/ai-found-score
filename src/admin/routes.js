@@ -5,6 +5,7 @@
 //   POST /admin/logout          clears the cookie (GET works too)
 //   POST /admin/expenses        add a manual expense
 //   POST /admin/scan            start a background scan from the form
+//   POST /admin/scan/run        "Run now" for a queued (or failed) free-report request scan (src/lib/auto-scan.js)
 //   GET  /admin/admin.js        the page's small script
 //   /api/admin/*                see src/admin/api.js
 //
@@ -20,6 +21,7 @@ import { handleAdminPing, handleAdminScanStart, handleAdminScanStatus, startScan
 import { dryRunEnabled, isLocalRequest } from './dry-run.js';
 import { redact } from './redact.js';
 import { defaultScanEngines } from '../../scanner/config.js';
+import { runQueuedScan } from '../lib/auto-scan.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -106,7 +108,7 @@ export async function handleAdminRequest(request, url, env) {
     return redirect(url, '/admin', { 'Set-Cookie': clearSessionCookie() });
   }
 
-  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan') return notFound();
+  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run') return notFound();
 
   const who = await adminAuth(request, adminToken);
   if (!who) {
@@ -136,6 +138,16 @@ export async function handleAdminRequest(request, url, env) {
       return render({ flash: { expense: { ok: false, text: `Could not save: ${redact(env, e?.message || e, 200)}` } }, status: 500 });
     }
     return redirect(url, '/admin?expense=saved#expenses');
+  }
+
+  if (path === '/admin/scan/run') {
+    if (method !== 'POST') return redirect(url, '/admin#requests');
+    const f = await form(request);
+    const id = String(f?.get('id') || '').trim().toLowerCase();
+    if (!UUID_RE.test(id)) return render({ flash: { requests: { ok: false, text: 'Bad scan id.' } }, status: 422 });
+    const r = await runQueuedScan(env, id);
+    if (!r.ok) return render({ flash: { requests: { ok: false, text: redact(env, r.error, 300) } }, status: r.status || 500 });
+    return redirect(url, `/admin?started=${r.scanId}#run`);
   }
 
   if (path === '/admin/scan') {
