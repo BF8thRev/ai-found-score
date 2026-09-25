@@ -298,6 +298,7 @@ img { max-width: 100%; }
 .page { padding-top: 8px; }
 .page h1 { font-size: clamp(32px, 4vw, 44px); margin: 0 0 14px; }
 .page h2 { font-size: 24px; margin: 32px 0 8px; }
+.page .lede-page { font-size: 20px; line-height: 1.55; color: var(--ink); margin: 0 0 18px; }
 .page ul { padding-left: 22px; }
 .page li { margin-bottom: 8px; }
 .unsub-form { display: grid; gap: 12px; max-width: 420px; margin-top: 18px; }
