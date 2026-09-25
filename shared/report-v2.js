@@ -279,6 +279,40 @@ function ownDomain(report) {
 }
 
 /**
+ * AI Found Score: our own 0-100 measure of how visible a business is to AI, computed only from
+ * this report's data (never guessed). Parts and weights (a part with no data is left out and the
+ * rest are scaled to 100):
+ *   named   50  share of answers that named the business
+ *   first   25  share of answers that named it first
+ *   facts   15  share of checked AI facts about it (hours, phone, price, address, services) that were right
+ *   ownSite 10  whether any answer cited the business's own website
+ * → { score, parts: [{ key, label, weight, value (0-1), detail }] } or null when there are no answers.
+ */
+export const SCORE_WEIGHTS = Object.freeze({ named: 50, first: 25, facts: 15, ownSite: 10 });
+
+export function computeVisibilityScore(report) {
+  const t = computeTotals(report);
+  if (!t.answers) return null;
+  const parts = [
+    { key: 'named', label: 'Named in AI answers', weight: SCORE_WEIGHTS.named, value: t.namedYou / t.answers, detail: `${t.namedYou} of ${t.answers} answers` },
+    { key: 'first', label: 'Named first', weight: SCORE_WEIGHTS.first, value: t.firstYou / t.answers, detail: `${t.firstYou} of ${t.answers} answers` },
+  ];
+  const facts = ((report && report.aiFacts) || []).filter((f) => f && (f.status === 'match' || f.status === 'differs'));
+  if (facts.length) {
+    const right = facts.filter((f) => f.status === 'match').length;
+    parts.push({ key: 'facts', label: 'AI got your facts right', weight: SCORE_WEIGHTS.facts, value: right / facts.length, detail: `${right} of ${facts.length} facts checked` });
+  }
+  const own = ownDomain(report);
+  if (own) {
+    const cited = ((report && report.sources) || []).some((x) => x && String(x.domain || '').toLowerCase() === own && Array.isArray(x.citedIn) && x.citedIn.length);
+    parts.push({ key: 'ownSite', label: 'AI cited your website', weight: SCORE_WEIGHTS.ownSite, value: cited ? 1 : 0, detail: cited ? 'Yes' : 'No' });
+  }
+  const total = parts.reduce((n, x) => n + x.weight, 0);
+  const score = Math.round((100 * parts.reduce((n, x) => n + x.weight * x.value, 0)) / total);
+  return { score, parts };
+}
+
+/**
  * buildGapSheet(report) → { answers, competitors: [...], sourcesChecked }
  *   competitors: every non-owner entity named in 2+ answers, proven by answer ids found in
  *   report.answers (recounted here, never taken from the stored counts):

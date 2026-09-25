@@ -694,3 +694,23 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .tiers.ladder .tier-plus { margin: 14px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14.5px; font-weight: 700; color: var(--navy); }
 .tiers.ladder .tier-plus + .tier-group { margin-top: 10px; }
 .tiers.ladder .tier-group + .tier-list { border-top: 0; padding-top: 0; }
+/* ---------- AI Found Score block (report v2) ---------- */
+.r2-score { border: 1px solid var(--line); border-radius: 16px; padding: 22px 22px 18px; background: #fff; }
+.r2-score-top { display: flex; align-items: center; gap: 18px; }
+.r2-score-top h2 { margin: 0 0 4px; }
+.r2-score-top h2 sup { font-size: .55em; color: var(--muted); }
+.r2-score-top .sub { margin: 0; }
+.r2-score-ring {
+  --c: var(--green); flex: 0 0 auto; width: 96px; height: 96px; border-radius: 50%; display: grid; place-content: center; text-align: center;
+  background: radial-gradient(closest-side, #fff 78%, transparent 79%), conic-gradient(var(--c) calc(var(--pct) * 1%), var(--wash-2) 0);
+}
+.r2-score-ring.mixed { --c: var(--amber); }
+.r2-score-ring.weak { --c: var(--red); }
+.r2-score-ring span { font-size: 32px; font-weight: 800; color: var(--navy); line-height: 1; }
+.r2-score-ring small { font-size: 11px; color: var(--muted); }
+.r2-score-parts { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 8px; }
+.r2-score-parts li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; font-size: 15px; padding: 8px 0; border-top: 1px solid var(--line); }
+.r2-score-parts .v { color: var(--muted); }
+.r2-score-parts .w { font-weight: 700; color: var(--navy); min-width: 56px; text-align: right; }
+.r2-score-note { margin: 14px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+@media (max-width: 520px) { .r2-score-parts li { grid-template-columns: 1fr auto; } .r2-score-parts .v { grid-column: 1; font-size: 13.5px; } }

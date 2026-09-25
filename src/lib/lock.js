@@ -8,7 +8,7 @@
 // copyText, plus the X-Ray sections (competitor gap sheet, fix checklist), are the paid part:
 // the $49 AI Visibility X-Ray (tier `xray`). Any recorded payment for the token unlocks all of it.
 
-import { xraySections } from '../../shared/report-v2.js';
+import { xraySections, computeVisibilityScore } from '../../shared/report-v2.js';
 
 /** The fields of an issue that survive locking. Everything else (description, steps, copyText, …) is dropped. */
 export const LOCKED_ISSUE_FIELDS = ['kind', 'severity', 'title'];
@@ -59,6 +59,9 @@ export function lockReport(r) {
  * sections (built from the report's own data); locked ones go through lockReport.
  */
 export function reportBody(report, unlocked) {
-  if (!unlocked) return lockReport(report);
-  return report.version === 2 ? { ...report, locked: false, xray: xraySections(report) } : report;
+  // v2: the AI Found Score is computed from the report's own data every time it is served, so it
+  // always matches what the page shows (shared/report-v2.js computeVisibilityScore). Free, never locked.
+  const withScore = (r) => (r.version === 2 ? { ...r, score: computeVisibilityScore(report) } : r);
+  if (!unlocked) return withScore(lockReport(report));
+  return report.version === 2 ? withScore({ ...report, locked: false, xray: xraySections(report) }) : report;
 }

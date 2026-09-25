@@ -548,6 +548,7 @@ function renderV2(root, report) {
     headerV2(report, b, meta),
     '<div class="wrap r2">',
     heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
+    scoreV2(report),
     baselineV2(report, t),
     report.sample ? '' : leadForm('top'),
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
@@ -630,6 +631,31 @@ function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, prov
       ${h.namedYou ? '' : '<p class="miss">It didn’t name you.</p>'}
       <div class="more">We ran ${cw.sameSearches} like this on ${escapeHtml(engineList)}${cw.runs > 1 ? `, ${cw.runs} times each: ${num(t.answers)} answers` : ''}. ${tally}${topLine}</div>
     </div>`;
+}
+
+// The AI Found Score: computed by the Worker from this report's own answers
+// (shared/report-v2.js computeVisibilityScore). The footnote says exactly how.
+function scoreV2(report) {
+  const sc = report.score;
+  if (!sc || !Array.isArray(sc.parts) || !Number.isFinite(Number(sc.score))) return '';
+  const n = Math.max(0, Math.min(100, Math.round(Number(sc.score))));
+  const band = n >= 70 ? 'strong' : n >= 40 ? 'mixed' : 'weak';
+  const bandText = { strong: 'AI finds you often.', mixed: 'AI finds you sometimes.', weak: 'AI rarely finds you.' }[band];
+  const rows = sc.parts.map((p) => `
+        <li><span class="k">${escapeHtml(p.label)}</span><span class="v">${escapeHtml(p.detail)}</span><span class="w">${num(Math.round(p.weight * p.value))} / ${num(p.weight)}</span></li>`).join('');
+  return `
+    <section class="report-section r2-score" aria-label="AI Found Score">
+      <div class="r2-score-top">
+        <div class="r2-score-ring ${band}" style="--pct:${n}"><span>${n}</span><small>of 100</small></div>
+        <div>
+          <h2>AI Found Score<sup>*</sup></h2>
+          <p class="sub">${bandText}</p>
+        </div>
+      </div>
+      <ul class="r2-score-parts">${rows}
+      </ul>
+      <p class="r2-score-note">* The AI Found Score is our own internal measure, not a rating from any AI company. We compute it only from the answers in this report: how often you were named (50%), named first (25%), whether the facts AI stated about you were right (15%) and whether AI cited your website (10%). A part we couldn&rsquo;t check is left out and the rest are scaled to 100. AI answers change, so the score can change from scan to scan.</p>
+    </section>`;
 }
 
 // Step 6: before/after strip when this scan has a baseline.
