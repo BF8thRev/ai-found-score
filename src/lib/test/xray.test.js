@@ -135,6 +135,13 @@ test('lock: the X-Ray sections are withheld until paid; unlocked reports carry t
   assert.equal(l2.gapSheet, undefined);
   assert.equal(l2.checklist, undefined);
   assert.equal(validateReport(l2).ok, true);
+  // The listing names read on cited pages feed only the gap sheet: dropped while locked.
+  const withListed = clone(v2);
+  withListed.sources = (withListed.sources || []).map((s) => ({ ...s, listed: ['Someone Else'] }));
+  const l3 = lockReport(withListed);
+  assert.ok(l3.sources.length > 0);
+  assert.ok(l3.sources.every((s) => !('listed' in s)));
+  assert.ok(reportBody(withListed, true).sources.every((s) => Array.isArray(s.listed)));
 });
 
 test('lock: v1 reports get no X-Ray', () => {

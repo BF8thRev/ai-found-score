@@ -8,8 +8,11 @@
 //   AUTO_SCAN unset/off  the row is 'queued'; /admin lists it with a "Run now" button (runQueuedScan).
 //
 // Brakes, in order (a request that trips one is QUEUED, never dropped; the page still gets its link):
-//   1. Dedupe: the same normalized business name + ZIP (request_key) within 7 days → the existing
-//      report token is returned and nothing new is created or scanned.
+//   1. Dedupe: the same normalized business name + ZIP (request_key) within 7 days → nothing is
+//      scanned. The earlier request's token is NEVER handed out (anyone can type a business's name
+//      and ZIP; its token may be paid for). This request gets its own new token instead: a copy of
+//      the finished report when there is one (locked until this token is paid for), else a queued
+//      row (reason 'duplicate', no request_key so it never becomes a dedupe anchor itself).
 //   2. Per-IP: the REQUEST_LIMITER binding, bucket 'autoscan' (per minute, per location).
 //   3. Daily caps over today's (UTC) automatic request scans in `scans` (queued rows don't count):
 //        AUTO_SCAN_DAILY_MAX (default 25) scans, AUTO_SCAN_DAILY_USD (default 20) dollars.
@@ -19,7 +22,7 @@
 //      Spend: every other row counts (finished scans at their real cost, unfinished ones at the larger
 //      of estimate and cost so far), which fails closed. A request that loses is demoted to 'queued'.
 //      The dedupe check is re-run the same way after the write, so two identical submits at the same
-//      moment end up on one report.
+//      moment start one scan (the later one becomes a queued duplicate with its own token).
 // Needs supabase/v4_ladder.sql (request_key, business, est_cost_usd) and SUPABASE_SERVICE_KEY. Any
 // failure before the row exists → null (the request is still saved; the page just gets no link).
 //
@@ -27,7 +30,7 @@
 // recorded fixtures and the token's state lives in this isolate's memory (DRY_RUN_REQUESTS).
 
 import { activeEngines, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
-import { canStore, upsertScan, stableUuid, getScan } from '../../scanner/store.js';
+import { canStore, upsertScan, stableUuid, getScan, saveReport } from '../../scanner/store.js';
 import { resolveKeys } from '../../scanner/config.js';
 import { parseScanRequest } from '../admin/scan-core.js';
 import { normalizeBizName } from '../../shared/report-v2.js';
@@ -169,6 +172,41 @@ async function deleteScan(env, id, { fetchImpl = fetch } = {}) {
   if (!res.ok) throw new Error(`scans delete failed: ${res.status}`);
 }
 
+/** The newest stored v2 report for a token (service key), or null. */
+async function readStoredReport(env, token, fetchImpl) {
+  const { base, headers } = supa(env);
+  const res = await fetchImpl(`${base}/scan_results?report_token=eq.${encodeURIComponent(token)}&version=eq.2&select=business_id,report,scanned_at&order=scanned_at.desc&limit=1`, { headers, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`scan_results read failed: ${res.status}`);
+  const [row] = await res.json();
+  return row && row.report && typeof row.report === 'object' ? row : null;
+}
+
+/**
+ * A duplicate request (same business within DEDUPE_DAYS) gets its OWN token, never the earlier one:
+ * a copy of the earlier finished report (unpaid, so it is served locked), or, while that report
+ * isn't ready, a queued row that /admin can run. Nothing is scanned. `rowWritten`: our scans row
+ * already exists (the post-write re-check) and is replaced/removed here.
+ */
+async function reuseWithNewToken(env, prior, { token, scanId, base, notes, rowWritten, fetchImpl }) {
+  try {
+    const stored = prior.report_token ? await readStoredReport(env, prior.report_token, fetchImpl) : null;
+    if (stored) {
+      await saveReport(env, { scanId: null, businessId: stored.business_id, reportToken: token, report: { ...stored.report, id: token } }, { fetchImpl });
+      if (rowWritten) await deleteScan(env, scanId, { fetchImpl }).catch(() => upsertScan(env, { id: scanId, status: 'failed', est_cost_usd: 0, request_key: null, notes: 'duplicate request (report copied)' }, { fetchImpl }).catch(() => {}));
+      return { token, status: 'reused', scanId: prior.id };
+    }
+  } catch (e) {
+    console.error('[auto-scan] duplicate copy failed', String(e?.message || e).slice(0, 200));
+  }
+  try {
+    await upsertScan(env, { ...base, status: 'queued', est_cost_usd: 0, request_key: null, notes: `${notes} · queued: duplicate` }, { fetchImpl });
+  } catch (e) {
+    console.error('[auto-scan] duplicate row failed', String(e?.message || e).slice(0, 200));
+    return null;
+  }
+  return { token, status: 'queued', scanId, reason: 'duplicate' };
+}
+
 // ---------------------------------------------------------------------------
 // start (or queue) the scan for a new request
 // ---------------------------------------------------------------------------
@@ -177,7 +215,8 @@ async function deleteScan(env, id, { fetchImpl = fetch } = {}) {
  * @param {object} env
  * @param {object} req      the saved request: { id, businessName, trade, town, state, zip, website, phone }
  * @param {object} o        { request (for the per-IP limiter), dryRun, now, fetchImpl, limiter, uuid }
- * @returns {Promise<null | { token, status: 'running'|'queued'|'reused', scanId, reason? }>}
+ * @returns {Promise<null | { token, status: 'running'|'queued'|'reused', scanId, reason? }>}  token is always
+ *   this request's own new token ('reused' = the earlier report was copied to it).
  */
 export async function startRequestScan(env, req, o = {}) {
   const now = o.now ?? Date.now();
@@ -220,7 +259,12 @@ export async function startRequestScan(env, req, o = {}) {
     console.error('[auto-scan] dedupe read failed', String(e?.message || e).slice(0, 200));
     return null;
   }
-  if (prior) return { token: prior.report_token, status: 'reused', scanId: prior.id };
+  const base = {
+    id: scanId, business_name: business.name, report_token: token, trigger: 'request', engines, runs: 1,
+    questions: 5, calls_total: 5 * engines.length, notes: params.notes, request_key: key, business,
+  };
+  const dup = { token, scanId, base, notes: params.notes, fetchImpl };
+  if (prior) return reuseWithNewToken(env, prior, { ...dup, rowWritten: false });
 
   // 2. Per-IP brake.
   let reason = null;
@@ -231,10 +275,6 @@ export async function startRequestScan(env, req, o = {}) {
 
   // 3. Reserve.
   const est = estimateRequestScanUsd(engines.length ? engines : ['chatgpt']);
-  const base = {
-    id: scanId, business_name: business.name, report_token: token, trigger: 'request', engines, runs: 1,
-    questions: 5, calls_total: 5 * engines.length, notes: params.notes, request_key: key, business,
-  };
   try {
     await upsertScan(env, { ...base, status: reason ? 'queued' : 'running', est_cost_usd: reason ? 0 : est }, { fetchImpl });
   } catch (e) {
@@ -250,10 +290,7 @@ export async function startRequestScan(env, req, o = {}) {
   // Verify the dedupe: of two identical submits at once, the later one gives way.
   try {
     const hit = dedupeHit(await readByKey(env, key, since, { fetchImpl }), scanId);
-    if (hit) {
-      await deleteScan(env, scanId, { fetchImpl }).catch(() => upsertScan(env, { id: scanId, status: 'failed', est_cost_usd: 0, notes: 'duplicate request' }, { fetchImpl }).catch(() => {}));
-      return { token: hit.report_token, status: 'reused', scanId: hit.id };
-    }
+    if (hit) return reuseWithNewToken(env, hit, { ...dup, rowWritten: true });
   } catch (e) {
     console.error('[auto-scan] dedupe re-read failed', String(e?.message || e).slice(0, 200));
     if (!reason) return queue('store');

@@ -14,7 +14,7 @@
 // (src/lib/live-preview.js): the page uses it to ask one question live without a second check.
 // Every JSON success also carries {report_url}: "/report/<token>" once the request's scans row
 // exists (src/lib/auto-scan.js; scanned at once with AUTO_SCAN=on, else queued for /admin "Run now";
-// the same business name + ZIP within 7 days gets the same link back), or null when no link could
+// the same business name + ZIP within 7 days gets its OWN new link, never the earlier one), or null when no link could
 // be made (bot check not configured, no service key, a database error). The request is saved either
 // way. A no-JS form post is redirected to the report link when there is one.
 

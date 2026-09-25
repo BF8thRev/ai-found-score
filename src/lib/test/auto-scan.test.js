@@ -13,8 +13,9 @@ import { REQUEST_ACTION } from '../turnstile.js';
 // ---------------------------------------------------------------------------
 // A fake Supabase `scans` table (PostgREST subset used by auto-scan.js / store.js)
 // ---------------------------------------------------------------------------
-function fakeDb(seed = []) {
+function fakeDb(seed = [], reportSeed = []) {
   const rows = seed.map((r) => ({ ...r }));
+  const reports = reportSeed.map((r) => ({ ...r })); // scan_results
   let clock = Date.parse('2026-09-24T12:00:00Z');
   const tick = () => new Date(clock++).toISOString();
   const match = (r, params) => {
@@ -33,9 +34,13 @@ function fakeDb(seed = []) {
   const f = async (input, init = {}) => {
     await new Promise((r) => setTimeout(r, 1)); // let concurrent requests interleave
     const u = new URL(String(input));
-    assert.ok(u.pathname.endsWith('/rest/v1/scans'), `unexpected table ${u.pathname}`);
     const method = init.method || 'GET';
     const params = [...u.searchParams.entries()];
+    if (u.pathname.endsWith('/rest/v1/scan_results')) {
+      if (method === 'POST') { const body = JSON.parse(init.body); reports.push(body); return Response.json([body], { status: 201 }); }
+      return Response.json(reports.filter((r) => match(r, params)).map((r) => ({ ...r })));
+    }
+    assert.ok(u.pathname.endsWith('/rest/v1/scans'), `unexpected table ${u.pathname}`);
     if (method === 'POST') {
       const body = JSON.parse(init.body);
       const cur = rows.find((r) => r.id === body.id);
@@ -52,7 +57,7 @@ function fakeDb(seed = []) {
     if ((u.searchParams.get('order') || '').startsWith('created_at.desc')) out.reverse();
     return Response.json(out.map((r) => ({ ...r })));
   };
-  return { rows, fetch: f, tick };
+  return { rows, reports, fetch: f, tick };
 }
 
 function fakeWorkflow() {
@@ -162,36 +167,58 @@ test('AUTO_SCAN off: no workflow is started; the request is queued and still get
   }
 });
 
-test('dedupe: same business name + ZIP within 7 days reuses the token; older or failed ones don\'t', async () => {
-  const db = fakeDb([
-    { id: '11111111-1111-4111-8111-111111111111', trigger: 'request', status: 'done', report_token: 'OLDTOKENOLDTOKEN1234', request_key: requestKey({ name: 'Otter Plumbing', zip: '11758' }), created_at: '2026-09-20T00:00:00.000Z' },
-  ]);
+test('dedupe: same business within 7 days never hands out the earlier token; a finished report is copied to a new one', async () => {
+  const prior = { id: '11111111-1111-4111-8111-111111111111', trigger: 'request', status: 'done', report_token: 'OLDTOKENOLDTOKEN1234', request_key: requestKey({ name: 'Otter Plumbing', zip: '11758' }), created_at: '2026-09-20T00:00:00.000Z' };
+  const stored = { report_token: 'OLDTOKENOLDTOKEN1234', version: 2, business_id: 'b1', scanned_at: '2026-09-20T01:00:00Z', report: { version: 2, id: 'OLDTOKENOLDTOKEN1234', business: { name: 'Otter Plumbing' } } };
+  const db = fakeDb([prior], [stored]);
   const env = baseEnv();
   const r = await startRequestScan(env, req({ businessName: 'OTTER plumbing.' }), { now: NOW, fetchImpl: db.fetch });
-  assert.deepEqual([r.status, r.token], ['reused', 'OLDTOKENOLDTOKEN1234']);
+  assert.equal(r.status, 'reused');
+  assert.notEqual(r.token, 'OLDTOKENOLDTOKEN1234');
+  assert.match(r.token, REQUEST_TOKEN_RE);
   assert.equal(env.SCAN_WORKFLOW.created.length, 0);
   assert.equal(db.rows.length, 1);
+  const copy = db.reports.find((x) => x.report_token === r.token);
+  assert.ok(copy, 'report copied to the new token');
+  assert.equal(copy.report.id, r.token);
+  assert.equal(copy.scan_id, null);
   // 8 days later it scans again.
   const later = await startRequestScan(env, req(), { now: Date.parse('2026-09-28T12:00:00Z'), fetchImpl: db.fetch });
   assert.equal(later.status, 'running');
   // A failed earlier scan is not reused.
-  const db2 = fakeDb([{ ...db.rows[0], status: 'failed' }]);
+  const db2 = fakeDb([{ ...prior, status: 'failed' }]);
   const r2 = await startRequestScan(baseEnv(), req(), { now: NOW, fetchImpl: db2.fetch });
   assert.equal(r2.status, 'running');
   assert.notEqual(r2.token, 'OLDTOKENOLDTOKEN1234');
 });
 
-test('dedupe race: two identical submits at once end up on one report and one scan', async () => {
+test('dedupe while the earlier report is not ready: a queued duplicate with its own token, not a dedupe anchor', async () => {
+  const prior = { id: '11111111-1111-4111-8111-111111111111', trigger: 'request', status: 'running', report_token: 'OLDTOKENOLDTOKEN1234', request_key: requestKey({ name: 'Otter Plumbing', zip: '11758' }), created_at: '2026-09-24T00:00:00.000Z' };
+  const db = fakeDb([prior]);
+  const env = baseEnv();
+  const r = await startRequestScan(env, req(), { now: NOW, fetchImpl: db.fetch });
+  assert.deepEqual([r.status, r.reason], ['queued', 'duplicate']);
+  assert.notEqual(r.token, 'OLDTOKENOLDTOKEN1234');
+  assert.equal(env.SCAN_WORKFLOW.created.length, 0);
+  const row = db.rows.find((x) => x.report_token === r.token);
+  assert.equal(row.status, 'queued');
+  assert.equal(row.request_key, null);
+  assert.equal(row.est_cost_usd, 0);
+  assert.equal(row.business.name, 'Otter Plumbing');
+});
+
+test('dedupe race: two identical submits at once start one scan; neither gets the other token', async () => {
   const db = fakeDb();
   const env = baseEnv();
-  const [a, b] = await Promise.all([
+  const [a, b] = await quiet(() => Promise.all([
     startRequestScan(env, req(), { now: NOW, fetchImpl: db.fetch }),
     startRequestScan(env, req(), { now: NOW, fetchImpl: db.fetch }),
-  ]);
-  assert.equal(a.token, b.token);
-  assert.deepEqual([a.status, b.status].sort(), ['reused', 'running']);
+  ]));
+  assert.notEqual(a.token, b.token);
+  assert.deepEqual([a.status, b.status].sort(), ['queued', 'running']);
+  assert.equal([a, b].find((x) => x.status === 'queued').reason, 'duplicate');
   assert.equal(env.SCAN_WORKFLOW.created.length, 1);
-  assert.equal(db.rows.length, 1);
+  assert.equal(db.rows.filter((x) => x.request_key).length, 1);
 });
 
 test('daily count cap: over AUTO_SCAN_DAILY_MAX the request is queued (link kept); yesterday doesn\'t count', async () => {

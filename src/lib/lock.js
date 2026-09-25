@@ -35,6 +35,13 @@ export function lockReport(r) {
       listings: (r.listings || []).map((l) =>
         l.status === 'match' ? l : { platform: l.platform, status: l.status, locked: true }),
       issues: (r.issues || []).map(lockIssue),
+      // The listing names read on each cited page (`listed`) only feed the paid gap sheet: with them,
+      // entities and answers, the gap sheet could be rebuilt from the free JSON. topListed stays free.
+      ...(Array.isArray(r.sources) ? { sources: r.sources.map((s) => {
+        if (!s || typeof s !== 'object' || !('listed' in s)) return s;
+        const { listed, ...keep } = s;
+        return keep;
+      }) } : {}),
       xray: { ...LOCKED_XRAY },
     };
   }

@@ -115,8 +115,9 @@ function renderV1(root, report) {
 
   const b = report.business;
   const locked = !!report.locked;
-  // The $49 X-Ray, only on a locked report with enough fixes to keep the refund promise.
-  const xrayOk = locked && report.issues.filter((i) => i && i.title).length >= MIN_FIX_ITEMS && tierOn('xray');
+  // The $49 X-Ray is never sold on a v1 report: its gap sheet and checklist are built only for
+  // v2 reports (src/lib/lock.js reportBody), so a v1 buyer wouldn't get what the offer promises.
+  const xrayOk = false;
   const named = report.aiResults.filter((r) => r.named).length;
   const total = report.aiResults.length;
   const badListings = report.listings.filter((l) => l.status === 'mismatch');
