@@ -6,7 +6,7 @@ One Cloudflare Worker serving the static site, the report API, and the admin sca
 
 | Path | What it is |
 |---|---|
-| `/` | Landing page (site copy v2): hero with the sample report's headline answer, what the report shows, how it works, the ladder (free Snapshot → $99 AI Visibility Audit → $499 Be the Answer, a year of scans with suggested fixes; the Competitor Breakdown and AI Defense are one line each, offered after delivery), FAQ, and the free-report form (shows the owner their 3 questions first, then asks for an optional email) |
+| `/` | Landing page (site copy v2): hero with the sample report's headline answer, what the report shows, how it works, the ladder (free Snapshot → $99 AI Visibility Audit → $499 Be the Answer, a scan every month for a year; nothing listed under it), FAQ, and the free-report form (shows the owner their 3 questions first, then asks for an optional email) |
 | `/report/sample-001` | Sample v2 report (fictional plumbing business, fictional competitors, made-up answers). Also `sample-edge-failed` (one engine didn't respond), `sample-recheck` (before/after strip) and `sample-v1` (legacy renderer) |
 | `/report/[id]` | Report page for any id — reads from `GET /api/report/[id]` |
 | `/r/[code]` | Postcard short code (e.g. `/r/K7M2QX`, case/dash-insensitive) → 302 to that recipient's `/report/[token]`. Unknown code → friendly not-found page |

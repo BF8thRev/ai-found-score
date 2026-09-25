@@ -58,13 +58,10 @@ test('only the plans on the ladder are offered', () => {
     const text = read(f);
     assert.ok(!/\$29\b|\$59\b|Monthly monitoring/i.test(text), `${f} mentions a retired plan`);
   }
-  // AI Defense is never sold on the public site: one mention line, no button.
-  const defense = index.match(/AI Defense/g) || [];
-  assert.equal(defense.length, 1, 'AI Defense is mentioned once');
-  assert.match(index, /<p class="ladder-note">AI Defense \(\$99\/mo[^<]*Never sold cold\.<\/p>/);
-  // The Competitor Breakdown is an after-audit upsell: one line, no price, no button.
-  assert.equal((index.match(/Competitor Breakdown/g) || []).length, 1, 'Competitor Breakdown is mentioned once');
-  assert.match(index, /<p class="ladder-note">After your audit, we also offer a Competitor Breakdown[^<$]*<\/p>/);
+  // After-delivery offers (AI Defense, Competitor Breakdown) are never on the public page; the
+  // ladder stays three cards with nothing listed under them.
+  assert.ok(!/AI Defense|Competitor Breakdown|ladder-note/.test(index), 'after-delivery offers on the homepage');
+  assert.ok(!/0[–-]100/.test(index), 'the offer no longer promises a score');
 });
 
 test('no banned words in page copy', () => {

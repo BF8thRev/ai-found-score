@@ -3,8 +3,8 @@
 > Free report for local service businesses. We ask the AI assistants customers use the questions a customer in the business's town would ask (three questions in the free snapshot, through each assistant's official or commercial service with web search on) and show every answer word for word: who got named, who got named first, and which websites the AI cited. Each report lists exactly which assistants were asked and when. The report also checks whether the business's name, phone, address, and hours match across Google, Apple, Bing, Yelp, and Facebook.
 
 - The free report (AI Visibility Snapshot) costs nothing and uses public data only. No logins are required.
-- AI Visibility Audit ($99, one-time): every answer quoted word for word, the 0-100 AI Found Score with the full breakdown, and a 5-minute fix checklist. Delivered in 24 hours. If the audit doesn't show something the owner didn't know, it's free.
-- Be the Answer ($499, one-time): the AI Visibility Audit, then full scans across every assistant up to once a month for 12 months, with suggested fixes after every scan. Money back if the first scan doesn't show something the owner didn't know.
+- AI Visibility Audit ($99, one-time): every major AI assistant, every question asked 3 times, every answer word for word, what AI gets wrong about the business and what to fix first. Delivered in 24 hours. Free if it shows nothing new.
+- Be the Answer ($499, one-time): the AI Visibility Audit, then a new scan every month for 12 months, with what changed and what to fix next after each. Money back if the first scan shows nothing new.
 - AI Found Score can't promise what AI will say, and does not promise placement or bookings.
 - Operator: Fields Holding d/b/a GetAiFound Score, 120 Terminal Drive, Plainview, NY 11803. Email: hello@aifoundscore.com
 
