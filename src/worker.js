@@ -10,7 +10,7 @@
 //                                AUTO_SCAN=on starts its scan at once, src/lib/auto-scan.js);
 //                                Turnstile-checked + per-IP rate limit (src/lib/report-request.js)
 //                                or {request_id, email} to attach an email to that request
-//   GET  /api/questions       -> the 5 questions we'd ask for ?trade=&town=&zip=&state=
+//   GET  /api/questions       -> the 3 questions the free scan asks for ?trade=&town=&zip=&state=
 //                                (per-IP rate limit)
 //   POST /api/stripe-webhook  -> Stripe webhook, verified signature, writes payment
 //   GET|POST /unsubscribe, /stop -> email or postcard opt-out
@@ -30,7 +30,7 @@ import {
   recordPayment, recordUnsubscribe, recordVisit, recordLead,
   getReport, getReportLink, isReportUnlocked,
 } from './lib/db.js';
-import { buildQuestions, normalizeTrade } from '../scanner/questions.js';
+import { freeQuestions, normalizeTrade } from '../scanner/questions.js';
 import { handleReportRequest } from './lib/report-request.js';
 import { turnstileConfigured, turnstileSiteKey } from './lib/turnstile.js';
 import { rateLimit } from './lib/rate-limit.js';
@@ -320,7 +320,7 @@ async function handleLead(request, env) {
 
 const TOWN_RE = /^[\p{L}\p{M}0-9 .,'’-]{1,60}$/u;
 
-// The exact questions the scanner would ask for this trade and town, built
+// The exact questions the free scan asks for this trade and town, built
 // from the scanner's own templates. Pure function of the query: no DB, no keys.
 function handleQuestions(url) {
   const p = url.searchParams;
@@ -333,7 +333,7 @@ function handleQuestions(url) {
   if (!TOWN_RE.test(town)) return bad('Please enter your town.');
   if (zip && !/^\d{5}$/.test(zip)) return bad('ZIP must be 5 digits.');
   if (!/^[A-Za-z]{2}$/.test(state)) return bad('State must be a 2-letter code.');
-  const questions = buildQuestions({ trade, town, zip, state }).map(({ id, intent, text }) => ({ id, intent, text }));
+  const questions = freeQuestions({ trade, town, zip, state }).map(({ id, intent, text }) => ({ id, intent, text }));
   return Response.json({ ok: true, trade, questions }, { headers: { 'Cache-Control': 'public, max-age=300' } });
 }
 

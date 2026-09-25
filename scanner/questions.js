@@ -12,6 +12,10 @@ import { stateAbbr } from './config.js';
 
 export const INTENTS = ['best', 'urgent', 'job', 'trust', 'price'];
 
+/** The free report (AI Visibility Snapshot) asks only the first three: best, urgent, job.
+ *  Owner decision (Sep 2026, site copy v2). Paid and admin scans still ask all five. */
+export const FREE_QUESTION_COUNT = 3;
+
 // Generic templates (the plan's "Template" column). A trade can override any of them.
 export const TEMPLATES = {
   best: "What's the best {trade} in {town}, {state}?",
@@ -134,4 +138,9 @@ export function buildQuestions(business) {
     if (tpl.includes('{zip}') && !zip) tpl = tpl.replace('{zip}', '{town} {state}');
     return { id: `q${i + 1}`, intent, text: fill(tpl, slots) };
   });
+}
+
+/** The questions the free report asks: the first FREE_QUESTION_COUNT of buildQuestions. */
+export function freeQuestions(business) {
+  return buildQuestions(business).slice(0, FREE_QUESTION_COUNT);
 }

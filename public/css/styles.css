@@ -588,3 +588,12 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .tier .price.planned { font-size: 34px; color: var(--muted); }
 .tier .price.planned small { margin-right: 4px; }
 .trust-after { font-size: 18px; font-weight: 700; color: var(--navy); margin: 28px 0 0; }
+
+/* Site copy v2: hero sample card miss line, lost-money line, AI Defense note */
+.ra-miss { align-self: flex-start; margin: 2px 0 0; font-size: 14.5px; color: var(--ink); }
+.ra-tag.miss { background: #FBE3E1; color: #9B2C22; }
+.lost-line { max-width: 760px; margin: 28px auto 0; padding: 16px 20px; border-left: 4px solid var(--amber); background: #fff; border-radius: 8px; font-size: 17px; font-weight: 600; color: var(--navy); text-align: left; }
+.ladder-note { max-width: 760px; margin: 22px auto 0; font-size: 14.5px; color: var(--muted); font-style: italic; }
+.tier-list.grow { flex: 1; }
+.btn-secondary.big { font-size: 18px; padding: 17px 30px; }
+@media (max-width: 520px) { .hero-grid .btn-secondary.big { width: 100%; text-align: center; padding: 16px 20px; } }

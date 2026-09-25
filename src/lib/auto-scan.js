@@ -4,7 +4,7 @@
 // random chars from [A-Za-z0-9_-]) and a `scans` row (trigger 'request') that the report page reads
 // while the report is being made (pendingReportStatus → GET /api/report/<token> answers 202).
 //
-//   AUTO_SCAN=on         start a ScanWorkflow for it at once (activeEngines(env), 1 run, 5 questions).
+//   AUTO_SCAN=on         start a ScanWorkflow for it at once (activeEngines(env), 1 run, FREE_QUESTION_COUNT questions).
 //   AUTO_SCAN unset/off  the row is 'queued'; /admin lists it with a "Run now" button (runQueuedScan).
 //
 // Brakes, in order (a request that trips one is QUEUED, never dropped; the page still gets its link):
@@ -34,6 +34,7 @@ import { canStore, upsertScan, stableUuid, getScan, saveReport } from '../../sca
 import { resolveKeys } from '../../scanner/config.js';
 import { parseScanRequest } from '../admin/scan-core.js';
 import { normalizeBizName } from '../../shared/report-v2.js';
+import { FREE_QUESTION_COUNT } from '../../scanner/questions.js';
 import { rowsBefore, startOfUtcDay } from './live-preview.js';
 
 export const DEFAULT_DAILY_MAX = 25;
@@ -84,9 +85,9 @@ export function requestKey(business) {
   return `${normalizeBizName(business?.name).trim()}|${String(business?.zip || '').trim()}`;
 }
 
-/** What one automatic scan is reserved at: 5 questions × engines × 1 run, extraction, and the headline re-ask. */
+/** What one automatic scan is reserved at: FREE_QUESTION_COUNT questions × engines × 1 run, extraction, and the headline re-ask. */
 export function estimateRequestScanUsd(engines) {
-  const base = estimateScanCost({ engines, questions: 5, runs: 1 }).total;
+  const base = estimateScanCost({ engines, questions: FREE_QUESTION_COUNT, runs: 1 }).total;
   const confirm = Math.max(0, ...engines.map((e) => priceCall(e, TYPICAL_CALL[e]))) + priceCall('extract', TYPICAL_CALL.extract);
   return Math.round((base + confirm) * 1e6) / 1e6;
 }
@@ -233,7 +234,7 @@ export async function startRequestScan(env, req, o = {}) {
   const business = parsed.params.business;
   const token = newRequestToken();
   const scanId = await requestScanId(token);
-  const params = { ...parsed.params, engines, scanId, reportToken: token, questionLimit: null };
+  const params = { ...parsed.params, engines, scanId, reportToken: token, questionLimit: FREE_QUESTION_COUNT };
   const on = autoScanOn(env);
 
   // ---- local dry run: fixtures, no database -------------------------------------------------
@@ -261,7 +262,7 @@ export async function startRequestScan(env, req, o = {}) {
   }
   const base = {
     id: scanId, business_name: business.name, report_token: token, trigger: 'request', engines, runs: 1,
-    questions: 5, calls_total: 5 * engines.length, notes: params.notes, request_key: key, business,
+    questions: FREE_QUESTION_COUNT, calls_total: FREE_QUESTION_COUNT * engines.length, notes: params.notes, request_key: key, business,
   };
   const dup = { token, scanId, base, notes: params.notes, fetchImpl };
   if (prior) return reuseWithNewToken(env, prior, { ...dup, rowWritten: false });
@@ -387,12 +388,12 @@ export async function runQueuedScan(env, id, { fetchImpl = (...a) => fetch(...a)
   try {
     await upsertScan(env, {
       id: scanId, business_name: row.business_name, report_token: row.report_token, trigger: 'request', status: 'running',
-      engines, runs: 1, questions: 5, calls_total: 5 * engines.length, notes: `${parsed.params.notes} · run now`,
+      engines, runs: 1, questions: FREE_QUESTION_COUNT, calls_total: FREE_QUESTION_COUNT * engines.length, notes: `${parsed.params.notes} · run now`,
       request_key: row.request_key ?? null, business: parsed.params.business, est_cost_usd: est,
     }, { fetchImpl });
     await env.SCAN_WORKFLOW.create({
       id: scanId,
-      params: { ...parsed.params, engines, scanId, reportToken: row.report_token, questionLimit: null, dryRun: false },
+      params: { ...parsed.params, engines, scanId, reportToken: row.report_token, questionLimit: FREE_QUESTION_COUNT, dryRun: false },
     });
   } catch (e) {
     const error = String(e?.message || e).slice(0, 300);

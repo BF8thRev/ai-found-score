@@ -2,7 +2,7 @@
 //
 // After a visitor's first submit passes Turnstile, POST /api/request returns a short-lived signed
 // preview token (signPreviewToken) that carries the request id and what they typed. The page can
-// then POST /api/live-preview {request_id, question_id, token} to ask ONE of their five questions to
+// then POST /api/live-preview {request_id, question_id, token} to ask ONE of their three questions to
 // ONE assistant right away (handleLivePreview). No second Turnstile solve, no DB read of the request.
 //
 // Brakes, in order:
@@ -24,7 +24,7 @@
 // Local testing: SCANNER_DRY_RUN=1 + a localhost request answers from the recorded fixtures and
 // skips Supabase entirely (src/admin/dry-run.js). Pure helpers are exported for tests.
 
-import { buildQuestions } from '../../scanner/questions.js';
+import { freeQuestions } from '../../scanner/questions.js';
 import { resolveKeys, enginesConfigured, ENGINE_NAMES, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
 import { ENGINES } from '../../scanner/engines/index.js';
 import { usageRow, saveUsage } from '../../scanner/store.js';
@@ -305,7 +305,7 @@ export async function handleLivePreview(request, env, deps = {}) {
 
   let question = null;
   try {
-    question = buildQuestions({ trade: tok.trade, town: tok.town, zip: tok.zip, state: tok.state }).find((q) => q.id === questionId) || null;
+    question = freeQuestions({ trade: tok.trade, town: tok.town, zip: tok.zip, state: tok.state }).find((q) => q.id === questionId) || null;
   } catch { /* no town: treated as a bad request */ }
   if (!question) return reply({ ok: false, reason: 'bad', message: MSG.bad }, 400);
 
