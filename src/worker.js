@@ -21,6 +21,8 @@
 //   POST /api/live-preview    -> ask one of the visitor's questions live (src/lib/live-preview.js);
 //                                needs the signed token /api/request returned after Turnstile
 //   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h
+//   GET  /                    -> homepage; the hero's real AI answer card comes from showcase_answers
+//                                (src/lib/showcase.js, filled by `node scanner/showcase.js`), cached 1 h
 //   everything else           -> static assets (public/) via env.ASSETS; HTML gets the Turnstile site key
 //                                and local examples from the visitor's request.cf (src/lib/geo.js)
 //
@@ -44,6 +46,7 @@ import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
 import { handleLivePreview, livePreviewStatus } from './lib/live-preview.js';
 import { handleProof } from './lib/proof.js';
+import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 
 // The background scan runner (Cloudflare Workflows entrypoint; binding SCAN_WORKFLOW).
@@ -126,7 +129,7 @@ export default {
     }
 
     // Static assets (landing, report, success pages).
-    return serveAsset(env, request);
+    return serveAsset(env, request, undefined, undefined, ctx);
   },
 };
 
@@ -488,6 +491,7 @@ async function handleStripeWebhook(request, env) {
 // which assistants were asked and when), so the only HTML rewrites are:
 //   data-turnstile-sitekey=""   TURNSTILE_SITE_KEY, only when Turnstile is fully configured
 //   data-geo-*                  the visitor's town/state/ZIP and example questions (src/lib/geo.js)
+//   data-showcase               homepage hero card: a stored real AI answer for this town (src/lib/showcase.js)
 // HTML personalised from the visitor's location is Cache-Control: private and its ETag carries a hash
 // of that location, so no shared cache hands one visitor's town to another and a 304 never crosses towns.
 // The location is only used to fill the page: never logged or stored.
@@ -499,7 +503,7 @@ const PAGE_TAG = '-p2';
  * env.ASSETS.fetch, then fill in the page slots. `path` serves a different asset (pretty
  * URLs); `method` overrides the request's (a POST that ends on a page).
  */
-async function serveAsset(env, request, path, method) {
+async function serveAsset(env, request, path, method, ctx) {
   let req = request;
   if (path || method) {
     const u = new URL(request.url);
@@ -512,7 +516,12 @@ async function serveAsset(env, request, path, method) {
   // The visitor's town (src/lib/geo.js), from the original request so a dev ?geo= survives the pretty-URL rewrite.
   const geo = geoForRequest(request);
   const personal = geo.source === 'ip';
-  const tag = PAGE_TAG + (siteKey ? `-ts.${siteKey.slice(-8).replace(/[^A-Za-z0-9_-]/g, '')}` : '') + geoTag(geo);
+  // Homepage only: the hero's real AI answer for this town and ?trade= (src/lib/showcase.js).
+  const reqUrl = new URL(req.url);
+  const showcase = !path && (reqUrl.pathname === '/' || reqUrl.pathname === '/index.html') && req.method !== 'HEAD'
+    ? pickShowcase(await loadShowcaseRows(env, { origin: reqUrl.origin, waitUntil: ctx?.waitUntil?.bind(ctx) }), geo, reqUrl.searchParams.get('trade'))
+    : null;
+  const tag = PAGE_TAG + (siteKey ? `-ts.${siteKey.slice(-8).replace(/[^A-Za-z0-9_-]/g, '')}` : '') + geoTag(geo) + showcaseTag(showcase);
   // Our ETag = asset ETag + tag; hand the asset server the ETag it knows.
   const inm = req.headers.get('If-None-Match');
   if (inm && inm.includes(tag)) {
@@ -532,7 +541,7 @@ async function serveAsset(env, request, path, method) {
     return r;
   };
   if (!res.body || res.status === 304 || req.method === 'HEAD') return tagged(new Response(res.body, res));
-  return tagged(addGeoHandlers(pageRewriter(siteKey), geo).transform(res));
+  return tagged(addShowcaseHandler(addGeoHandlers(pageRewriter(siteKey), geo), showcase).transform(res));
 }
 
 function pageRewriter(siteKey) {

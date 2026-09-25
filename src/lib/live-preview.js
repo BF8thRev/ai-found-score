@@ -29,6 +29,7 @@ import { resolveKeys, enginesConfigured, ENGINE_NAMES, priceCall, TYPICAL_CALL }
 import { ENGINES } from '../../scanner/engines/index.js';
 import { usageRow, saveUsage } from '../../scanner/store.js';
 import { turnstileConfigured } from './turnstile.js';
+import { displayText } from '../../scanner/answer-text.js';
 
 /** Cheapest first. */
 export const PREVIEW_ORDER = ['gemini', 'chatgpt', 'google_ai_mode', 'perplexity', 'claude'];
@@ -392,6 +393,8 @@ export async function handleLivePreview(request, env, deps = {}) {
 
   const text = String(result.text);
   const ranges = nameRanges(text, tok.name);
+  // What the page shows: the same words without markdown links / bold markers (scanner/answer-text.js).
+  const display = displayText(text);
   return reply({
     ok: true,
     engine,
@@ -400,6 +403,8 @@ export async function handleLivePreview(request, env, deps = {}) {
     questionId: question.id,
     answer: text,
     citations: citedDomains(result.citations),
+    display,
+    displayRanges: nameRanges(display, tok.name),
     named: ranges.length > 0,
     ranges,
     businessName: tok.name,

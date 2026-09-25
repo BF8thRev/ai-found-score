@@ -538,27 +538,33 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .hero-grid .hero-copy h1 { font-size: clamp(32px, 4vw, 48px); line-height: 1.08; margin: 0 0 20px; max-width: none; }
 .hero-grid .h1-accent { display: block; color: var(--blue); }
 .hero-grid .lede { margin: 0 0 28px; max-width: 560px; font-size: 19px; }
-.hero-grid .cta-row, .hero-grid .trust-line { justify-content: flex-start; }
+.hero-grid .cta-row { justify-content: flex-start; }
 .hero-grid .hero-alt a { color: var(--navy); font-weight: 600; }
 .hero-grid .proof-line { margin-left: 0; }
 .real-answer { min-width: 0; }
-.ra-card {
-  margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 16px 16px 18px;
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.hero-micro { margin: 12px 0 0; font-size: 14.5px; color: var(--muted); }
+/* Real AI answer card: plain and neutral, no assistant look-alike. */
+.sc-card {
+  margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px 20px;
   box-shadow: var(--shadow-lg);
 }
-.ra-label { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); text-align: center; margin: 0 0 14px; }
-.ra-chat { display: flex; flex-direction: column; gap: 10px; }
-.ra-bubble { margin: 0; padding: 11px 14px; font-size: 15.5px; line-height: 1.5; max-width: 88%; overflow-wrap: anywhere; }
-.ra-user { align-self: flex-end; background: var(--blue); color: #fff; border-radius: 18px 18px 4px 18px; }
-.ra-ai { align-self: flex-start; background: var(--wash); color: var(--ink); border-radius: 18px 18px 18px 4px; max-width: 96%; }
-.ra-hit { padding: 1px 3px; border-radius: 4px; font-weight: 700; color: inherit; }
-.ra-hit.first { background: #CFEFDC; color: #145A38; }
-.ra-hit.also { background: var(--wash-2); color: var(--navy); }
-.ra-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; margin: 0 2px 0 4px; vertical-align: 1px; line-height: 1.5; white-space: nowrap; }
-.ra-tag.first { background: var(--green); color: #fff; }
-.ra-tag.also { background: #fff; color: var(--muted); border: 1px solid var(--line); }
-.ra-caption { font-size: 14.5px; color: var(--muted); margin: 14px 4px 0; text-align: center; }
-.ra-caption a { font-weight: 600; white-space: nowrap; }
+.sc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; }
+.sc-label { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.sc-pick select {
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--navy); background: var(--wash); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 28px 5px 12px; cursor: pointer; appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%230B2A5B' stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center;
+}
+.sc-pick select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.sc-q { margin: 0 0 12px auto; width: fit-content; max-width: 92%; padding: 10px 14px; background: var(--wash-2); color: var(--navy); font-weight: 600; font-size: 15.5px; line-height: 1.45; border-radius: 14px 14px 4px 14px; }
+.sc-a { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
+.sc-a b { font-weight: 700; background: #FFF1C2; border-radius: 3px; padding: 0 2px; }
+.sc-more { color: var(--muted); }
+.sc-caption { font-size: 16px; font-weight: 700; color: var(--navy); margin: 16px 4px 0; line-height: 1.4; }
+.sc-note { font-size: 12.5px; color: var(--muted); margin: 6px 4px 0; }
+.sc-note a { color: var(--muted); }
 @media (max-width: 900px) {
   .hero-grid { grid-template-columns: 1fr; gap: 36px; }
   .real-answer { max-width: 520px; width: 100%; margin: 0 auto; }
@@ -568,7 +574,8 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
   .hero-grid .hero-copy h1 { font-size: 31px; }
   .hero-grid .lede { font-size: 17.5px; }
   .hero-grid .btn.big { width: 100%; text-align: center; padding: 16px 20px; }
-  .ra-bubble { font-size: 15px; }
+  .sc-q, .sc-a { font-size: 15px; }
+  .sc-card { padding: 16px; }
 }
 
 /* ---------- stats headline, offer ladder, trust line (index.html, Sep 2026) ---------- */

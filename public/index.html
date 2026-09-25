@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI Found Score — Does AI say your name?</title>
+  <title>AI Found Score — Is AI sending your calls to someone else?</title>
   <meta name="description" content="Free AI visibility report for local businesses. We ask the AI assistants your customers use the exact questions they'd ask, and show you every answer word for word.">
   <link rel="canonical" href="https://aifoundscore.com/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="AI Found Score">
-  <meta property="og:title" content="When someone in your town asks AI who to call, does it say your name?">
+  <meta property="og:title" content="Your customers are asking AI now. Is it sending your calls to someone else?">
   <meta property="og:description" content="Free report: we ask the AI assistants your customers use the questions they ask. See every answer word for word, who got named instead of you, and which websites the AI trusted.">
   <meta property="og:url" content="https://aifoundscore.com/">
   <meta property="og:image" content="https://aifoundscore.com/img/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="When someone in your town asks AI who to call, does it say your name?">
+  <meta name="twitter:title" content="Your customers are asking AI now. Is it sending your calls to someone else?">
   <meta name="twitter:description" content="Free report: we ask the AI assistants your customers use the questions they ask. See every answer word for word, who got named instead of you, and which websites the AI trusted.">
   <meta name="twitter:image" content="https://aifoundscore.com/img/og.png">
   <meta name="theme-color" content="#0B2A5B">
@@ -57,27 +57,26 @@
   <div class="wrap">
     <div class="hero-grid">
       <div class="hero-copy">
-        <span class="eyebrow">Free AI visibility report for local businesses</span>
-        <h1>When someone in <span data-geo-town>Massapequa</span> asks AI who to call, <span class="h1-accent">does it say your name?</span></h1>
-        <p class="lede">Get a free report that shows what AI tells your customers when they ask for a business like yours: who it recommends, whether you made the list, and what to fix if you didn't.</p>
+        <h1>Your customers are asking AI now. <span class="h1-accent">Is it sending your calls to someone else?</span></h1>
+        <p class="lede">Do you know what it tells them? We ask AI your customers&rsquo; questions and show you every word.</p>
         <div class="cta-row">
-          <a class="btn big" href="#request">Show me what AI says about me</a>
+          <a class="btn big" href="#request">Show me who&rsquo;s getting my calls</a>
         </div>
+        <p class="hero-micro">Free. No email to start. No sales call.</p>
         <p class="hero-alt"><a href="/report/mega-wash-and-dry">See a real report &rarr;</a></p>
-        <div class="trust-line"><span>No email needed to see your questions</span><span>No sales call</span><span>Ready in about a day</span></div>
         <p class="proof-line" id="proof-line" hidden></p>
       </div>
-      <!-- A labelled real quote, published with the owner's permission. The text is verbatim
-           (the hyphens in "all‑around" and "24‑hour" are U+2011, as in the original answer). -->
-      <div class="real-answer" data-real-quote>
-        <figure class="ra-card">
-          <figcaption class="ra-label">A real answer · ChatGPT · Sep 24, 2026</figcaption>
-          <div class="ra-chat">
-            <p class="ra-bubble ra-user">What's the best laundromat in North Babylon, NY?</p>
-            <p class="ra-bubble ra-ai">Many people in North Babylon recommend <mark class="ra-hit first">Mega Wash &amp; Dry</mark><span class="ra-tag first">named first</span> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <mark class="ra-hit also">One Hour Laundry</mark><span class="ra-tag also">also named</span> (North Babylon location) is another top option.</p>
-          </div>
+      <!-- Real AI answer card. The Worker replaces this with a stored answer for the visitor's town and
+           trade (src/lib/showcase.js, filled by `node scanner/showcase.js`). This fallback is the real
+           Mega Wash & Dry answer, published with the owner's permission; the text is verbatim (the
+           hyphens in "all‑around" and "24‑hour" are U+2011, as in the original answer). -->
+      <div class="real-answer" data-showcase>
+        <figure class="sc-card">
+          <div class="sc-head"><figcaption class="sc-label">Real AI answer &middot; asked Sep 24, 2026</figcaption></div>
+          <p class="sc-q">What's the best laundromat in North Babylon, NY?</p>
+          <p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p>
         </figure>
-        <p class="ra-caption">Mega Wash &amp; Dry was named in 9 of 10 searches. <a href="/report/mega-wash-and-dry">See the one it missed &rarr;</a></p>
+        <p class="sc-caption">If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
       </div>
     </div>
   </div>
@@ -277,12 +276,12 @@
   <div class="wrap">
     <div class="request">
       <div>
-        <h2>Get your free report</h2>
-        <p class="intro">See the exact questions we'll ask — before we ask for anything else.</p>
+        <h2>Check your business</h2>
+        <p class="intro">Do you know what AI tells your customers? Enter your business and we'll ask AI live. You'll see every word.</p>
         <ul>
           <li>No sign-up, no card</li>
           <li>Public data only, no logins</li>
-          <li>Email only if you want the link sent to you</li>
+          <li>Email only if you want the full report</li>
         </ul>
       </div>
       <div class="request-col" id="request-col">
@@ -308,9 +307,9 @@
         <label><span>Website <small class="opt">(optional)</small></span> <input name="website" type="text" maxlength="160" autocomplete="url" placeholder="yourbusiness.com"></label>
         <label><span>Phone <small class="opt">(optional)</small></span> <input name="phone" type="tel" maxlength="30" autocomplete="tel" placeholder="(516) 555-0142"></label>
         <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
-        <button class="btn" type="submit">Show me the questions</button>
+        <button class="btn" type="submit">Show me who&rsquo;s getting my calls</button>
         <p class="status" id="request-status" role="status"></p>
-        <p class="form-note">No email needed. We only read public information about your business. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
+        <p class="form-note">Free. No email to start. No sales call. We only read public information about your business. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
       </form>
         <!-- Turnstile bot check (invisible unless Cloudflare needs a click). The Worker fills in the site key;
              empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
@@ -318,32 +317,37 @@
       </div>
 
       <div class="request-next" id="request-next" hidden>
-        <div class="rq-block" id="rq-questions" tabindex="-1">
-          <h3>Here's exactly what we'll ask</h3>
-          <p class="rq-sub" id="rq-sub">We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when. Try one yourself if you like.</p>
-          <p class="live-offer" id="live-offer" hidden><strong>Run one of these now.</strong> Tap &ldquo;Ask now&rdquo; and we'll ask one AI assistant while you wait. It can take up to 40 seconds.</p>
-          <ol class="rq-list" id="rq-list"></ol>
-          <p class="rq-count" id="rq-count">Every answer goes in your report, word for word.</p>
-        </div>
+        <!-- Live answer: on submit we ask the first question to one assistant right away
+             (POST /api/live-preview) and show its answer word for word. -->
         <div class="rq-block rq-live" id="rq-live" hidden tabindex="-1">
-          <p class="live-wait" id="live-wait" hidden>Asking now&hellip;</p>
+          <div class="live-wait" id="live-wait" hidden>
+            <p class="live-asking">Asking AI: <strong id="live-wait-q"></strong></p>
+            <div class="live-bar" aria-hidden="true"><span></span></div>
+          </div>
           <div class="live-out" id="live-out" hidden>
+            <p class="live-named" id="live-named"></p>
             <p class="live-head" id="live-head"></p>
             <p class="live-q" id="live-q"></p>
-            <p class="live-named" id="live-named"></p>
             <div class="live-answer" id="live-answer"></div>
             <p class="live-cites" id="live-cites"></p>
             <p class="live-note" id="live-note"></p>
           </div>
           <p class="live-msg" id="live-msg" role="status"></p>
+          <button class="btn-secondary live-retry" id="live-retry" type="button" hidden>Try again</button>
+        </div>
+        <div class="rq-block" id="rq-questions" tabindex="-1">
+          <h3 id="rq-title">Here's exactly what we'll ask</h3>
+          <p class="rq-sub" id="rq-sub">We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.</p>
+          <ol class="rq-list" id="rq-list"></ol>
+          <p class="rq-count" id="rq-count">Every answer goes in your report, word for word.</p>
         </div>
         <p class="status" id="request-save" role="status"></p>
         <form class="rq-block rq-email" id="email-form" novalidate>
-          <h3>Where should we send your report?</h3>
-          <p class="rq-sub">Optional. We use it only to send your private report link, usually within one business day.</p>
+          <h3>Want all 5 answers, plus your name, phone and hours checked on Google, Apple, Bing, Yelp and Facebook?</h3>
+          <p class="rq-sub">Optional. We use your email only to send your private report link, usually within one business day. No sales call.</p>
           <label><span>Email <small class="opt">(optional)</small></span> <input name="email" type="email" maxlength="160" autocomplete="email" placeholder="you@yourbusiness.com"></label>
           <div class="ts-box" id="ts-email"></div>
-          <button class="btn" type="submit">Send my report here</button>
+          <button class="btn" type="submit">Send my full report</button>
           <p class="status" id="email-status" role="status"></p>
           <p class="form-note">Rather not? That's fine. Email <a href="mailto:hello@aifoundscore.com?subject=My%20report%20link" style="color:#DCE6F4">hello@aifoundscore.com</a> with your business name whenever you want the link. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
         </form>
@@ -497,90 +501,117 @@
   if (q === 'ok') show(status, 'ok', 'Got it. We\'ll run your report, usually within one business day.');
   if (q === 'error') show(status, 'error', fallback);
 
+  // Questions panel. While the live answer runs (and after it), the first question is the live one,
+  // so the list shows the other four, numbered on from 2.
+  var LIVE_Q = 'q1';
+  var liveState = 'idle'; // idle | preparing | waiting | done | failed
+  function el(id) { return document.getElementById(id); }
+  function paintQuestions() {
+    var list = el('rq-list');
+    var withLive = liveState === 'preparing' || liveState === 'waiting' || liveState === 'done';
+    var rest = withLive ? shownQuestions.filter(function (qq) { return qq.id !== LIVE_Q; }) : shownQuestions;
+    el('rq-title').textContent = liveState === 'done' ? 'The other ' + rest.length + ' questions in your full report'
+      : withLive ? 'What else we’ll ask' : 'Here’s exactly what we’ll ask';
+    el('rq-sub').textContent = liveState === 'done'
+      ? 'We ask every question to the AI assistants your customers use. Your report shows every answer, word for word.'
+      : 'We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.';
+    list.style.counterReset = 'rq ' + (withLive && rest.length < shownQuestions.length ? 1 : 0);
+    list.innerHTML = rest.map(function (qq) { return '<li>' + esc(qq.text) + '</li>'; }).join('');
+  }
   function renderQuestions(res) {
-    var list = document.getElementById('rq-list');
     if (!res || !res.questions || !res.questions.length) {
-      document.getElementById('rq-sub').innerHTML = 'We couldn\'t load the questions just now. They\'re five plain questions a customer in ' + esc(biz.town) + ' would ask, and every one is in your report.';
-      list.innerHTML = '';
+      el('rq-sub').innerHTML = 'We couldn\'t load the questions just now. They\'re five plain questions a customer in ' + esc(biz.town) + ' would ask, and every one is in your report.';
+      el('rq-list').innerHTML = '';
       shownQuestions = [];
-    } else {
-      list.innerHTML = res.questions.map(function (qq) { return '<li>' + esc(qq.text) + '</li>'; }).join('');
-      shownQuestions = res.questions.map(function (qq) { return { id: String(qq.id), text: String(qq.text) }; });
+      return;
     }
+    shownQuestions = res.questions.map(function (qq) { return { id: String(qq.id), text: String(qq.text) }; });
+    paintQuestions();
+  }
+  function questionText(id) {
+    for (var i = 0; i < shownQuestions.length; i++) if (shownQuestions[i].id === id) return shownQuestions[i].text;
+    return '';
   }
 
-  // ---- Live answer: ask one question to one assistant now (POST /api/live-preview) ----
+  // ---- Live answer: ask the first question to one assistant as soon as the request is saved ----
+  // (POST /api/live-preview with the signed token /api/request returned after the bot check).
   // The answer is third-party text: it only ever goes into the page through textContent / text nodes.
-  var LIVE_FALLBACK = 'We couldn\'t get an answer just now. We\'ll include it in your full report.';
-  var liveBox = document.getElementById('rq-live');
-  function liveEl(id) { return document.getElementById(id); }
-  function liveButtons(on) {
-    var bs = document.querySelectorAll('#rq-list .live-btn');
-    for (var i = 0; i < bs.length; i++) bs[i].disabled = !on;
+  var LIVE_BUSY = 'Lots of owners are checking right now, so we couldn\'t ask AI live. Here are your 5 questions. Add your email and we\'ll send you every answer.';
+  var LIVE_FAILED = 'We couldn\'t ask AI live just now. Here are your 5 questions. Add your email and we\'ll send you every answer.';
+  var liveBox = el('rq-live');
+  function liveWaiting(text) {
+    liveBox.hidden = false;
+    el('live-out').hidden = true;
+    el('live-msg').textContent = '';
+    el('live-retry').hidden = true;
+    el('live-wait').hidden = false;
+    el('live-wait-q').textContent = text;
   }
-  function liveDone() {
-    var bs = document.querySelectorAll('#rq-list .live-btn');
-    for (var i = 0; i < bs.length; i++) bs[i].parentNode.removeChild(bs[i]);
-    liveEl('live-offer').hidden = true;
-  }
-  // One "Ask now" button on each question the owner sees.
-  function setupLive() {
-    if (!liveBox || !previewToken || !requestId || !shownQuestions.length) return;
-    var items = document.querySelectorAll('#rq-list li');
-    if (items.length !== shownQuestions.length) return;
-    shownQuestions.forEach(function (qq, i) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'live-btn';
-      b.textContent = 'Ask now';
-      b.setAttribute('aria-label', 'Ask now: ' + qq.text);
-      b.addEventListener('click', function () { runLive(qq.id); });
-      items[i].appendChild(b);
-    });
-    liveEl('live-offer').hidden = false;
+  // Called once the first save settles. No token = live answers are off: plain questions list.
+  function startLive() {
+    if (!liveBox) return;
+    if (!previewToken || !requestId) {
+      liveState = 'idle';
+      liveBox.hidden = true;
+      paintQuestions();
+      return;
+    }
+    runLive(LIVE_Q);
   }
   function withTimeout(p, ms) {
     return Promise.race([p, new Promise(function (resolve) { setTimeout(function () { resolve({ ok: false, status: 0, body: {} }); }, ms); })]);
   }
   function runLive(qid) {
-    liveButtons(false);
-    liveEl('live-msg').textContent = '';
-    liveEl('live-out').hidden = true;
-    liveEl('live-wait').hidden = false;
-    liveBox.hidden = false;
-    liveBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    liveState = 'waiting';
+    var qt = questionText(qid);
+    liveWaiting(qt ? '“' + qt + '”' : 'one of your questions');
+    paintQuestions();
     push({ event: 'live_preview_start', trade: biz && biz.trade });
     withTimeout(postJson('/api/live-preview', { request_id: requestId, question_id: qid, token: previewToken }), 50000).then(function (res) {
-      liveEl('live-wait').hidden = true;
+      el('live-wait').hidden = true;
       var b = res.body || {};
       if (res.ok && typeof b.answer === 'string' && b.answer) {
+        liveState = 'done';
         renderLive(b);
-        liveDone();
+        paintQuestions();
         push({ event: 'live_preview_answer', named: !!b.named });
         return;
       }
-      liveEl('live-msg').textContent = (typeof b.message === 'string' && b.message) || LIVE_FALLBACK;
+      liveState = 'failed';
+      paintQuestions();
+      var reason = String(b.reason || '');
+      el('live-msg').textContent = reason === 'cap' ? LIVE_BUSY
+        : (reason === 'ip' || reason === 'request' || reason === 'token') && typeof b.message === 'string' && b.message ? b.message
+        : LIVE_FAILED;
       // Worth another try only if it was a hiccup; caps and expired pages are final.
-      var retry = res.status === 0 || b.reason === 'busy' || b.reason === 'engine' || b.reason === 'timeout';
-      if (retry) liveButtons(true); else liveDone();
+      el('live-retry').hidden = !(res.status === 0 || reason === 'busy' || reason === 'engine' || reason === 'timeout');
+      push({ event: 'live_preview_failed', reason: reason || String(res.status) });
     });
   }
+  el('live-retry').addEventListener('click', function () { runLive(LIVE_Q); });
+  function shortDate(iso) {
+    var d = new Date(iso || Date.now());
+    if (isNaN(d)) d = new Date();
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
   function renderLive(d) {
-    var who = String(d.assistant || 'The assistant');
-    var name = String(d.businessName || '');
-    liveEl('live-head').textContent = 'Here\'s what ' + who + ' said just now';
-    liveEl('live-q').textContent = '\u201C' + String(d.question || '') + '\u201D';
-    var named = liveEl('live-named');
+    var who = String(d.assistant || 'the assistant');
+    var named = el('live-named');
     named.className = 'live-named ' + (d.named ? 'yes' : 'no');
     named.textContent = d.named
-      ? name + ' was named in this answer.'
-      : name + ' was not named in this answer.';
-    // Highlight the business name: split the answer on the server's literal-match ranges.
-    var text = String(d.answer);
-    var box = liveEl('live-answer');
+      ? 'Your name is in this answer.'
+      : 'We didn’t see your name in this answer. Check it yourself below.';
+    el('live-head').textContent = 'AI’s answer, word for word · ' + shortDate(d.askedAt);
+    el('live-q').textContent = '“' + String(d.question || '') + '”';
+    // The answer as a reader sees it (links and bold markers removed, words unchanged), with the
+    // business name highlighted on the server's literal-match ranges.
+    var clean = typeof d.display === 'string' && d.display && Array.isArray(d.displayRanges);
+    var text = String(clean ? d.display : d.answer);
+    var ranges = clean ? d.displayRanges : (Array.isArray(d.ranges) ? d.ranges : []);
+    var box = el('live-answer');
     box.textContent = '';
     var at = 0;
-    (Array.isArray(d.ranges) ? d.ranges : []).forEach(function (r) {
+    ranges.forEach(function (r) {
       var s = Number(r && r[0]), e = Number(r && r[1]);
       if (!(s >= at && e > s && e <= text.length)) return;
       if (s > at) box.appendChild(document.createTextNode(text.slice(at, s)));
@@ -591,9 +622,9 @@
     });
     if (at < text.length) box.appendChild(document.createTextNode(text.slice(at)));
     var cites = Array.isArray(d.citations) ? d.citations.map(String) : [];
-    liveEl('live-cites').textContent = cites.length ? 'Websites it cited: ' + cites.join(', ') : 'It didn\'t cite any websites.';
-    liveEl('live-note').textContent = 'Asked just now through ' + who + '\'s API with web search on; answers change. Your full report asks every question to every assistant we check.';
-    liveEl('live-out').hidden = false;
+    el('live-cites').textContent = cites.length ? 'Websites it cited: ' + cites.join(', ') : 'It didn\'t cite any websites.';
+    el('live-note').textContent = 'Asked just now through ' + who + ', with web search on. Answers change from day to day.';
+    el('live-out').hidden = false;
   }
 
   form.addEventListener('submit', function (e) {
@@ -625,12 +656,15 @@
     // The questions show even if the save failed: the owner still sees what we'd ask.
     questions.then(function (res) {
       var limited = res && res.limited;
+      // With the bot check on, the save usually comes back with a live-answer token: show the
+      // waiting state now so the answer area doesn't jump in later.
+      if (TS_KEY && liveBox) { liveState = 'preparing'; liveWaiting('getting your first question ready…'); }
       renderQuestions(limited ? null : res);
-      if (limited) document.getElementById('rq-sub').innerHTML = '<strong>' + esc(limited) + '</strong> Your questions are five plain questions a customer in ' + esc(biz.town) + ' would ask, and every one is in your report.';
+      if (limited) el('rq-sub').innerHTML = '<strong>' + esc(limited) + '</strong> Your questions are five plain questions a customer in ' + esc(biz.town) + ' would ask, and every one is in your report.';
       form.hidden = true;
       next.hidden = false;
       box.classList.add('done');
-      var head = document.getElementById('rq-questions');
+      var head = liveState === 'preparing' ? liveBox : el('rq-questions');
       head.scrollIntoView({ behavior: 'smooth', block: 'start' });
       try { head.focus({ preventScroll: true }); } catch (err) { head.focus(); }
       return saved;
@@ -638,7 +672,7 @@
       if (res.ok && res.body.id) {
         requestId = res.body.id;
         markConverted();
-        if (typeof res.body.preview_token === 'string') { previewToken = res.body.preview_token; setupLive(); }
+        if (typeof res.body.preview_token === 'string') previewToken = res.body.preview_token;
         // Their own report link, shown right away (the page says "in progress" until it's ready).
         if (typeof res.body.report_url === 'string' && /^\/report\/[A-Za-z0-9_-]{8,64}$/.test(res.body.report_url)) {
           var abs = location.origin + res.body.report_url;
@@ -660,8 +694,53 @@
         // The email step will then save the whole request, so it needs its own bot check.
         if (TS_KEY && !tsEmail) tsEmail = tsWidget(document.getElementById('ts-email'));
       }
+      startLive();
     });
   });
+
+  // Trade from the link (?trade=plumbing) or the hero card's picker pre-fills the form, until the
+  // owner picks one themselves.
+  var tradeSelect = form.elements.trade;
+  var tradeTouched = false;
+  tradeSelect.addEventListener('change', function () { tradeTouched = true; });
+  var TRADE_ALIASES = { plumber: 'plumbing', roofer: 'roofing', electrician: 'electrical', landscaper: 'landscaping', cleaner: 'cleaning', mechanic: 'auto_repair' };
+  function presetTrade(v) {
+    v = String(v || '').toLowerCase();
+    v = TRADE_ALIASES[v] || v;
+    if (tradeTouched || !v) return;
+    for (var i = 0; i < tradeSelect.options.length; i++) if (tradeSelect.options[i].value === v) { tradeSelect.value = v; return; }
+  }
+
+  // Hero card (src/lib/showcase.js): the picker swaps in that trade's stored answer for the same town.
+  (function () {
+    var pick = document.querySelector('[data-sc-trade]');
+    var dataEl = document.getElementById('sc-data');
+    if (!pick || !dataEl) { presetTrade(new URLSearchParams(location.search).get('trade')); return; }
+    var sc;
+    try { sc = JSON.parse(dataEl.textContent); } catch (err) { return; }
+    presetTrade(pick.value);
+    pick.addEventListener('change', function () {
+      var a = sc && sc.answers && sc.answers[pick.value];
+      if (!a) return;
+      document.querySelector('[data-sc-q]').textContent = a.question;
+      document.querySelector('[data-sc-date]').textContent = new Date(a.askedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+      var box = document.querySelector('[data-sc-a]');
+      box.textContent = '';
+      var at = 0;
+      (a.spans || []).forEach(function (s) {
+        if (!(s[0] >= at && s[1] > s[0] && s[1] <= a.excerpt.length)) return;
+        box.appendChild(document.createTextNode(a.excerpt.slice(at, s[0]).replace(/\n{2,}/g, '\n')));
+        var b = document.createElement('b');
+        b.textContent = a.excerpt.slice(s[0], s[1]);
+        box.appendChild(b);
+        at = s[1];
+      });
+      box.appendChild(document.createTextNode(a.excerpt.slice(at).replace(/\n{2,}/g, '\n')));
+      if (a.truncated) { var more = document.createElement('span'); more.className = 'sc-more'; more.textContent = ' …'; box.appendChild(more); }
+      presetTrade(pick.value);
+      push({ event: 'showcase_trade', trade: pick.value });
+    });
+  })();
 
   emailForm.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -692,7 +771,7 @@
         emailForm.innerHTML = '<h3>You\'re all set</h3><p class="status ok" role="status">We\'ll send your private report link to <strong>' + esc(email) + '</strong>, usually within one business day. One email with the link. Unsubscribe anytime.</p>';
       } else {
         show(emailStatus, 'error', ((res.body && res.body.error) ? esc(res.body.error) + ' ' : '') + 'Try again, or email ' + HELLO + ' with your business name, town and this email.');
-        btn.disabled = false; btn.textContent = 'Send my report here';
+        btn.disabled = false; btn.textContent = 'Send my full report';
       }
     });
   });

@@ -63,6 +63,15 @@ Code: `src/lib/auto-scan.js` (called from `src/lib/report-request.js`). Needs [`
 
 `refund_requests` (`supabase/v4_ladder.sql`; id, report_token, email, reason, created_at, status open | refunded | declined; service key only) backs the X-Ray promise "If we can't show you 3 things to fix, it's free." There is no public form yet. `/admin` lists the rows with a "Find in Stripe" link (dashboard search by email, else report token). Refunds are made by a person in Stripe; then set the row's status in Supabase.
 
+## Homepage real AI answer card (showcase)
+
+The hero shows one real, dated AI answer to "What's the best <trade> in <town>, <ST>?" for the visitor's town (else Massapequa) and trade (`?trade=roofer` from an ad or link, else plumber). The card has a picker for the other trades. Code: `src/lib/showcase.js` (Worker, renders the card into `<div data-showcase>`, cached 1 h) and `scanner/showcase.js` (asks the questions from this PC). Until rows exist the static Mega Wash & Dry card in `public/index.html` stays.
+
+1. Apply [`supabase/showcase_v5.sql`](supabase/showcase_v5.sql) once.
+2. Weekly: `node scanner/showcase.js --towns "Massapequa,NY,11758;Hicksville,NY,11801"` (default: Massapequa, all 8 trades, the first of ChatGPT/Claude/Gemini with a key; about 3-4 cents per answer, logged to `scan_usage` so /admin shows it). `--estimate` prints the cost; `--dry-run` uses the fixtures and stores nothing.
+3. It prints each excerpt. The excerpt is the start of the answer word for word (markdown links removed), cut at a sentence end, ~60 words, and stopped before any phone number or street address. An answer that names no business is skipped.
+4. Takedown ("remove my business"): set that row's `active` to false in Supabase. The weekly refresh never turns it back on.
+
 ## Running scans from your PC (Free plan)
 
 On the Workers Free plan a full scan can't run on Cloudflare (10 ms CPU, 50 subrequests per invocation). Until that changes, run scans from Node on your own PC: `scanner/run.js` does exactly what the Workflow does (same `scans` / `scan_raw` / `scan_usage` / `scan_results` rows, same row ids, same report gate), so `/admin` and `/report/<token>` show the results as if the Workflow had run. No hosting cost; you pay only the API calls.
@@ -186,7 +195,7 @@ Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` 
 
 ## Wiring checklist (the things filled in later)
 
-1. **Supabase.** Run `supabase/setup.sql`, then `supabase/scan_v2.sql`, then `supabase/admin_v3.sql`, then `supabase/v4_ladder.sql`. Add `SUPABASE_ANON_KEY` as a Worker secret.
+1. **Supabase.** Run `supabase/setup.sql`, then `supabase/scan_v2.sql`, then `supabase/admin_v3.sql`, then `supabase/v4_ladder.sql`, then `supabase/showcase_v5.sql`. Add `SUPABASE_ANON_KEY` as a Worker secret.
 2. **Stripe payment links.** Paste the four real links into `STRIPE_LINKS` in `public/js/config.js` (keys: `snapshot`, `before_after`, `full_year`, `listing_fix`). On each Payment Link in the Stripe dashboard, set the after-payment redirect to `https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}`. No metadata is needed: the webhook takes the tier from the amount paid (`TIER_BY_CENTS` in `src/lib/stripe.js`: 4900 → `xray`, the $49 AI Visibility X-Ray; the retired $29/$59/$69/$199 keys stay so an old payment still records; update it if prices change). Any recorded payment for a report token unlocks that whole report, X-Ray sections included. Business and arm come from the report token: the report page appends `client_reference_id=<report token>` and the webhook looks the rest up. Report tokens must be letters, digits, `-` or `_` (Stripe's rule for `client_reference_id`).
 3. **Stripe webhook.** Endpoint `https://aifoundscore.com/api/stripe-webhook`, events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Store its signing secret (`whsec_...`) as the runtime secret `STRIPE_WEBHOOK_SECRET`. Only paid checkouts are recorded.
 4. **Postcards.** QR code and printed URL both point at `https://aifoundscore.com/r/<short_code>`; opt-out line: `aifoundscore.com/stop` + the same code.
