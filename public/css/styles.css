@@ -686,3 +686,11 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .tiers.ladder .tier-more { margin-top: 14px; }
 .tiers.ladder .tier-promise + a { margin-top: auto; }
 .tiers.ladder .tier-promise { margin-bottom: 20px; }
+.tiers.ladder .tier-foot { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+/* The plan we want sold is lifted; all three stay the same width. */
+@media (min-width: 861px) {
+  .tiers.ladder .tier.featured { transform: translateY(-10px); box-shadow: var(--shadow-lg); }
+}
+.tiers.ladder .tier-plus { margin: 14px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14.5px; font-weight: 700; color: var(--navy); }
+.tiers.ladder .tier-plus + .tier-group { margin-top: 10px; }
+.tiers.ladder .tier-group + .tier-list { border-top: 0; padding-top: 0; }
