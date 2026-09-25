@@ -34,5 +34,21 @@
     // Paid + supabase/v4_ladder.sql first); anything else queues it for Run now in /admin. Optional caps:
     // AUTO_SCAN_DAILY_MAX (default 25), AUTO_SCAN_DAILY_USD (default 20). Set here, not in the dashboard.
     "AUTO_SCAN": "off"
+  },
+  // PR preview builds (Workers Builds on non-production branches). Wrangler requires this block and
+  // never copies production vars or ratelimits into it. Preview-safe values: Cloudflare's always-pass
+  // Turnstile test site key (the real widget only allows aifoundscore.com), AUTO_SCAN off so a
+  // preview never starts a paid scan, and rate-limit namespaces of their own. SUPABASE_URL is the
+  // public project URL: give previews Supabase secrets only if a preview should reach the database.
+  "previews": {
+    "vars": {
+      "SUPABASE_URL": "https://bahmemiydzpotfrxmlzw.supabase.co",
+      "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+      "AUTO_SCAN": "off"
+    },
+    "ratelimits": [
+      { "name": "REQUEST_LIMITER", "namespace_id": "2001", "simple": { "limit": 20, "period": 60 } },
+      { "name": "PREVIEW_LIMITER", "namespace_id": "2002", "simple": { "limit": 3, "period": 60 } }
+    ]
   }
 }
