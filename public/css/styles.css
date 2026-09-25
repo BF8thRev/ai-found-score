@@ -595,3 +595,30 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .tier .price.planned { font-size: 34px; color: var(--muted); }
 .tier .price.planned small { margin-right: 4px; }
 .trust-after { font-size: 18px; font-weight: 700; color: var(--navy); margin: 28px 0 0; }
+
+/* Site copy v2: lighter hero with the sample's "who AI named" card, lost-call band, ladder */
+.hero-grid .hero-copy h1 { font-size: clamp(32px, 4.2vw, 52px); }
+.hero-grid .h1-accent { margin-top: 6px; }
+.ra-card .ra-user { margin-left: auto; }
+.ra-k { margin: 18px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ra-names { margin: 0; padding-left: 22px; font-size: 16px; font-weight: 600; color: var(--navy); line-height: 1.8; }
+.ra-names li:first-child { color: #145A38; }
+.ra-miss { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 16px; font-weight: 600; color: var(--ink); }
+.ra-tag.miss { background: #FBE3E1; color: #9B2C22; }
+.lost-band { background: var(--navy); color: #fff; padding: 28px 0; }
+.lost-line { max-width: 820px; margin: 0 auto; font-size: clamp(18px, 2.2vw, 22px); font-weight: 700; line-height: 1.4; text-align: center; }
+/* Pricing ladder v2.3: three short cards, same rhythm, buttons aligned at the bottom */
+.tiers.ladder { max-width: 980px; margin: 36px auto 0; align-items: stretch; }
+.tiers.ladder .tier { position: relative; padding: 32px 28px 28px; text-align: left; }
+.tiers.ladder .tier.featured { border-width: 2px; }
+.tiers.ladder .tier-tag { position: absolute; top: -13px; left: 28px; margin: 0; }
+.tiers.ladder h3 { font-size: 20px; margin: 0; }
+.tiers.ladder .price { font-size: 40px; margin: 10px 0 0; }
+.tiers.ladder .tier-tagline { flex: 0 0 auto; margin: 10px 0 0; font-size: 16.5px; font-weight: 700; color: var(--navy); line-height: 1.4; min-height: 2.8em; }
+.tiers.ladder .tier-list { margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--line); font-size: 15.5px; }
+.tiers.ladder .tier-promise { flex: 0 0 auto; margin: 16px 0 0; font-size: 14.5px; font-weight: 600; color: var(--green); }
+.tiers.ladder .btn, .tiers.ladder .btn-secondary { margin-top: auto; }
+.tiers.ladder .tier-promise + a { margin-top: 20px; }
+.tiers.ladder .tier-list { flex: 1 0 auto; }
+@media (max-width: 860px) { .tiers.ladder { gap: 28px; } .tiers.ladder .tier-tagline { min-height: 0; } }
+.lost-band + .stats-band { padding-top: 56px; }

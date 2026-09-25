@@ -73,4 +73,15 @@
     window.dataLayer.push({ event: 'cta_click', cta_id: CTA_ID[t] || t, tier: t, arm: arm });
     window.dataLayer.push({ event: 'begin_checkout', tier: t, arm: arm });
   });
+
+  // Homepage offer ladder: which tier people reach for, while checkout isn't wired there.
+  // The choice is remembered for the tab so the free-report request can carry it.
+  var OFFER_PRICE = { free_snapshot: 0, full_audit: 99, be_the_answer: 499 };
+  document.addEventListener('click', function (e) {
+    var el = e.target && e.target.closest ? e.target.closest('[data-offer]') : null;
+    if (!el) return;
+    var o = el.getAttribute('data-offer');
+    window.dataLayer.push({ event: 'offer_click', offer: o, value: OFFER_PRICE[o] || 0, currency: 'USD', arm: arm });
+    try { sessionStorage.setItem('afs_offer', o); } catch (err) {}
+  });
 })();
