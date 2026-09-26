@@ -36,6 +36,7 @@ import { parseScanRequest } from '../admin/scan-core.js';
 import { normalizeBizName } from '../../shared/report-v2.js';
 import { FREE_QUESTION_COUNT } from '../../scanner/questions.js';
 import { rowsBefore, startOfUtcDay } from './live-preview.js';
+import { linkRequestToken } from './notify.js';
 
 export const DEFAULT_DAILY_MAX = 25;
 export const DEFAULT_DAILY_USD = 20;
@@ -249,6 +250,8 @@ export async function startRequestScan(env, req, o = {}) {
   }
 
   if (!canStore(env)) return null;
+  // So the "report ready" email can find this request's address (src/lib/notify.js).
+  await linkRequestToken(env, req.id, token, { fetchImpl }).catch(() => false);
   const key = requestKey(business);
   const since = new Date(now - DEDUPE_DAYS * 86400_000).toISOString();
 

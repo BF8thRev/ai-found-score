@@ -208,6 +208,8 @@ export async function recordPayment(env, payment) {
     amount_cents: payment.amountCents ?? null,
     stripe_session_id: payment.stripeSessionId ?? null,
     livemode: payment.livemode ?? true,
+    // The checkout email, for the receipt, the full-audit and 30-day re-check emails (supabase/v7_email.sql).
+    customer_email: payment.customerEmail ? String(payment.customerEmail).trim().toLowerCase().slice(0, 200) : null,
     paid_at: new Date().toISOString(),
   };
 
