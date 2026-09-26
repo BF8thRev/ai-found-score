@@ -50,9 +50,17 @@ export function siteCheckResults(sc) {
   if (sc.onSite) { add('phone', !!sc.onSite.phone); add('address', !!sc.onSite.address); }
   if ('sitemap' in sc) add('sitemap', sc.sitemap);
   if (sc.llmsTxt != null) add('llmsTxt', typeof sc.llmsTxt === 'object' ? sc.llmsTxt.found : sc.llmsTxt);
-  if (sc.https != null) add('https', typeof sc.https === 'object' ? sc.https.ok ?? sc.https.secure : sc.https);
-  if (sc.faqSchema != null) add('faqSchema', typeof sc.faqSchema === 'object' ? sc.faqSchema.found : sc.faqSchema);
-  if (sc.meta && typeof sc.meta === 'object') { add('metaTrade', sc.meta.mentionsTrade); add('metaTown', sc.meta.mentionsTown); }
+  if (sc.https && typeof sc.https === 'object') {
+    add('https', sc.https.loads);
+    if (sc.https.loads) add('httpsRedirect', sc.https.redirects);
+  }
+  if (sc.faqSchema != null) add('faqSchema', sc.faqSchema);
+  if (sc.meta && typeof sc.meta === 'object') {
+    add('title', sc.meta.title);
+    add('metaTrade', sc.meta.mentionsTrade);
+    add('metaTown', sc.meta.mentionsTown);
+  }
+  if (sc.speed && Number.isFinite(Number(sc.speed.score))) add('speed', Number(sc.speed.score) >= 50);
   return out;
 }
 
