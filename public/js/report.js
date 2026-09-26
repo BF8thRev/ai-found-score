@@ -1000,6 +1000,7 @@ function xrayV2({ report, aById, cw, N }) {
         : `No other business was named in 2 or more of the ${num(N)} ${cw.unit}, so there is no competitor gap to show.`}</p>
       ${checkedNote && comps.length ? `<p class="r2-note">${escapeHtml(checkedNote)}</p>` : ''}
       ${cards}
+      ${comps.length ? `<div class="r2-upsell"><p><strong>Want to know why AI picks them?</strong> Our Competitor Breakdown looks at the businesses AI names instead of you and tells you why they get picked.</p><a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Ask for a Competitor Breakdown</a></div>` : ''}
       <h2 class="r2-xray-h2">Your fix checklist</h2>
       <p class="sub">${checklist.length} ${plural(checklist.length, 'fix', 'fixes')}, in order. Ticks are saved in this browser.</p>
       <ul class="r2-check">${checklist.map((i, n) => {
