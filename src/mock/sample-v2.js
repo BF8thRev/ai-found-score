@@ -142,6 +142,36 @@ const HARBORVIEW_SPEC = {
   ],
   baselineFixes: true,
   listings: HARBORVIEW_LISTINGS,
+  // The owner's website as the scanner reads it (scanner/owner-checks.js checkSite). Fictional.
+  siteCheck: {
+    url: 'https://harborviewplumbing.example.com',
+    reachable: true,
+    robots: { found: true, blocked: [] },
+    sitemap: true,
+    schema: { found: true, types: ['WebSite', 'Plumber'] },
+    onSite: { phone: '(516) 555-0148', address: '4820 Merrick Road, Massapequa, NY 11758' },
+    llmsTxt: false,
+    https: { loads: true, redirects: true },
+    meta: {
+      title: 'Harborview Plumbing & Heating | Massapequa Plumber & Boiler Repair',
+      description: '',
+      h1: 'Plumbing and heating you can count on',
+      mentionsTrade: true,
+      mentionsTown: true,
+    },
+    faqSchema: false,
+    pages: { internalLinks: 9, servicePages: 3, townPages: 0 },
+    speed: { score: 41, strategy: 'mobile' },
+  },
+  // Google ratings for the owner and the businesses AI named most (fictional).
+  reviews: {
+    you: { rating: 4.6, count: 38 },
+    competitors: [
+      { name: 'Tidewater Plumbing Co.', rating: 4.8, count: 212 },
+      { name: 'Kessler Bros. Plumbing', rating: 4.7, count: 96 },
+      { name: 'Sunrise Pipe & Heat', rating: 4.4, count: 51 },
+    ],
+  },
   issues: [
     {
       kind: 'not_listed',

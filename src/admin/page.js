@@ -198,6 +198,46 @@ function requestsSection(d, errors, { flash = '' } = {}) {
 </section>`;
 }
 
+// The free 30-day re-checks: every paid report is scanned again 30 days after purchase and compared
+// with the audit. Each row is someone to offer Be the Answer: no change → "want us to do it?",
+// better → "want us to finish it?". Contact details are in Stripe (searched by report token).
+const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+
+export function recheckVerdict(r) {
+  const n = r?.now;
+  const b = r?.before;
+  if (!n || !b || !Number(n.answers) || !Number(b.answers)) return null;
+  const pn = n.namedYou / n.answers;
+  const pb = b.namedYou / b.answers;
+  if (pn > pb) return { tone: 'good', label: 'Better', pitch: 'Want us to finish it?' };
+  if (pn < pb) return { tone: 'bad', label: 'Worse', pitch: 'It slipped. Want us to fix it?' };
+  return { tone: 'warn', label: 'No change', pitch: 'Want us to do it for you?' };
+}
+
+function rechecksSection(d, errors) {
+  const rows = d.rechecks || [];
+  const cell = (t) => (t && Number(t.answers) ? `${num(t.namedYou)} of ${num(t.answers)}` : '—');
+  return `<section id="rechecks">
+  <h2>30-day re-checks: who to offer Be the Answer</h2>
+  <p class="sub">Every paid report is scanned again 30 days after purchase (daily cron) and compared with the audit. “Named” is how many answers named them.</p>
+  ${sectionError(errors, 'rechecks')}
+  ${rows.length ? `<div class="tw"><table>
+    <thead><tr><th>Business</th><th>Re-checked</th><th>Named: audit → now</th><th>Result</th><th>Report</th><th>Contact</th></tr></thead>
+    <tbody>${rows.map((r) => {
+      const v = r.status === 'done' ? recheckVerdict(r) : null;
+      return `<tr>
+        <td>${esc(r.business_name || '—')}</td>
+        <td class="small">${esc(shortTime(r.created_at))}</td>
+        <td>${esc(cell(r.before))} → ${esc(cell(r.now))}</td>
+        <td>${v ? `${toneBadge(v.tone, v.label)}<div class="small">${esc(v.pitch)}</div>` : toneBadge(r.status === 'failed' ? 'bad' : 'neutral', r.status)}</td>
+        <td>${r.report_token ? `<a href="/report/${esc(encodeURIComponent(r.report_token))}" target="_blank" rel="noopener">Open</a>` : '—'}</td>
+        <td>${r.report_token ? `<a href="${esc(stripeSearchUrl(r))}" target="_blank" rel="noopener">Find in Stripe</a>` : '—'}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>` : (errors.rechecks ? '' : '<p class="small">No re-checks yet. The first ones run 30 days after the first paid audits.</p>')}
+</section>`;
+}
+
 // Refund requests (supabase/v4_ladder.sql). No public form yet. Refunds are made by a person in Stripe;
 // the link searches the Stripe dashboard for the payment (by email, else by report token).
 export function stripeSearchUrl(r) {
@@ -369,6 +409,7 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
   ${funnelSection(d, errors)}
   ${gatesSection(d, errors)}
   ${activitySection(d, errors)}
+  ${rechecksSection(d, errors)}
   ${refundsSection(d, errors)}
   ${expensesSection(d, errors, { flash: flashHtml(flash.expense), now })}
 </main>

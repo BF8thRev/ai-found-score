@@ -86,7 +86,7 @@ export const TRADES = {
   },
 };
 
-const TRADE_ALIASES = {
+export const TRADE_ALIASES = {
   plumber: 'plumbing', plumbers: 'plumbing',
   'heating and cooling': 'hvac', 'heating & cooling': 'hvac', 'air conditioning': 'hvac', 'hvac contractor': 'hvac',
   electrician: 'electrical', electricians: 'electrical', electric: 'electrical',

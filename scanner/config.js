@@ -143,6 +143,10 @@ export const ENV_ALIASES = {
   supabaseUrl: ['SUPABASE_URL'],
   supabaseServiceKey: ['SUPABASE_SERVICE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY'],
   googlePlacesKey: ['GOOGLE_PLACES_API_KEY', 'GOOGLE_MAPS_API_KEY', 'GOOGLE_Maps_API_KEY', 'PLACES_API_KEY'],
+  // Google PageSpeed Insights (scanner/owner-checks.js speed check). Optional: when unset, the
+  // Places key is reused (both are Google Cloud API keys), which only works if the PageSpeed
+  // Insights API is enabled on that key's project.
+  pagespeedKey: ['PAGESPEED_API_KEY', 'GOOGLE_PAGESPEED_API_KEY', 'PSI_API_KEY'],
   adminToken: ['ADMIN_TOKEN'],
   openaiModel: ['OPENAI_MODEL'],
   geminiModel: ['GEMINI_MODEL'],
@@ -198,6 +202,16 @@ export function enginesConfigured(env = {}) {
 export function activeEngines(env = {}) {
   const c = enginesConfigured(env);
   return ENGINE_IDS.filter((e) => c[e]);
+}
+
+/** The free Snapshot asks only these (owner decision, Sep 26 2026): the paid audit asks every
+ *  engine with a key, so adding Perplexity / Google AI Mode keys widens the audit, never the free
+ *  report. The site's free card names exactly these three. */
+export const FREE_ENGINES = ['chatgpt', 'gemini', 'claude'];
+
+/** The engines a free-report scan runs: FREE_ENGINES that have keys, in ENGINE_IDS order. */
+export function freeEngines(env = {}) {
+  return activeEngines(env).filter((e) => FREE_ENGINES.includes(e));
 }
 
 /** activeEngines(env), or ACTIVE_ENGINES when no engine has a key (so the error names the missing key). */

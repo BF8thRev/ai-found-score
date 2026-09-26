@@ -21,6 +21,10 @@
 //   POST /api/live-preview    -> ask one of the visitor's questions live (src/lib/live-preview.js);
 //                                needs the signed token /api/request returned after Turnstile
 //   GET  /api/zip           -> town for ?zip= (src/lib/zip.js, zippopotam.us, cached 30 days; per-IP rate limit)
+//   GET|POST /api/fix-kit/[token], GET /api/fix-kit/[token].zip -> Fix Kit details form + zip download
+//                                ($149 fix_kit / $499 be_the_answer); src/lib/fix-kit-route.js
+//   GET  /fix-kit/[token]     -> the Fix Kit page (public/fix-kit.html)
+//   cron (daily)              -> the free 30-day re-check of every paid report (src/lib/auto-scan.js startDueRechecks)
 //   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h
 //   GET  /                    -> homepage; the hero's real AI answer card comes from showcase_answers
 //                                (src/lib/showcase.js, filled by `node scanner/showcase.js`), cached 1 h
@@ -41,13 +45,14 @@ import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
 import { reportBody } from './lib/lock.js';
-import { pendingReportStatus } from './lib/auto-scan.js';
+import { pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks } from './lib/auto-scan.js';
 import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
 import { handleLivePreview, livePreviewStatus } from './lib/live-preview.js';
 import { handleProof } from './lib/proof.js';
 import { handleZip } from './lib/zip.js';
+import { handleFixKit } from './lib/fix-kit-route.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 
@@ -117,6 +122,11 @@ export default {
       return handleUnsubscribe(request, url, env);
     }
 
+    // Fix Kit: confirm details, download the zip (src/lib/fix-kit-route.js; sample-* works with no database).
+    if (url.pathname.startsWith('/api/fix-kit/') && (request.method === 'GET' || request.method === 'POST')) {
+      return handleFixKit(request, url, env, { mockReports: MOCK_REPORTS });
+    }
+
     if (url.pathname.startsWith('/api/report/') && request.method === 'GET') {
       let id;
       try { id = decodeURIComponent(url.pathname.slice('/api/report/'.length)); } catch {
@@ -129,12 +139,21 @@ export default {
     if (url.pathname.startsWith('/report/') && url.pathname.length > '/report/'.length) {
       return serveAsset(env, request, '/report');
     }
+    if (url.pathname.startsWith('/fix-kit/') && url.pathname.length > '/fix-kit/'.length) {
+      return serveAsset(env, request, '/fix-kit');
+    }
     if (url.pathname === '/success') {
       return serveAsset(env, request, '/success');
     }
 
     // Static assets (landing, report, success pages).
     return serveAsset(env, request, undefined, undefined, ctx);
+  },
+
+  // Daily cron (wrangler.jsonc triggers): the free 30-day re-check for every paid report
+  // (src/lib/auto-scan.js startDueRechecks). RECHECK_SCAN=off turns it off.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(startDueRechecks(env).then((r) => console.log('[recheck]', JSON.stringify(r))));
   },
 };
 
@@ -254,6 +273,8 @@ async function handleGetReport(id, url, env, dryRun = false) {
   }
   // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
   const body = reportBody(report, unlocked);
+  // Paid, and the full scan (every question, every assistant) is still running: the page says so.
+  if (unlocked && !isSample && !dryRun && (await paidScanRunning(env, id))) body.fullScanPending = true;
   return Response.json(body, {
     // Real reports change the moment they're paid for, so never cache them.
     headers: { 'Cache-Control': isSample ? 'public, max-age=300' : 'private, no-store' },
@@ -485,6 +506,11 @@ async function handleStripeWebhook(request, env) {
     // Return 500 so Stripe retries the event.
     return Response.json({ error: 'Payment write failed' }, { status: 500 });
   }
+
+  // The paid audit asks every question on every assistant we have: start that scan now, under the
+  // same token. Never fails the webhook (the payment is recorded); a miss shows in the log and /admin.
+  const full = await startPaidScan(env, { token: reportToken, sessionId: session.id, tier: tierForSession(session) });
+  console.log('[webhook] full scan', JSON.stringify(full));
 
   return Response.json({ received: true });
 }

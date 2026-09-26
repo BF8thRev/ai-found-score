@@ -212,7 +212,7 @@ function blurred(text) {
 const XRAY = {
   name: 'AI Visibility Audit',
   price: '$49 one-time',
-  what: 'Everything in this report unlocked: every fix step by step with copy-paste text, the competitor gap sheet, and your fix checklist.',
+  what: 'We ask all 5 customer questions again on every AI assistant we check, and you get every answer word for word, every website AI cited, exactly what’s wrong on your website and Google listing, every fix step by step with copy-paste text, the competitor gap sheet, your fix checklist, and a free re-scan 30 days later to see what changed.',
   promise: 'If we can’t show you 3 things to fix, it’s free.',
   button: 'Get my audit — $49',
 };
@@ -233,6 +233,30 @@ function xrayOffer(lead = '') {
       <p>${lead ? `${lead} ` : ''}${XRAY.what} ${XRAY.promise}</p>
       <p><a class="btn big" data-tier="xray" href="#">${XRAY.button}</a></p>
       <p class="fine">Secure checkout by Stripe. One-time payment, no subscription. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
+    </div>`;
+}
+
+// The 30-day re-check (a rescan compared with the audit): the moment to offer Be the Answer. It
+// opens soon, so the button is an email for now.
+function recheckOffer(report) {
+  const subject = encodeURIComponent('Be the Answer: ' + (report.business?.name || ''));
+  return `
+    <div class="r2-upsell">
+      <p><strong>Want us to do the rest?</strong> Be the Answer ($499): we check every town you serve, submit your details to 30+ directories and data providers, and re-scan every month for a year. Your $49 counts toward it.</p>
+      <a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${subject}">Tell me when it opens</a>
+    </div>`;
+}
+
+// After the audit: the $149 Fix Kit (src/lib/fix-kit.js). Only on paid reports; the owner
+// confirms their details on /fix-kit/<token> and downloads the files.
+function fixKitOffer(report) {
+  const kitUrl = '/fix-kit/' + encodeURIComponent(String(report.id || ''));
+  return `
+    <div class="cta-band r2-xray-offer">
+      <h2>Want the fixes ready to install? Fix Kit — $149 one-time.</h2>
+      <p>You check your business details, and we build the files for you: robots.txt, llms.txt, schema code, an FAQ page, your Google profile text and a review QR code, with a one-page guide for whoever runs your website.</p>
+      <p><a class="btn big" data-tier="fix_kit" href="#">Get my Fix Kit — $149</a></p>
+      <p class="fine">Already bought it? <a href="${kitUrl}">Open your Fix Kit</a></p>
     </div>`;
 }
 
@@ -511,7 +535,8 @@ function renderV2(root, report) {
   // Unsure owner matches are never counted as "didn't name you".
   const lostAnswerIds = new Set(answers.filter((a) => !a.namedYou && a.ownerMatch !== 'unsure').map((a) => a.id));
   const cw = countWords(report);
-  const fixCount = issues.filter((i) => i && i.title).length;
+  // A locked report's fixes are untitled stand-ins (src/lib/lock.js): still counted.
+  const fixCount = issues.filter((i) => i && (i.title || i.locked)).length;
   // The $49 X-Ray is offered only on a locked report with at least MIN_FIX_ITEMS fixes (the refund promise).
   const xrayOk = locked && !paid && fixCount >= MIN_FIX_ITEMS && tierOn('xray');
   const ownDomain = String(b.website || '').replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase();
@@ -537,7 +562,8 @@ function renderV2(root, report) {
   const nobodyTwice = proven.length === 0;
   // Same rule as edgeState() in shared/report-v2.js.
   const missingSources = (report.sources || []).filter((s) => s.youListed === false);
-  const noFixes = badListings.length === 0 && missingSources.length === 0;
+  const missingCount = report.sourcesSummary ? num(report.sourcesSummary.missingYou) : missingSources.length;
+  const noFixes = badListings.length === 0 && missingCount === 0;
   const generalAdvice = answers.filter((a) => !(a.businessesNamed || []).length).length;
 
   const trade = b.trade ? b.trade[0].toUpperCase() + b.trade.slice(1) : '';
@@ -547,9 +573,11 @@ function renderV2(root, report) {
   root.innerHTML = [
     headerV2(report, b, meta),
     '<div class="wrap r2">',
+    report.fullScanPending ? fullScanNote() : '',
     heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
     scoreV2(report),
     baselineV2(report, t),
+    paid && report.baseline && !isDemoReport(report) ? recheckOffer(report) : '',
     report.sample ? '' : leadForm('top'),
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
     nobodyTwice ? '' : whoAiNamesV2({ b, t, N, cw, proven }),
@@ -560,6 +588,7 @@ function renderV2(root, report) {
     listingsV2({ listings, badListings }),
     issuesV2({ issues, locked, xrayOk }),
     xrayV2({ report, aById, cw, N }),
+    paid && !isDemoReport(report) && tierOn('fix_kit') ? fixKitOffer(report) : '',
     offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }),
     answersV2({ questions, answers }),
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
@@ -596,6 +625,15 @@ function headerV2(report, b, meta) {
         ${reportTools()}
       </div>
     </section>`;
+}
+
+// Paid, and the full scan (every question, every assistant we have) is still running.
+function fullScanNote() {
+  return `
+    <div class="r2-note r2-fullscan" role="status">
+      <strong>Your full audit is on its way.</strong> We’re asking all 5 customer questions on every AI assistant we check.
+      This page updates with the new answers when they’re ready, usually within the hour. Everything below is already yours.
+    </div>`;
 }
 
 // 1. Hero: one real search, and who it named.
@@ -776,6 +814,17 @@ function safeHref(u) {
 
 // 5. Why they got named instead: sources cited in answers the owner lost.
 function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
+  // Locked: the cited sites are the audit's; only the tally is sent (src/lib/lock.js).
+  const sum = report.sourcesSummary;
+  if (report.locked && sum) {
+    if (!num(sum.cited)) return '';
+    return `
+    <section class="report-section">
+      <h2>Why they got named instead</h2>
+      <p class="sub">AI cited ${num(sum.cited)} ${plural(num(sum.cited), 'website', 'websites')} in the ${cw.unit} that didn’t name you.${num(sum.missingYou) ? ` <strong>${num(sum.missingYou)} of them list other ${escapeHtml(tradePlural(b.trade))} and not you.</strong>` : ''}</p>
+      <div class="listing-card">${blurred('Each site AI cited, who it lists first, and whether you’re on it, with the link.')}</div>
+    </section>`;
+  }
   const order = (s) => (s.youListed === false ? 0 : s.youListed == null ? 1 : 2);
   const list = (report.sources || [])
     .map((s) => ({ ...s, lostIn: (s.citedIn || []).filter((id) => lostAnswerIds.has(id)) }))
@@ -877,10 +926,26 @@ function listingsV2({ listings, badListings }) {
 }
 
 // Can AI read the owner's website? (scanner/owner-checks.js checkSite: robots.txt, schema, sitemap,
-// phone and address on the page.) Public page reads only.
+// phone and address on the page, plus the rows in siteMoreRowsV2.) Public page reads only.
 function siteV2(report) {
   const sc = report.siteCheck;
   if (!sc || !sc.url) return '';
+  // Locked: a pass/fail tally only; which checks failed is in the audit (src/lib/lock.js).
+  if (sc.locked) {
+    const failedN = Math.max(0, num(sc.checks) - num(sc.passed));
+    const verdict = !sc.reachable
+      ? '<li class="bad"><span aria-hidden="true">✗</span> We couldn’t load your website. AI can’t read a site that doesn’t load.</li>'
+      : failedN
+        ? `<li class="bad"><span aria-hidden="true">✗</span> ${failedN} of ${num(sc.checks)} checks failed.</li>`
+        : `<li class="ok"><span aria-hidden="true">✓</span> All ${num(sc.checks)} checks passed.</li>`;
+    return `
+    <section class="report-section r2-site">
+      <h2>Can AI read your website?</h2>
+      <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI crawler would.</p>
+      <ul class="r2-site-list">${verdict}</ul>
+      ${failedN ? `<div class="listing-card">${blurred('Which checks failed, what each one means, and the exact fix.')}</div>` : ''}
+    </section>`;
+  }
   const row = (ok, text) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span> ${text}</li>`;
   const blocked = (sc.robots && sc.robots.blocked) || [];
   const rows = !sc.reachable
@@ -893,6 +958,7 @@ function siteV2(report) {
       row(!!(sc.onSite && sc.onSite.phone), sc.onSite && sc.onSite.phone ? `Your phone number is on the page: ${escapeHtml(sc.onSite.phone)}.` : 'We couldn’t find your phone number on the page.'),
       row(!!(sc.onSite && sc.onSite.address), sc.onSite && sc.onSite.address ? `Your address is on the page: ${escapeHtml(sc.onSite.address)}.` : 'We couldn’t find your street address on the page.'),
       row(!!sc.sitemap, sc.sitemap ? 'A sitemap helps crawlers find every page.' : 'No sitemap, so crawlers may miss pages.'),
+      ...siteMoreRowsV2(sc, row),
     ];
   return `
     <section class="report-section r2-site">
@@ -900,6 +966,76 @@ function siteV2(report) {
       <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI crawler would.</p>
       <ul class="r2-site-list">${rows.join('')}</ul>
     </section>`;
+}
+
+// The newer website checks (https, llms.txt, title / description / heading, FAQ schema, service and
+// town pages, phone speed). Every field is optional: a missing one (an older report, or a locked
+// report that only carries pass/fail) renders no row. Text fields may be a string or just true/false.
+function siteMoreRowsV2(sc, row) {
+  const out = [];
+  const isBool = (v) => typeof v === 'boolean';
+  const h = sc.https && typeof sc.https === 'object' ? sc.https : null;
+  if (h && h.loads === false) out.push(row(false, 'Your site doesn’t load over a secure https:// address.'));
+  else if (h && h.loads === true) {
+    out.push(h.redirects === false
+      ? row(false, 'Your site loads over https://, but the plain http:// address doesn’t forward to it.')
+      : row(true, 'Your site loads over a secure https:// address.'));
+  }
+  if (isBool(sc.llmsTxt)) {
+    out.push(row(sc.llmsTxt, sc.llmsTxt
+      ? 'Your site has an llms.txt file, a short summary written for AI tools.'
+      : 'No llms.txt file (a newer, optional summary written for AI tools).'));
+  }
+  const m = sc.meta && typeof sc.meta === 'object' ? sc.meta : null;
+  if (m) {
+    if (typeof m.title === 'string' || isBool(m.title)) {
+      out.push(m.title
+        ? row(true, typeof m.title === 'string' ? `Page title: “${escapeHtml(m.title)}”.` : 'Your homepage has a page title.')
+        : row(false, 'Your homepage has no page title.'));
+    }
+    if (typeof m.description === 'string' || isBool(m.description)) {
+      out.push(row(!!m.description, m.description
+        ? 'Your homepage has a meta description (the summary under your link in search results).'
+        : 'No meta description (the summary under your link in search results).'));
+    }
+    if (isBool(m.mentionsTrade)) {
+      out.push(row(m.mentionsTrade, m.mentionsTrade
+        ? 'Your title and main heading say what you do.'
+        : 'Your title, description and main heading don’t say what you do.'));
+    }
+    if (isBool(m.mentionsTown)) {
+      out.push(row(m.mentionsTown, m.mentionsTown
+        ? 'Your title and main heading say where you work.'
+        : 'Your title, description and main heading don’t say where you work.'));
+    }
+  }
+  if (isBool(sc.faqSchema)) {
+    out.push(row(sc.faqSchema, sc.faqSchema
+      ? 'Questions and answers are marked up for search engines and AI (FAQ schema).'
+      : 'No FAQ schema on your homepage.'));
+  }
+  const p = sc.pages && typeof sc.pages === 'object' ? sc.pages : null;
+  if (p) {
+    const pagesRow = (v, what) => {
+      if (typeof v === 'number') {
+        return row(v > 0, v > 0
+          ? `Your homepage links to ${num(v)} ${plural(v, 'page', 'pages')} about ${what}.`
+          : `Your homepage doesn’t link to a page about ${what}.`);
+      }
+      if (isBool(v)) return row(v, v ? `Your homepage links to pages about ${what}.` : `Your homepage doesn’t link to a page about ${what}.`);
+      return '';
+    };
+    const a = pagesRow(p.servicePages, 'your services');
+    const b = pagesRow(p.townPages, 'the towns you serve');
+    if (a) out.push(a);
+    if (b) out.push(b);
+  }
+  const sp = sc.speed && typeof sc.speed === 'object' ? sc.speed : null;
+  if (sp && typeof sp.score === 'number') {
+    const s = Math.round(sp.score);
+    out.push(row(s >= 50, `Google’s speed score on phones: ${num(s)} out of 100 (${s >= 90 ? 'fast' : s >= 50 ? 'could be faster' : 'slow'}).`));
+  }
+  return out;
 }
 
 // Copy-paste blocks under a fix: plain text, or a code block (JSON-LD), each with a Copy button.
@@ -921,6 +1057,21 @@ function copyBlocksV2(items) {
 // (removed server-side, src/lib/lock.js).
 function issuesV2({ issues, locked, xrayOk }) {
   if (!issues.length) return '';
+  // Locked: how many fixes and how serious; the titles are the fix, so they're the audit's.
+  if (issues.every((i) => i && i.locked && !i.title)) {
+    const bySev = {};
+    for (const i of issues) bySev[i.severity || 'low'] = (bySev[i.severity || 'low'] || 0) + 1;
+    const order = ['high', 'medium', 'low'];
+    const sevs = [...order.filter((k) => bySev[k]), ...Object.keys(bySev).filter((k) => !order.includes(k))];
+    return `
+    <section class="report-section">
+      <h2>What to fix</h2>
+      <p class="sub">We found <strong>${issues.length} ${plural(issues.length, 'problem', 'problems')}</strong> you can fix.</p>
+      <p class="r2-sev">${sevs.map((k) => `<span class="badge ${escapeHtml(k)}">${num(bySev[k])} ${escapeHtml(severityLabel(k).toLowerCase())}</span>`).join(' ')}</p>
+      <div class="issue-card">${blurred('Each problem by name, in order, with the exact steps to fix it and text you can copy and paste.')}</div>
+      ${xrayOk ? unlockPanel() : ''}
+    </section>`;
+  }
   return `
     <section class="report-section">
       <h2>What to fix, in order</h2>
@@ -949,7 +1100,7 @@ function xrayV2({ report, aById, cw, N }) {
     return `
     <section class="report-section r2-xray">
       <h2>Competitor gap sheet</h2>
-      <div class="issue-card">${blurred('Each business AI named over you, how often it was named and named first, and the sites AI cited that list them and not you.')}</div>
+      <div class="issue-card">${blurred('Each business AI named over you, how often it was named and named first, their Google reviews next to yours, and the sites AI cited that list them and not you.')}</div>
       <h2 class="r2-xray-h2">Your fix checklist</h2>
       <div class="issue-card">${blurred('Every fix in this report as a checklist you can tick off as you go.')}</div>
     </section>`;
@@ -962,12 +1113,27 @@ function xrayV2({ report, aById, cw, N }) {
     return links.length ? `<p class="r2-muted">Read the answers: ${links.join(' · ')}</p>` : '';
   };
   const anyGap = comps.some((c) => (c.sources || []).length);
+  // Google reviews (looked up at scan time): "4.8★ from 212 Google reviews (you: 4.6★ from 38)".
+  const revText = (r) => {
+    if (!r || typeof r !== 'object' || !Number.isInteger(r.count)) return '';
+    const n = `${num(r.count)} Google ${plural(r.count, 'review', 'reviews')}`;
+    return typeof r.rating === 'number' && r.count > 0 ? `${r.rating.toFixed(1)}★ from ${n}` : n;
+  };
+  const yr = gap.youReviews;
+  const youRev = !yr || !Number.isInteger(yr.count) ? ''
+    : yr.count === 0 ? 'no reviews yet'
+      : typeof yr.rating === 'number' ? `${yr.rating.toFixed(1)}★ from ${num(yr.count)}` : `${num(yr.count)} ${plural(yr.count, 'review', 'reviews')}`;
+  const reviewsLine = (c) => {
+    const t = revText(c.reviews);
+    return t ? `<p class="r2-reviews">${escapeHtml(t)}${youRev ? ` <span class="r2-muted">(you: ${escapeHtml(youRev)})</span>` : ''}</p>` : '';
+  };
   const cards = comps.map((c) => {
     const srcs = (c.sources || []).filter((s) => s && s.domain);
     return `
       <div class="listing-card r2-gap">
         <h3>${escapeHtml(c.name)}</h3>
         <p>Named in ${num(c.named)} of ${num(N)} ${cw.unit}${num(c.first) ? `, first in ${num(c.first)}` : ', never first'}.</p>
+        ${reviewsLine(c)}
         ${srcs.length
           ? `<p><strong>Sites AI cited that list them and not you:</strong></p>
              <ul class="r2-gap-list">${srcs.map((s) => `<li><a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${num(s.position) ? ` <span class="r2-muted">(listed #${num(s.position)})</span>` : ''}</li>`).join('')}</ul>`
@@ -1052,6 +1218,17 @@ function answersV2({ questions, answers }) {
       ${qa.map((a) => {
         const m = markFor(a);
         const cites = (a.citations || []).filter((c) => c && c.url);
+        if (a.locked) {
+          const named = (a.businessesNamed || []).filter((n) => n && n.name && !isYouNamed(n)).map((n) => escapeHtml(n.name));
+          return `
+        <details class="r2-ans" id="ans-${escapeHtml(a.id)}">
+          <summary><span class="eng">${escapeHtml(engineName(a.engine))}${runs > 1 ? ` · run ${num(a.run) || 1}` : ''}</span><span class="mk ${m.cls}">${m.txt}</span><span class="lbl">${m.label}</span></summary>
+          <div class="body">
+            ${named.length ? `<p>It named ${listJoin(named)}.</p>` : '<p>It didn’t name any other business.</p>'}
+            ${blurred('The full answer, word for word, and every website it cited.')}
+          </div>
+        </details>`;
+        }
         return `
         <details class="r2-ans" id="ans-${escapeHtml(a.id)}">
           <summary><span class="eng">${escapeHtml(engineName(a.engine))}${runs > 1 ? ` · run ${num(a.run) || 1}` : ''}</span><span class="mk ${m.cls}">${m.txt}</span><span class="lbl">${m.label}</span></summary>
@@ -1068,7 +1245,9 @@ function answersV2({ questions, answers }) {
   return `
     <section class="report-section">
       <h2>Read every answer</h2>
-      <p class="sub">Word for word, as the AI returned it. Business names in bold, yours highlighted. Tap to open.</p>
+      <p class="sub">${answers.some((a) => a.locked)
+        ? 'Who each answer named. Tap to open. The answer at the top of this report is here word for word; every other answer, and the websites it cited, is in the audit.'
+        : 'Word for word, as the AI returned it. Business names in bold, yours highlighted. Tap to open.'}</p>
       ${groups}
     </section>`;
 }

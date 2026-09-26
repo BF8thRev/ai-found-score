@@ -49,6 +49,8 @@ const LINT_SKIP_KEYS = new Set([
   'text', 'url', 'urls', 'domain', 'aiSays', 'sourceSays', 'name', 'aliases', 'topListed', 'listed', 'quote', 'format',
   'fields', 'answerId', 'answerIds', 'citedIn', 'entityId', 'questionId', 'id', 'askedAt',
   'model', 'api', 'error', 'checkError', 'rule', 'kind', 'status', 'severity', 'field', 'intent', 'engine', 'ownerMatch', 'sourceFrom',
+  // siteCheck.meta: the title, meta description and H1 as read from the owner's own homepage.
+  'meta', 'placeUrl',
 ]);
 
 function lintWalk(value, path, out, data = []) {
@@ -235,9 +237,9 @@ export function edgeState(report) {
 /** The refund promise: "if we can't show you 3 things you can fix, money back". */
 export const MIN_FIX_ITEMS = 3;
 
-/** Fix items in a report: its issues (titles stay visible on a locked report). */
+/** Fix items in a report: its issues (a locked report keeps them as untitled stand-ins, still counted). */
 export function fixItems(report) {
-  return ((report && report.issues) || []).filter((i) => i && i.title);
+  return ((report && report.issues) || []).filter((i) => i && (i.title || i.locked));
 }
 
 /** True when the $29 Fix steps tier may be offered for this report (≥ MIN_FIX_ITEMS fixes). */
@@ -321,12 +323,17 @@ export function computeVisibilityScore(report) {
  *   name read on the page, `listed`) where the owner was checked and is NOT listed
  *   (youListed === false). The owner's own site never counts. [] when none were found.
  *   sourcesChecked = how many cited sites were read for listings at all (youListed not null).
+ *   With report.reviews (Google ratings looked up at scan time, scanner/owner-checks.js): a
+ *   competitor that was found on Google also carries reviews: { rating, count }, and the sheet
+ *   carries youReviews: { rating, count } | null (the owner's own).
  */
 export function buildGapSheet(report) {
   const answers = (report && report.answers) || [];
   const byId = new Map(answers.map((a) => [a && a.id, a]));
   const own = ownDomain(report);
   const sources = ((report && report.sources) || []).filter((s) => s && s.domain !== own);
+  const rv = report && report.reviews && typeof report.reviews === 'object' ? report.reviews : null;
+  const rvComps = rv && Array.isArray(rv.competitors) ? rv.competitors.filter((c) => c && typeof c.name === 'string') : [];
   const competitors = [];
   for (const e of (report && report.entities) || []) {
     if (!e || !e.id || e.isYou) continue;
@@ -351,13 +358,19 @@ export function buildGapSheet(report) {
         const position = idx >= 0 ? idx + 1 : (s.topListed && names.some((m) => sameBiz(s.topListed, m)) ? 1 : null);
         return { domain: s.domain, url: s.url, position };
       });
-    competitors.push({ id: e.id, name: e.name, named: named.length, first, answerIds: named, sources: gap });
+    const r = rvComps.find((c) => names.some((m) => m === c.name || sameBiz(c.name, m)));
+    competitors.push({
+      id: e.id, name: e.name, named: named.length, first, answerIds: named, sources: gap,
+      ...(r ? { reviews: { rating: typeof r.rating === 'number' ? r.rating : null, count: Number.isInteger(r.count) ? r.count : null } } : {}),
+    });
   }
   competitors.sort((a, b) => b.named - a.named || b.first - a.first || String(a.name).localeCompare(String(b.name)));
+  const you = rv && rv.you && typeof rv.you === 'object' ? rv.you : null;
   return {
     answers: answers.length,
     competitors,
     sourcesChecked: sources.filter((s) => s.youListed === true || s.youListed === false).length,
+    ...(rv ? { youReviews: you ? { rating: typeof you.rating === 'number' ? you.rating : null, count: Number.isInteger(you.count) ? you.count : null } : null } : {}),
   };
 }
 
@@ -408,7 +421,8 @@ export function validateReport(report) {
       if (!b || typeof b.name !== 'string' || !b.name) return err(`${bt} has no name`);
       if (!Number.isInteger(b.pos) || b.pos < 0) return err(`${bt}.pos must be a non-negative integer (got ${b.pos})`);
       const slice = text.slice(b.pos, b.pos + b.name.length);
-      if (slice !== b.name) err(`${bt} is not in the answer text at pos ${b.pos} (text there: ${JSON.stringify(slice)})`);
+      // A locked answer (src/lib/lock.js) has had its text removed; its names were checked before locking.
+      if (slice !== b.name && !a.locked) err(`${bt} is not in the answer text at pos ${b.pos} (text there: ${JSON.stringify(slice)})`);
       if (b.isYou) youCount++;
       if (b.ownerMatch !== 'unsure' && (!earliest || b.pos < earliest.pos)) earliest = b;
     });
@@ -453,7 +467,8 @@ export function validateReport(report) {
     for (const aid of ids) {
       const a = byId.get(aid);
       if (!a) { err(`${et}.answerIds has "${aid}", which is not an answer`); continue; }
-      const hit = names.some((n) => (a.text || '').includes(n));
+      // A locked answer's text was removed after this check passed on the stored report.
+      const hit = a.locked || names.some((n) => (a.text || '').includes(n));
       if (!hit) err(`${et}: answer ${aid} does not contain "${names.join('" or "')}" as written`);
       else proving.push(aid);
     }
@@ -498,7 +513,7 @@ export function validateReport(report) {
     const a = f && byId.get(f.answerId);
     if (!a) return err(`${ft}.answerId "${f && f.answerId}" is not an answer`);
     if (typeof f.aiSays !== 'string' || !f.aiSays) return err(`${ft}.aiSays is empty`);
-    if (!(a.text || '').includes(f.aiSays)) err(`${ft}.aiSays ${JSON.stringify(f.aiSays)} is not a literal quote from answer ${a.id}`);
+    if (!a.locked && !(a.text || '').includes(f.aiSays)) err(`${ft}.aiSays ${JSON.stringify(f.aiSays)} is not a literal quote from answer ${a.id}`);
     if (!['match', 'differs', 'not stated'].includes(f.status)) err(`${ft}.status "${f.status}" is not match | differs | not stated`);
   });
 
@@ -511,19 +526,53 @@ export function validateReport(report) {
     const a = d && byId.get(d.answerId);
     if (!a) return err(`${dt}.answerId "${d && d.answerId}" is not an answer`);
     if (typeof d.quote !== 'string' || !d.quote.trim()) return err(`${dt}.quote is empty`);
-    if (!(a.text || '').includes(d.quote)) err(`${dt}.quote ${JSON.stringify(d.quote)} is not a literal quote from answer ${a.id}`);
+    if (!a.locked && !(a.text || '').includes(d.quote)) err(`${dt}.quote ${JSON.stringify(d.quote)} is not a literal quote from answer ${a.id}`);
     if (!a.namedYou) err(`${dt} comes from answer ${a.id}, which does not name the owner`);
   });
 
   // Fix steps and copy-paste text: plain strings, nothing else.
   (report.issues || []).forEach((it, i) => {
     const t = `issues[${i}]`;
+    if (it && it.locked) return; // locked (src/lib/lock.js): only its severity is left, checked on the stored report
     if (!it || typeof it.title !== 'string' || !it.title) return err(`${t}.title is empty`);
     if (it.steps != null && !(Array.isArray(it.steps) && it.steps.every((s) => typeof s === 'string' && s.trim())))
       err(`${t}.steps must be an array of non-empty strings`);
     if (it.copyText != null && !(Array.isArray(it.copyText) && it.copyText.every((c) => c && typeof c.label === 'string' && c.label && typeof c.text === 'string' && c.text.trim())))
       err(`${t}.copyText must be an array of { label, text }`);
   });
+
+  // Google reviews (optional; paid gap sheet). Every competitor is a business the answers named.
+  if (report.reviews != null) {
+    const rv = report.reviews;
+    const isRating = (x) => x === null || (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 5);
+    const isCount = (x) => Number.isInteger(x) && x >= 0;
+    if (typeof rv !== 'object' || Array.isArray(rv)) err('reviews must be an object { you, competitors }');
+    else {
+      if (rv.you != null) {
+        if (typeof rv.you !== 'object') err('reviews.you must be null or { rating, count }');
+        else {
+          if (!isRating(rv.you.rating)) err(`reviews.you.rating must be null or a number from 0 to 5 (got ${JSON.stringify(rv.you.rating)})`);
+          if (!isCount(rv.you.count)) err(`reviews.you.count must be a non-negative integer (got ${JSON.stringify(rv.you.count)})`);
+        }
+      }
+      if (!Array.isArray(rv.competitors)) err('reviews.competitors must be an array');
+      else {
+        const known = new Set();
+        for (const e of report.entities || []) {
+          if (e && !e.isYou) for (const n of [e.name, ...(e.aliases || [])]) if (n) known.add(n);
+        }
+        rv.competitors.forEach((c, i) => {
+          const ct = `reviews.competitors[${i}]`;
+          if (!c || typeof c !== 'object') return err(`${ct} is not an object`);
+          if (typeof c.name !== 'string' || !c.name) return err(`${ct}.name is empty`);
+          if (!known.has(c.name)) err(`${ct}.name "${c.name}" is not a competitor named in the answers`);
+          if (!isRating(c.rating)) err(`${ct}.rating must be null or a number from 0 to 5 (got ${JSON.stringify(c.rating)})`);
+          if (!isCount(c.count)) err(`${ct}.count must be a non-negative integer (got ${JSON.stringify(c.count)})`);
+          if (c.placeUrl != null && typeof c.placeUrl !== 'string') err(`${ct}.placeUrl must be a string`);
+        });
+      }
+    }
+  }
 
   (report.sources || []).forEach((s, i) => {
     if (s.youPosition != null && (!Number.isInteger(s.youPosition) || s.youPosition < 1))

@@ -27,7 +27,7 @@ import { proposeForAnswer } from '../scanner/extract/propose.js';
 import { validateReport } from '../shared/report-v2.js';
 import {
   canStore, ensureBusiness, upsertScan, rawRow, saveRaw, usageRow, saveUsage, stableUuid,
-  saveReport, findReportByScan, getBaseline, getRawById, sumUsageCost,
+  saveReport, findReportByScan, getBaseline, getBaselineByToken, getRawById, sumUsageCost,
 } from '../scanner/store.js';
 import {
   scanJobs, chunk, compactCall, isTransientEngineError, isTransientExtractError, scanTotals, callWindow,
@@ -212,6 +212,11 @@ export class ScanWorkflow extends WorkflowEntrypoint {
         let baseline = null;
         if (store && business.id) {
           baseline = await getBaseline(env, business.id, { excludeScanId: scanId, fetchImpl }).catch(() => null);
+        }
+        // Request tokens have no business id: a rescan of the same link (the 30-day re-check) compares
+        // against the last report under that token that asked the same questions.
+        if (store && !baseline && p.reportToken) {
+          baseline = await getBaselineByToken(env, p.reportToken, { excludeScanId: scanId, questionCount: questions.length, fetchImpl }).catch(() => null);
         }
         // Any answer without a recorded proposal would be extracted here; record that spend too.
         let extraExtractCostUsd = 0;

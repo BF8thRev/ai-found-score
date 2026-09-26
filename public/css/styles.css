@@ -341,6 +341,9 @@ img { max-width: 100%; }
 .r2 .listing-card h3, .r2 .issue-card h3 { font-size: 18px; overflow-wrap: anywhere; }
 .r2-muted { color: var(--muted); }
 .r2-note { background: #FFF4E0; color: #7A4A0B; border-radius: 10px; padding: 10px 14px; font-size: 15px; margin: 0 0 14px; }
+.r2-fullscan { background: #E8F0FE; color: #173A6B; margin-top: 18px; }
+.r2-sev { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.r2-sev .badge { margin: 0; }
 
 .r2-hero {
   background: var(--navy); color: #fff; border-radius: 18px; padding: 26px 24px; margin: 28px 0 0;

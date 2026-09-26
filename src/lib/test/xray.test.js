@@ -140,8 +140,8 @@ test('lock: the X-Ray sections are withheld until paid; unlocked reports carry t
   const withListed = clone(v2);
   withListed.sources = (withListed.sources || []).map((s) => ({ ...s, listed: ['Someone Else'] }));
   const l3 = lockReport(withListed);
-  assert.ok(l3.sources.length > 0);
-  assert.ok(l3.sources.every((s) => !('listed' in s)));
+  assert.deepEqual(l3.sources, [], 'cited sites belong to the audit: a locked report carries only their count');
+  assert.ok(!JSON.stringify(l3).includes('Someone Else'));
   assert.ok(reportBody(withListed, true).sources.every((s) => Array.isArray(s.listed)));
 });
 

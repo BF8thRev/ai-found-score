@@ -9,6 +9,7 @@
 
 import { pickHeadline } from '../../shared/report-v2.js';
 import { baselineFixes } from '../../scanner/extract/fixes.js';
+import { siteIssues, reviewsIssue } from '../../scanner/owner-checks.js';
 
 /** Earliest occurrence of any alias; longest alias wins at the same spot. */
 function findName(text, aliases) {
@@ -38,6 +39,9 @@ function domainOf(url) {
  *   facts: [{ q, engine, run, field, aiSays, sourceSays, status }],
  *   descriptors: [{ q, engine, run, quote }]   "How AI describes you" (literal quotes, owner named)
  *   listings, issues, method, baseline,
+ *   siteCheck?, reviews?   the owner's website checks and Google reviews (scanner/owner-checks.js);
+ *                          their fixes are generated the way a real scan does, then all fixes are
+ *                          ordered high → medium → low (stable), as buildIssues does
  *   baselineFixes: true   append the always-applicable fixes (scanner/extract/fixes.js), built from
  *                         business (+ business.facts) and questions exactly as a real scan does
  *   engines?: [engineId...]   keep only these engines' answers, facts and method.engines
@@ -148,10 +152,16 @@ export function buildSample(fullSpec) {
     return { answerId: a.id, quote: d.quote };
   });
 
+  const SEV = { high: 0, medium: 1, low: 2 };
+  const reviewFix = spec.reviews ? reviewsIssue({ reviews: spec.reviews, placeId: spec.placeId || null, business: spec.business }) : null;
   const issues = [
     ...(spec.issues || []),
+    ...(spec.siteCheck ? siteIssues({ siteCheck: spec.siteCheck, business: spec.business }) : []),
+    ...(reviewFix ? [reviewFix] : []),
     ...(spec.baselineFixes ? baselineFixes({ business: spec.business, questions: spec.questions }) : []),
-  ];
+  ].map((x, i) => ({ x, i }))
+    .sort((a, b) => (SEV[a.x.severity] ?? 3) - (SEV[b.x.severity] ?? 3) || a.i - b.i)
+    .map(({ x }) => x);
 
   return {
     id: spec.id,
@@ -168,6 +178,8 @@ export function buildSample(fullSpec) {
     aiFacts,
     ownerDescriptors,
     listings: spec.listings || [],
+    ...(spec.siteCheck ? { siteCheck: spec.siteCheck } : {}),
+    ...(spec.reviews ? { reviews: spec.reviews } : {}),
     issues,
     method: spec.method,
     baseline: spec.baseline ?? null,
