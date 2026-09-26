@@ -4,7 +4,7 @@
 // random chars from [A-Za-z0-9_-]) and a `scans` row (trigger 'request') that the report page reads
 // while the report is being made (pendingReportStatus → GET /api/report/<token> answers 202).
 //
-//   AUTO_SCAN=on         start a ScanWorkflow for it at once (activeEngines(env), 1 run, FREE_QUESTION_COUNT questions).
+//   AUTO_SCAN=on         start a ScanWorkflow for it at once (freeEngines(env), 1 run, FREE_QUESTION_COUNT questions).
 //   AUTO_SCAN unset/off  the row is 'queued'; /admin lists it with a "Run now" button (runQueuedScan).
 //
 // Brakes, in order (a request that trips one is QUEUED, never dropped; the page still gets its link):
@@ -29,7 +29,7 @@
 // Local dry run (SCANNER_DRY_RUN=1 + localhost): no Supabase at all. The workflow answers from the
 // recorded fixtures and the token's state lives in this isolate's memory (DRY_RUN_REQUESTS).
 
-import { activeEngines, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
+import { freeEngines, activeEngines, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
 import { canStore, upsertScan, stableUuid, getScan, saveReport } from '../../scanner/store.js';
 import { resolveKeys } from '../../scanner/config.js';
 import { parseScanRequest } from '../admin/scan-core.js';
@@ -222,7 +222,7 @@ async function reuseWithNewToken(env, prior, { token, scanId, base, notes, rowWr
 export async function startRequestScan(env, req, o = {}) {
   const now = o.now ?? Date.now();
   const fetchImpl = o.fetchImpl || ((...a) => fetch(...a));
-  const engines = activeEngines(o.dryRun ? o.dryEnv || env : env);
+  const engines = freeEngines(o.dryRun ? o.dryEnv || env : env);
   const parsed = parseScanRequest({
     business: { name: req.businessName, trade: req.trade, town: req.town, state: req.state, zip: req.zip, website: req.website, phone: req.phone },
     engines: engines.length ? engines : undefined,
@@ -379,7 +379,7 @@ export async function runQueuedScan(env, id, { fetchImpl = (...a) => fetch(...a)
   const row = await getScan(env, id, { fetchImpl }).catch(() => null);
   if (!row || row.trigger !== 'request') return { ok: false, status: 404, error: 'No request scan with that id.' };
   if (row.status !== 'queued' && row.status !== 'failed') return { ok: false, status: 409, error: `That scan is ${row.status}.` };
-  const engines = activeEngines(env);
+  const engines = freeEngines(env);
   if (!engines.length) return { ok: false, status: 503, error: 'No engine has a key.' };
   const parsed = parseScanRequest({ business: row.business || {}, engines, runs: 1, trigger: 'request', notes: row.notes || 'free-report request' });
   if (!parsed.ok) return { ok: false, status: 422, error: `This row can't be scanned: ${parsed.error} (apply supabase/v4_ladder.sql so requests keep their details).` };
@@ -401,4 +401,81 @@ export async function runQueuedScan(env, id, { fetchImpl = (...a) => fetch(...a)
     return { ok: false, status: 500, error: `could not start the workflow: ${error}` };
   }
   return { ok: true, scanId };
+}
+
+// ---------------------------------------------------------------------------
+// The paid audit: a fresh scan with all 5 questions on every engine with a key
+// ---------------------------------------------------------------------------
+
+/** Tiers whose payment starts the full scan (the $49 audit and everything above it). */
+export const FULL_SCAN_TIERS = ['xray', 'fix_kit', 'be_the_answer'];
+
+/** The scan id for a paid scan: stable per Stripe Checkout Session, so a retried webhook starts nothing new. */
+export function paidScanId(sessionId) {
+  return stableUuid(`paid-scan:${sessionId}`);
+}
+
+/** The newest `business` a scans row kept for this token (request scans store it), or null. */
+async function readScanBusiness(env, token, fetchImpl) {
+  const rows = await readRows(env, `report_token=eq.${encodeURIComponent(token)}&business=not.is.null&select=business&order=created_at.desc&limit=1`, fetchImpl);
+  const b = rows[0]?.business;
+  return b && typeof b === 'object' ? b : null;
+}
+
+/**
+ * Start the full audit scan for a paid report token: every question (no questionLimit), every
+ * engine with a key (activeEngines, not the free three), 1 run, under the SAME token. The newest
+ * v2 report for a token is the one served (src/lib/db.js getReport), so the owner's link keeps
+ * showing the free scan, now unlocked, until the full one is saved. Caps and dedupe don't apply:
+ * it's paid for. One paid scan per token: a second payment (a Fix Kit after the audit) or a
+ * retried webhook starts nothing. The business comes from the request's scans row, else from the
+ * stored report. Never throws: the payment is already recorded, and /admin can re-run by hand.
+ * → { ok: true, scanId } | { ok: false, reason }
+ */
+export async function startPaidScan(env, { token, sessionId, tier }, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  try {
+    if (!FULL_SCAN_TIERS.includes(tier)) return { ok: false, reason: 'tier' };
+    if (!token || !LOOKUP_TOKEN_RE.test(String(token)) || !sessionId) return { ok: false, reason: 'no-token' };
+    if (!env.SCAN_WORKFLOW) return { ok: false, reason: 'no-workflow' };
+    if (!canStore(env)) return { ok: false, reason: 'no-store' };
+    const rows = await readByToken(env, token, { fetchImpl });
+    if (rows.some((r) => r.trigger === 'paid' && r.status !== 'failed')) return { ok: false, reason: 'already' };
+    const engines = activeEngines(env);
+    if (!engines.length) return { ok: false, reason: 'no-engine' };
+    let business = await readScanBusiness(env, token, fetchImpl).catch(() => null);
+    if (!business) business = (await readStoredReport(env, token, fetchImpl))?.report?.business || null;
+    const parsed = parseScanRequest({ business: business || {}, engines, runs: 1, trigger: 'paid', notes: `paid ${tier} ${sessionId}` });
+    if (!parsed.ok) return { ok: false, reason: `business: ${parsed.error}` };
+    const scanId = await paidScanId(sessionId);
+    const questions = 5;
+    await upsertScan(env, {
+      id: scanId, business_name: parsed.params.business.name, report_token: token, trigger: 'paid', status: 'running',
+      engines, runs: 1, questions, calls_total: questions * engines.length, notes: parsed.params.notes,
+      business: parsed.params.business, est_cost_usd: estimateScanCost({ engines, questions, runs: 1 }).total,
+    }, { fetchImpl });
+    try {
+      await env.SCAN_WORKFLOW.create({
+        id: scanId,
+        params: { ...parsed.params, engines, scanId, reportToken: token, questionLimit: null, dryRun: false },
+      });
+    } catch (e) {
+      const error = String(e?.message || e).slice(0, 300);
+      await upsertScan(env, { id: scanId, status: 'failed', est_cost_usd: 0, errors: [{ kind: 'workflow', error }] }, { fetchImpl }).catch(() => {});
+      return { ok: false, reason: `workflow: ${error}` };
+    }
+    return { ok: true, scanId };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 300) };
+  }
+}
+
+/** True while a paid full scan for this token is running (the report page says the full audit is on its way). */
+export async function paidScanRunning(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  if (!canStore(env) || !LOOKUP_TOKEN_RE.test(String(token || ''))) return false;
+  try {
+    const rows = await readByToken(env, token, { fetchImpl });
+    return rows.some((r) => r.trigger === 'paid' && (r.status === 'running' || r.status === 'queued'));
+  } catch {
+    return false;
+  }
 }

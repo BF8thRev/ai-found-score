@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import {
   startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey,
   newRequestToken, requestScanId, autoScanOn, autoScanLimits, estimateRequestScanUsd, REQUEST_TOKEN_RE,
-  DRY_RUN_REQUESTS,
+  DRY_RUN_REQUESTS, startPaidScan, paidScanRunning,
 } from '../auto-scan.js';
+import { freeEngines, activeEngines } from '../../../scanner/config.js';
 import { handleReportRequest } from '../report-request.js';
 import { REQUEST_ACTION } from '../turnstile.js';
 
@@ -398,4 +399,45 @@ test('Run now: a queued request starts under its own id; a failed one gets a new
   // An admin scan (not a request) can't be run from here.
   db.rows.push({ id: '66666666-6666-4666-8666-666666666666', trigger: 'admin', status: 'queued', created_at: db.tick() });
   assert.equal((await runQueuedScan(env, '66666666-6666-4666-8666-666666666666', { fetchImpl: db.fetch })).status, 404);
+});
+
+// ---------------------------------------------------------------------------
+// Free vs paid engines, and the paid audit's full scan
+// ---------------------------------------------------------------------------
+test('free scans ask only the free three; paid scans ask every engine with a key', async () => {
+  const env = baseEnv({ ANTHROPIC_API_KEY: 'k3', PERPLEXITY_API_KEY: 'k4' });
+  assert.deepEqual(freeEngines(env), ['chatgpt', 'gemini', 'claude']);
+  assert.ok(activeEngines(env).includes('perplexity'));
+  const db = fakeDb();
+  const r = await startRequestScan(env, req(), { now: NOW, fetchImpl: db.fetch });
+  assert.equal(r.status, 'running');
+  assert.ok(!env.SCAN_WORKFLOW.created[0].params.engines.includes('perplexity'));
+});
+
+test('paid scan: every question, every engine, same token; once per token; never throws', async () => {
+  const env = baseEnv({ AUTO_SCAN: 'off', PERPLEXITY_API_KEY: 'k4' });
+  const db = fakeDb();
+  const q = await startRequestScan(env, req(), { now: NOW, fetchImpl: db.fetch });
+  assert.equal((await startPaidScan(env, { token: q.token, sessionId: 'cs_1', tier: 'unknown' }, { fetchImpl: db.fetch })).reason, 'tier');
+  const r = await startPaidScan(env, { token: q.token, sessionId: 'cs_1', tier: 'xray' }, { fetchImpl: db.fetch });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const wf = env.SCAN_WORKFLOW.created.at(-1);
+  assert.equal(wf.params.reportToken, q.token);
+  assert.equal(wf.params.questionLimit, null);
+  assert.ok(wf.params.engines.includes('perplexity'));
+  assert.equal(wf.params.business.name, 'Otter Plumbing');
+  const row = db.rows.find((x) => x.id === r.scanId);
+  assert.equal(row.trigger, 'paid');
+  assert.equal(row.questions, 5);
+  assert.equal(await paidScanRunning(env, q.token, { fetchImpl: db.fetch }), true);
+  // A retried webhook, or a Fix Kit bought after the audit, starts nothing new.
+  assert.equal((await startPaidScan(env, { token: q.token, sessionId: 'cs_1', tier: 'xray' }, { fetchImpl: db.fetch })).reason, 'already');
+  assert.equal((await startPaidScan(env, { token: q.token, sessionId: 'cs_2', tier: 'fix_kit' }, { fetchImpl: db.fetch })).reason, 'already');
+  // A failing workflow is reported, not thrown.
+  const env2 = baseEnv({ SCAN_WORKFLOW: { create: async () => { throw new Error('boom'); } } });
+  const db2 = fakeDb();
+  const q2 = await startRequestScan(baseEnv({ AUTO_SCAN: 'off' }), req(), { now: NOW, fetchImpl: db2.fetch });
+  const bad = await startPaidScan(env2, { token: q2.token, sessionId: 'cs_3', tier: 'xray' }, { fetchImpl: db2.fetch });
+  assert.equal(bad.ok, false);
+  assert.match(bad.reason, /boom/);
 });

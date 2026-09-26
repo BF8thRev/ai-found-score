@@ -7,7 +7,7 @@ import { normalizeTrade } from '../../scanner/questions.js';
 import { scrubKeyFragments } from '../../scanner/store.js';
 import { verifyAnswer } from '../../scanner/extract/verify.js';
 
-export const TRIGGERS = ['admin', 'request', 'recheck'];
+export const TRIGGERS = ['admin', 'request', 'recheck', 'paid'];
 export const MAX_RUNS = 3;
 /** Longest answer text carried between Workflow steps (step results must stay well under 1 MiB). */
 export const MAX_STEP_TEXT = 40_000;

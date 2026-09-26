@@ -235,9 +235,9 @@ export function edgeState(report) {
 /** The refund promise: "if we can't show you 3 things you can fix, money back". */
 export const MIN_FIX_ITEMS = 3;
 
-/** Fix items in a report: its issues (titles stay visible on a locked report). */
+/** Fix items in a report: its issues (a locked report keeps them as untitled stand-ins, still counted). */
 export function fixItems(report) {
-  return ((report && report.issues) || []).filter((i) => i && i.title);
+  return ((report && report.issues) || []).filter((i) => i && (i.title || i.locked));
 }
 
 /** True when the $29 Fix steps tier may be offered for this report (≥ MIN_FIX_ITEMS fixes). */
@@ -408,7 +408,8 @@ export function validateReport(report) {
       if (!b || typeof b.name !== 'string' || !b.name) return err(`${bt} has no name`);
       if (!Number.isInteger(b.pos) || b.pos < 0) return err(`${bt}.pos must be a non-negative integer (got ${b.pos})`);
       const slice = text.slice(b.pos, b.pos + b.name.length);
-      if (slice !== b.name) err(`${bt} is not in the answer text at pos ${b.pos} (text there: ${JSON.stringify(slice)})`);
+      // A locked answer (src/lib/lock.js) has had its text removed; its names were checked before locking.
+      if (slice !== b.name && !a.locked) err(`${bt} is not in the answer text at pos ${b.pos} (text there: ${JSON.stringify(slice)})`);
       if (b.isYou) youCount++;
       if (b.ownerMatch !== 'unsure' && (!earliest || b.pos < earliest.pos)) earliest = b;
     });
@@ -453,7 +454,8 @@ export function validateReport(report) {
     for (const aid of ids) {
       const a = byId.get(aid);
       if (!a) { err(`${et}.answerIds has "${aid}", which is not an answer`); continue; }
-      const hit = names.some((n) => (a.text || '').includes(n));
+      // A locked answer's text was removed after this check passed on the stored report.
+      const hit = a.locked || names.some((n) => (a.text || '').includes(n));
       if (!hit) err(`${et}: answer ${aid} does not contain "${names.join('" or "')}" as written`);
       else proving.push(aid);
     }
@@ -498,7 +500,7 @@ export function validateReport(report) {
     const a = f && byId.get(f.answerId);
     if (!a) return err(`${ft}.answerId "${f && f.answerId}" is not an answer`);
     if (typeof f.aiSays !== 'string' || !f.aiSays) return err(`${ft}.aiSays is empty`);
-    if (!(a.text || '').includes(f.aiSays)) err(`${ft}.aiSays ${JSON.stringify(f.aiSays)} is not a literal quote from answer ${a.id}`);
+    if (!a.locked && !(a.text || '').includes(f.aiSays)) err(`${ft}.aiSays ${JSON.stringify(f.aiSays)} is not a literal quote from answer ${a.id}`);
     if (!['match', 'differs', 'not stated'].includes(f.status)) err(`${ft}.status "${f.status}" is not match | differs | not stated`);
   });
 
@@ -511,13 +513,14 @@ export function validateReport(report) {
     const a = d && byId.get(d.answerId);
     if (!a) return err(`${dt}.answerId "${d && d.answerId}" is not an answer`);
     if (typeof d.quote !== 'string' || !d.quote.trim()) return err(`${dt}.quote is empty`);
-    if (!(a.text || '').includes(d.quote)) err(`${dt}.quote ${JSON.stringify(d.quote)} is not a literal quote from answer ${a.id}`);
+    if (!a.locked && !(a.text || '').includes(d.quote)) err(`${dt}.quote ${JSON.stringify(d.quote)} is not a literal quote from answer ${a.id}`);
     if (!a.namedYou) err(`${dt} comes from answer ${a.id}, which does not name the owner`);
   });
 
   // Fix steps and copy-paste text: plain strings, nothing else.
   (report.issues || []).forEach((it, i) => {
     const t = `issues[${i}]`;
+    if (it && it.locked) return; // locked (src/lib/lock.js): only its severity is left, checked on the stored report
     if (!it || typeof it.title !== 'string' || !it.title) return err(`${t}.title is empty`);
     if (it.steps != null && !(Array.isArray(it.steps) && it.steps.every((s) => typeof s === 'string' && s.trim())))
       err(`${t}.steps must be an array of non-empty strings`);

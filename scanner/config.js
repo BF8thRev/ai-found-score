@@ -200,6 +200,16 @@ export function activeEngines(env = {}) {
   return ENGINE_IDS.filter((e) => c[e]);
 }
 
+/** The free Snapshot asks only these (owner decision, Sep 26 2026): the paid audit asks every
+ *  engine with a key, so adding Perplexity / Google AI Mode keys widens the audit, never the free
+ *  report. The site's free card names exactly these three. */
+export const FREE_ENGINES = ['chatgpt', 'gemini', 'claude'];
+
+/** The engines a free-report scan runs: FREE_ENGINES that have keys, in ENGINE_IDS order. */
+export function freeEngines(env = {}) {
+  return activeEngines(env).filter((e) => FREE_ENGINES.includes(e));
+}
+
 /** activeEngines(env), or ACTIVE_ENGINES when no engine has a key (so the error names the missing key). */
 export function defaultScanEngines(env = {}) {
   const a = activeEngines(env);

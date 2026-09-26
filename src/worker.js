@@ -41,7 +41,7 @@ import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
 import { reportBody } from './lib/lock.js';
-import { pendingReportStatus } from './lib/auto-scan.js';
+import { pendingReportStatus, startPaidScan, paidScanRunning } from './lib/auto-scan.js';
 import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
@@ -254,6 +254,8 @@ async function handleGetReport(id, url, env, dryRun = false) {
   }
   // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
   const body = reportBody(report, unlocked);
+  // Paid, and the full scan (every question, every assistant) is still running: the page says so.
+  if (unlocked && !isSample && !dryRun && (await paidScanRunning(env, id))) body.fullScanPending = true;
   return Response.json(body, {
     // Real reports change the moment they're paid for, so never cache them.
     headers: { 'Cache-Control': isSample ? 'public, max-age=300' : 'private, no-store' },
@@ -485,6 +487,11 @@ async function handleStripeWebhook(request, env) {
     // Return 500 so Stripe retries the event.
     return Response.json({ error: 'Payment write failed' }, { status: 500 });
   }
+
+  // The paid audit asks every question on every assistant we have: start that scan now, under the
+  // same token. Never fails the webhook (the payment is recorded); a miss shows in the log and /admin.
+  const full = await startPaidScan(env, { token: reportToken, sessionId: session.id, tier: tierForSession(session) });
+  console.log('[webhook] full scan', JSON.stringify(full));
 
   return Response.json({ received: true });
 }

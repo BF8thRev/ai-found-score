@@ -19,7 +19,7 @@ const read = (f) => readFileSync(new URL(f, PUBLIC), 'utf8');
 const withoutStats = (html) => html
   .replace(/<section class="stats-band"[\s\S]*?<\/section>/, '')
   .replace(/<div class="real-answer" data-(?:real|sample)-quote>[\s\S]*?<\/figure>[\s\S]*?<\/p>\s*<\/div>/, '')
-  .replace(/<li data-assistant-list>[\s\S]*?<\/li>/, '');
+  .replace(/<li data-assistant-list>[\s\S]*?<\/li>/g, '');
 const visible = (html) => html
   .replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ')
   .replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;|&#\d+;/g, ' ');
