@@ -18,6 +18,7 @@
 // be made (bot check not configured, no service key, a database error). The request is saved either
 // way. A no-JS form post is redirected to the report link when there is one.
 
+import { notifyRequestEmail } from './notify.js';
 import { recordReportRequest, attachReportRequestEmail } from './db.js';
 import { normalizeTrade } from '../../scanner/questions.js';
 import { turnstileConfigured, verifyTurnstile, warnUnconfiguredOnce, REQUEST_ACTION } from './turnstile.js';
@@ -81,7 +82,12 @@ export async function handleReportRequest(request, url, env, deps = {}) {
     if (!UUID_RE.test(requestId)) return fail(422, 'Bad request');
     if (!emailOk) return fail(422, 'Please enter a valid email.');
     try {
-      if (await attach(env, { id: requestId, email })) return okResponse(requestId);
+      if (await attach(env, { id: requestId, email })) {
+        // Report already finished? Send it now; otherwise the scan's own "ready" email covers it.
+        const r = await (deps.notifyRequestEmail || notifyRequestEmail)(env, { requestId, email });
+        if (r && r.error) console.warn('[request] ready email failed', r.error);
+        return okResponse(requestId);
+      }
     } catch (e) {
       console.error('[request] email attach failed', e);
     }

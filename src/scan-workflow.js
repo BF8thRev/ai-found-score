@@ -20,6 +20,7 @@
 
 import { WorkflowEntrypoint } from 'cloudflare:workers';
 import { buildQuestions } from '../scanner/questions.js';
+import { notifyScanDone } from './lib/notify.js';
 import { ENGINES } from '../scanner/engines/index.js';
 import { round6, defaultScanEngines } from '../scanner/config.js';
 import { buildReport } from '../scanner/extract/build.js';
@@ -262,7 +263,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
       });
 
       // ---- finalize ----------------------------------------------------------------------
-      return await step.do('finalize', STEP_DB, async () => {
+      const fin = await step.do('finalize', STEP_DB, async () => {
         // extract_cost_usd = every scan_usage row of this scan (retried steps included).
         const usageCostUsd = store ? await sumUsageCost(env, scanId, { fetchImpl }) : null;
         const totals = scanTotals({ calls, extractions, build, confirmation, usageCostUsd });
@@ -289,6 +290,13 @@ export class ScanWorkflow extends WorkflowEntrypoint {
           finishedAt,
         };
       });
+
+      // ---- email whoever is waiting (src/lib/notify.js; nothing until RESEND_API_KEY is set) ----
+      if (store && !dry && build.saved && build.valid) {
+        await step.do('email', STEP_DB, async () => notifyScanDone(env, { trigger: p.trigger, token: build.reportToken, scanId }, { fetchImpl }))
+          .catch((e) => console.error('[email] scan-done step failed', safe(e)));
+      }
+      return fin;
     } catch (e) {
       const message = safe(e);
       await step.do('mark failed', STEP_DB, async () => {

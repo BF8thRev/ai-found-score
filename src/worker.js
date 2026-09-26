@@ -46,6 +46,7 @@ import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
 import { reportBody } from './lib/lock.js';
 import { pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks } from './lib/auto-scan.js';
+import { notifyPayment, notifyLead } from './lib/notify.js';
 import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
@@ -344,6 +345,11 @@ async function handleLead(request, env) {
     console.error('[lead] write failed', e);
     return Response.json({ ok: false, error: 'Could not save that. Try again.' }, { status: 500 });
   }
+  // Send the link now (src/lib/notify.js). Per-IP brake: the address is whatever was typed.
+  if (!(await rateLimit(env, request, 'lead'))) {
+    const r = await notifyLead(env, { token, email });
+    if (!r.sent) console.warn('[lead] not emailed', JSON.stringify(r));
+  }
   return Response.json({ ok: true });
 }
 
@@ -511,6 +517,9 @@ async function handleStripeWebhook(request, env) {
   // same token. Never fails the webhook (the payment is recorded); a miss shows in the log and /admin.
   const full = await startPaidScan(env, { token: reportToken, sessionId: session.id, tier: tierForSession(session) });
   console.log('[webhook] full scan', JSON.stringify(full));
+  // The receipt (src/lib/notify.js). Nothing is sent until RESEND_API_KEY is set.
+  const receipt = await notifyPayment(env, { token: reportToken, email: session.customer_details?.email, tier: tierForSession(session), sessionId: session.id });
+  console.log('[webhook] receipt', JSON.stringify(receipt));
 
   return Response.json({ received: true });
 }
