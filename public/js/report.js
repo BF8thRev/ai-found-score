@@ -242,7 +242,7 @@ function recheckOffer(report) {
   const subject = encodeURIComponent('Be the Answer: ' + (report.business?.name || ''));
   return `
     <div class="r2-upsell">
-      <p><strong>Want us to do the rest?</strong> Be the Answer ($499): we check every town you serve, submit your details to 30+ directories and data providers, and re-scan every month for a year. Your $49 counts toward it.</p>
+      <p><strong>Want us to do the rest?</strong> Be the Answer ($499): up to 3 towns you serve, why AI picks your competitors, and a re-scan every month for a year with an email when who AI names changes. Your $49 counts toward it.</p>
       <a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${subject}">Tell me when it opens</a>
     </div>`;
 }

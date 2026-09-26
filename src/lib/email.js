@@ -189,7 +189,7 @@ export function recheckEmail(env, { token, name, totals, before }) {
     paragraphs: [
       'We ran your audit again, free, 30 days after you bought it.',
       line,
-      'Want us to do the rest? Be the Answer covers every town you serve, submits your details to 30+ directories and data providers, and re-scans every month for a year. Your $49 counts toward it. Just reply to this email.',
+      'Want us to do the rest? Be the Answer covers up to 3 towns you serve, shows why AI picks your competitors, and re-scans every month for a year. Your $49 counts toward it. Just reply to this email.',
     ],
     button: 'See what changed',
     url: reportUrl(env, token),
