@@ -724,3 +724,7 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .r2-site-list li.bad { background: #FDF1EF; }
 .r2-site-list li.bad span { color: var(--red); }
 .badge.found { background: var(--wash-2); color: var(--navy); }
+.tiers.ladder .tier-when { flex: 0 0 auto; margin: 10px 0 0; font-size: 14px; font-weight: 600; color: var(--navy); }
+.tiers.ladder .tier-when a { font-weight: 600; white-space: nowrap; }
+.r2-upsell { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: space-between; margin: 18px 0 8px; padding: 16px 18px; border: 1px dashed #C9D4E3; border-radius: 12px; background: #fff; }
+.r2-upsell p { margin: 0; flex: 1 1 320px; font-size: 15.5px; }
