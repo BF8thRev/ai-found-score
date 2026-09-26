@@ -4,7 +4,7 @@
 
 - The free report (AI Visibility Snapshot) costs nothing and uses public data only. No logins are required.
 - AI Visibility Audit ($49, one-time): all 5 customer questions asked fresh on every assistant we check (more being added; each report lists which ones), every answer word for word and every website AI cited, exactly what's wrong on the business's website and Google listing, every fix with copy-paste text, a competitor gap sheet and a fix checklist. Free if it shows nothing new.
-- Be the Answer ($499, one-time, opening soon): the audit for every town the business serves, a full AI check of its website, ready-to-install fix files (robots.txt, llms.txt, schema code, FAQ page, Google profile text, review QR codes), the owner's confirmed details submitted to 30+ directories and data providers without passwords, the Google profile kept current, competitor alerts, and a re-scan every month for a year. Still wrong at 30 days: re-submitted; still wrong after that: money back.
+- Be the Answer ($499, one-time, opening soon): the audit for every town the business serves, a full AI check of its website, ready-to-install fix files (robots.txt, llms.txt, schema code, FAQ page, Google profile text, review QR codes), the owner's confirmed details submitted to 30+ directories and data providers without passwords, the Google profile kept current, competitor alerts, and a re-scan every month for a year. The Accuracy Guarantee: still wrong at 30 days, the details are re-submitted; still wrong after that, money back.
 - AI Found Score can't promise what AI will say, and does not promise placement or bookings.
 - Operator: Fields Holding d/b/a GetAiFound Score, 120 Terminal Drive, Plainview, NY 11803. Email: hello@aifoundscore.com
 
