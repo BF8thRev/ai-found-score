@@ -714,3 +714,5 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .r2-score-parts .w { font-weight: 700; color: var(--navy); min-width: 56px; text-align: right; }
 .r2-score-note { margin: 14px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 @media (max-width: 520px) { .r2-score-parts li { grid-template-columns: 1fr auto; } .r2-score-parts .v { grid-column: 1; font-size: 13.5px; } }
+.tiers.ladder .tier-plus + .tier-list { border-top: 0; padding-top: 0; margin-top: 8px; }
+.tiers.ladder .tier-small { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
