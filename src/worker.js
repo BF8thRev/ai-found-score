@@ -21,6 +21,9 @@
 //   POST /api/live-preview    -> ask one of the visitor's questions live (src/lib/live-preview.js);
 //                                needs the signed token /api/request returned after Turnstile
 //   GET  /api/zip           -> town for ?zip= (src/lib/zip.js, zippopotam.us, cached 30 days; per-IP rate limit)
+//   GET|POST /api/fix-kit/[token], GET /api/fix-kit/[token].zip -> Fix Kit details form + zip download
+//                                ($149 fix_kit / $499 be_the_answer); src/lib/fix-kit-route.js
+//   GET  /fix-kit/[token]     -> the Fix Kit page (public/fix-kit.html)
 //   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h
 //   GET  /                    -> homepage; the hero's real AI answer card comes from showcase_answers
 //                                (src/lib/showcase.js, filled by `node scanner/showcase.js`), cached 1 h
@@ -48,6 +51,7 @@ import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
 import { handleLivePreview, livePreviewStatus } from './lib/live-preview.js';
 import { handleProof } from './lib/proof.js';
 import { handleZip } from './lib/zip.js';
+import { handleFixKit } from './lib/fix-kit-route.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 
@@ -117,6 +121,11 @@ export default {
       return handleUnsubscribe(request, url, env);
     }
 
+    // Fix Kit: confirm details, download the zip (src/lib/fix-kit-route.js; sample-* works with no database).
+    if (url.pathname.startsWith('/api/fix-kit/') && (request.method === 'GET' || request.method === 'POST')) {
+      return handleFixKit(request, url, env, { mockReports: MOCK_REPORTS });
+    }
+
     if (url.pathname.startsWith('/api/report/') && request.method === 'GET') {
       let id;
       try { id = decodeURIComponent(url.pathname.slice('/api/report/'.length)); } catch {
@@ -128,6 +137,9 @@ export default {
     // Pretty-URL rewrites. Serve the clean-URL asset paths directly.
     if (url.pathname.startsWith('/report/') && url.pathname.length > '/report/'.length) {
       return serveAsset(env, request, '/report');
+    }
+    if (url.pathname.startsWith('/fix-kit/') && url.pathname.length > '/fix-kit/'.length) {
+      return serveAsset(env, request, '/fix-kit');
     }
     if (url.pathname === '/success') {
       return serveAsset(env, request, '/success');

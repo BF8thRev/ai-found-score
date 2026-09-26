@@ -57,6 +57,8 @@ export const TIER_BY_CENTS = Object.freeze({
   5900: 'before_after',   // retired: $59 Fix it and re-check
   6900: 'full_year',      // retired: $69 Full Year
   19900: 'listing_fix',   // retired: $199 Full listing build
+  14900: 'fix_kit',       // $149 Fix Kit: confirm details, download the ready-to-install files (/fix-kit/<token>)
+  49900: 'be_the_answer', // $499 Be the Answer (includes the Fix Kit)
 });
 
 /** The tier for a Checkout Session: explicit metadata first, then the amount paid. */
