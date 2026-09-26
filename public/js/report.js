@@ -900,7 +900,7 @@ function listingsV2({ listings, badListings }) {
 }
 
 // Can AI read the owner's website? (scanner/owner-checks.js checkSite: robots.txt, schema, sitemap,
-// phone and address on the page.) Public page reads only.
+// phone and address on the page, plus the rows in siteMoreRowsV2.) Public page reads only.
 function siteV2(report) {
   const sc = report.siteCheck;
   if (!sc || !sc.url) return '';
@@ -932,6 +932,7 @@ function siteV2(report) {
       row(!!(sc.onSite && sc.onSite.phone), sc.onSite && sc.onSite.phone ? `Your phone number is on the page: ${escapeHtml(sc.onSite.phone)}.` : 'We couldn’t find your phone number on the page.'),
       row(!!(sc.onSite && sc.onSite.address), sc.onSite && sc.onSite.address ? `Your address is on the page: ${escapeHtml(sc.onSite.address)}.` : 'We couldn’t find your street address on the page.'),
       row(!!sc.sitemap, sc.sitemap ? 'A sitemap helps crawlers find every page.' : 'No sitemap, so crawlers may miss pages.'),
+      ...siteMoreRowsV2(sc, row),
     ];
   return `
     <section class="report-section r2-site">
@@ -939,6 +940,76 @@ function siteV2(report) {
       <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI crawler would.</p>
       <ul class="r2-site-list">${rows.join('')}</ul>
     </section>`;
+}
+
+// The newer website checks (https, llms.txt, title / description / heading, FAQ schema, service and
+// town pages, phone speed). Every field is optional: a missing one (an older report, or a locked
+// report that only carries pass/fail) renders no row. Text fields may be a string or just true/false.
+function siteMoreRowsV2(sc, row) {
+  const out = [];
+  const isBool = (v) => typeof v === 'boolean';
+  const h = sc.https && typeof sc.https === 'object' ? sc.https : null;
+  if (h && h.loads === false) out.push(row(false, 'Your site doesn’t load over a secure https:// address.'));
+  else if (h && h.loads === true) {
+    out.push(h.redirects === false
+      ? row(false, 'Your site loads over https://, but the plain http:// address doesn’t forward to it.')
+      : row(true, 'Your site loads over a secure https:// address.'));
+  }
+  if (isBool(sc.llmsTxt)) {
+    out.push(row(sc.llmsTxt, sc.llmsTxt
+      ? 'Your site has an llms.txt file, a short summary written for AI tools.'
+      : 'No llms.txt file (a newer, optional summary written for AI tools).'));
+  }
+  const m = sc.meta && typeof sc.meta === 'object' ? sc.meta : null;
+  if (m) {
+    if (typeof m.title === 'string' || isBool(m.title)) {
+      out.push(m.title
+        ? row(true, typeof m.title === 'string' ? `Page title: “${escapeHtml(m.title)}”.` : 'Your homepage has a page title.')
+        : row(false, 'Your homepage has no page title.'));
+    }
+    if (typeof m.description === 'string' || isBool(m.description)) {
+      out.push(row(!!m.description, m.description
+        ? 'Your homepage has a meta description (the summary under your link in search results).'
+        : 'No meta description (the summary under your link in search results).'));
+    }
+    if (isBool(m.mentionsTrade)) {
+      out.push(row(m.mentionsTrade, m.mentionsTrade
+        ? 'Your title and main heading say what you do.'
+        : 'Your title, description and main heading don’t say what you do.'));
+    }
+    if (isBool(m.mentionsTown)) {
+      out.push(row(m.mentionsTown, m.mentionsTown
+        ? 'Your title and main heading say where you work.'
+        : 'Your title, description and main heading don’t say where you work.'));
+    }
+  }
+  if (isBool(sc.faqSchema)) {
+    out.push(row(sc.faqSchema, sc.faqSchema
+      ? 'Questions and answers are marked up for search engines and AI (FAQ schema).'
+      : 'No FAQ schema on your homepage.'));
+  }
+  const p = sc.pages && typeof sc.pages === 'object' ? sc.pages : null;
+  if (p) {
+    const pagesRow = (v, what) => {
+      if (typeof v === 'number') {
+        return row(v > 0, v > 0
+          ? `Your homepage links to ${num(v)} ${plural(v, 'page', 'pages')} about ${what}.`
+          : `Your homepage doesn’t link to a page about ${what}.`);
+      }
+      if (isBool(v)) return row(v, v ? `Your homepage links to pages about ${what}.` : `Your homepage doesn’t link to a page about ${what}.`);
+      return '';
+    };
+    const a = pagesRow(p.servicePages, 'your services');
+    const b = pagesRow(p.townPages, 'the towns you serve');
+    if (a) out.push(a);
+    if (b) out.push(b);
+  }
+  const sp = sc.speed && typeof sc.speed === 'object' ? sc.speed : null;
+  if (sp && typeof sp.score === 'number') {
+    const s = Math.round(sp.score);
+    out.push(row(s >= 50, `Google’s speed score on phones: ${num(s)} out of 100 (${s >= 90 ? 'fast' : s >= 50 ? 'could be faster' : 'slow'}).`));
+  }
+  return out;
 }
 
 // Copy-paste blocks under a fix: plain text, or a code block (JSON-LD), each with a Copy button.
@@ -1003,7 +1074,7 @@ function xrayV2({ report, aById, cw, N }) {
     return `
     <section class="report-section r2-xray">
       <h2>Competitor gap sheet</h2>
-      <div class="issue-card">${blurred('Each business AI named over you, how often it was named and named first, and the sites AI cited that list them and not you.')}</div>
+      <div class="issue-card">${blurred('Each business AI named over you, how often it was named and named first, their Google reviews next to yours, and the sites AI cited that list them and not you.')}</div>
       <h2 class="r2-xray-h2">Your fix checklist</h2>
       <div class="issue-card">${blurred('Every fix in this report as a checklist you can tick off as you go.')}</div>
     </section>`;
@@ -1016,12 +1087,27 @@ function xrayV2({ report, aById, cw, N }) {
     return links.length ? `<p class="r2-muted">Read the answers: ${links.join(' · ')}</p>` : '';
   };
   const anyGap = comps.some((c) => (c.sources || []).length);
+  // Google reviews (looked up at scan time): "4.8★ from 212 Google reviews (you: 4.6★ from 38)".
+  const revText = (r) => {
+    if (!r || typeof r !== 'object' || !Number.isInteger(r.count)) return '';
+    const n = `${num(r.count)} Google ${plural(r.count, 'review', 'reviews')}`;
+    return typeof r.rating === 'number' && r.count > 0 ? `${r.rating.toFixed(1)}★ from ${n}` : n;
+  };
+  const yr = gap.youReviews;
+  const youRev = !yr || !Number.isInteger(yr.count) ? ''
+    : yr.count === 0 ? 'no reviews yet'
+      : typeof yr.rating === 'number' ? `${yr.rating.toFixed(1)}★ from ${num(yr.count)}` : `${num(yr.count)} ${plural(yr.count, 'review', 'reviews')}`;
+  const reviewsLine = (c) => {
+    const t = revText(c.reviews);
+    return t ? `<p class="r2-reviews">${escapeHtml(t)}${youRev ? ` <span class="r2-muted">(you: ${escapeHtml(youRev)})</span>` : ''}</p>` : '';
+  };
   const cards = comps.map((c) => {
     const srcs = (c.sources || []).filter((s) => s && s.domain);
     return `
       <div class="listing-card r2-gap">
         <h3>${escapeHtml(c.name)}</h3>
         <p>Named in ${num(c.named)} of ${num(N)} ${cw.unit}${num(c.first) ? `, first in ${num(c.first)}` : ', never first'}.</p>
+        ${reviewsLine(c)}
         ${srcs.length
           ? `<p><strong>Sites AI cited that list them and not you:</strong></p>
              <ul class="r2-gap-list">${srcs.map((s) => `<li><a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${num(s.position) ? ` <span class="r2-muted">(listed #${num(s.position)})</span>` : ''}</li>`).join('')}</ul>`

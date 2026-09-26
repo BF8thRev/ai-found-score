@@ -16,14 +16,14 @@
 // Recorded proposals (tests / re-runs) are keyed by answer id ("a1") or by
 // `${engine}:${questionId}:${run}`.
 
-import { computeTotals, pickHeadline, validateReport } from '../../shared/report-v2.js';
+import { computeTotals, pickHeadline, validateReport, buildGapSheet } from '../../shared/report-v2.js';
 import { proposeForAnswer } from './propose.js';
 import { verifyAnswer, factStatus, ownerFact, descriptorKey } from './verify.js';
 import { groupEntities } from './entities.js';
 import { normalizeName } from './normalize.js';
 import { buildSources } from './sources.js';
 import { buildIssues } from './issues.js';
-import { runOwnerChecks } from '../owner-checks.js';
+import { runOwnerChecks, lookupCompetitorReviews, reviewsIssue, MAX_REVIEW_LOOKUPS } from '../owner-checks.js';
 
 const ENGINE_API = {
   chatgpt: 'openai-responses+web_search',
@@ -179,9 +179,13 @@ export async function buildReport({
   // The owner's website (robots.txt, schema, phone and address) and Google listing (scanner/owner-checks.js).
   // Skipped on a pre-build (maxFetch 0) and when the caller already supplies listings.
   let siteCheck = null;
+  let placesOk = false; // the Places API answered: competitor review lookups are worth trying
+  let ownerReviews = null;
   if (maxFetch !== 0 && !listings.length && business && (business.website || business.name)) {
     const oc = await runOwnerChecks(business, env, { fetchImpl: fetchImpl || fetch });
     siteCheck = oc.siteCheck;
+    placesOk = !!(oc.google && oc.google.ok);
+    ownerReviews = oc.reviews || null;
     listings = oc.listings;
     issues = [...issues, ...oc.issues];
     // What the owner told us wins; the website fills the gaps.
@@ -280,6 +284,20 @@ export async function buildReport({
     });
   }
 
+  // Google reviews for the businesses AI named most: the gap sheet's competitors (named in 2+
+  // answers), top MAX_REVIEW_LOOKUPS. Paid-audit data (the X-Ray gap sheet); fails soft to [].
+  let reviews = null;
+  if (placesOk) {
+    const top = buildGapSheet({ answers, entities, sources: [], business }).competitors
+      .slice(0, MAX_REVIEW_LOOKUPS).map((c) => c.name);
+    const competitors = top.length
+      ? await lookupCompetitorReviews(top, business, env, { fetchImpl: fetchImpl || fetch }).catch(() => [])
+      : [];
+    reviews = { you: ownerReviews ? { rating: ownerReviews.rating, count: ownerReviews.count } : null, competitors };
+    const ri = reviewsIssue({ reviews, placeId: ownerReviews && ownerReviews.placeId, business });
+    if (ri) issues = [...issues, ri];
+  }
+
   // Sources (citations from the APIs only) + directory page checks.
   const sources = await buildSources({ answers, business, fetchImpl, maxFetch });
 
@@ -325,6 +343,7 @@ export async function buildReport({
     ownerDescriptors: pickDescriptors(descriptorsRaw, engineOf),
     listings,
     ...(siteCheck ? { siteCheck } : {}),
+    ...(reviews ? { reviews } : {}),
     issues: [],
     method: {
       engines: methodEngines,
