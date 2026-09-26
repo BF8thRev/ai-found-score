@@ -142,6 +142,7 @@ export const ENV_ALIASES = {
   dataforseoPassword: ['DATAFORSEO_PASSWORD', 'DATAFORSEO_API_PASSWORD', 'DATAFORSEO_PASS', 'DFS_PASSWORD'],
   supabaseUrl: ['SUPABASE_URL'],
   supabaseServiceKey: ['SUPABASE_SERVICE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY'],
+  googlePlacesKey: ['GOOGLE_PLACES_API_KEY', 'GOOGLE_MAPS_API_KEY', 'GOOGLE_Maps_API_KEY', 'PLACES_API_KEY'],
   adminToken: ['ADMIN_TOKEN'],
   openaiModel: ['OPENAI_MODEL'],
   geminiModel: ['GEMINI_MODEL'],

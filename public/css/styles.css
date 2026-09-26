@@ -716,3 +716,11 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 @media (max-width: 520px) { .r2-score-parts li { grid-template-columns: 1fr auto; } .r2-score-parts .v { grid-column: 1; font-size: 13.5px; } }
 .tiers.ladder .tier-plus + .tier-list { border-top: 0; padding-top: 0; margin-top: 8px; }
 .tiers.ladder .tier-small { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+/* ---------- Can AI read your website? (report v2) ---------- */
+.r2-site-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.r2-site-list li { font-size: 15.5px; line-height: 1.45; padding: 10px 12px; border-radius: 10px; background: var(--wash); }
+.r2-site-list li span { font-weight: 800; margin-right: 6px; }
+.r2-site-list li.ok span { color: var(--green); }
+.r2-site-list li.bad { background: #FDF1EF; }
+.r2-site-list li.bad span { color: var(--red); }
+.badge.found { background: var(--wash-2); color: var(--navy); }

@@ -371,7 +371,7 @@ async function submitLead(e, token) {
 
 // Render only the listing fields that have a value. Empty fields are dropped, never guessed.
 function fields(f) {
-  const rows = [['Name', f?.name], ['Phone', f?.phone], ['Hours', f?.hours]]
+  const rows = [['Name', f?.name], ['Phone', f?.phone], ['Address', f?.address], ['Hours', f?.hours]]
     .filter(([, v]) => v)
     .map(([k, v]) => `<dt>${k}:</dt><dd>${escapeHtml(v)}</dd>`)
     .join('');
@@ -556,6 +556,7 @@ function renderV2(root, report) {
     gridV2({ questions, answers, engines, failedNote }),
     sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     factsV2({ report, b, aById }),
+    siteV2(report),
     listingsV2({ listings, badListings }),
     issuesV2({ issues, locked, xrayOk }),
     xrayV2({ report, aById, cw, N }),
@@ -866,12 +867,38 @@ function listingsV2({ listings, badListings }) {
       <p class="sub">${sub}</p>
       ${listings.map((l) => `
         <div class="listing-card">
-          <span class="badge ${l.status === 'match' ? 'match' : 'mismatch'}">${l.status === 'match' ? '✓ Correct' : '✗ Needs a fix'}</span>
+          <span class="badge ${l.status === 'match' ? 'match' : l.status === 'unchecked' ? 'found' : 'mismatch'}">${l.status === 'match' ? '✓ Correct' : l.status === 'unchecked' ? 'Found' : '✗ Needs a fix'}</span>
           <h3>${escapeHtml(l.platform)}</h3>
           ${l.locked
             ? blurred('What this listing shows, what it should say, and where to change it.')
             : `${l.details ? `<p>${escapeHtml(l.details)}</p>` : ''}${fields(l.fields)}`}
         </div>`).join('')}
+    </section>`;
+}
+
+// Can AI read the owner's website? (scanner/owner-checks.js checkSite: robots.txt, schema, sitemap,
+// phone and address on the page.) Public page reads only.
+function siteV2(report) {
+  const sc = report.siteCheck;
+  if (!sc || !sc.url) return '';
+  const row = (ok, text) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span> ${text}</li>`;
+  const blocked = (sc.robots && sc.robots.blocked) || [];
+  const rows = !sc.reachable
+    ? [row(false, 'We couldn’t load your website. AI can’t read a site that doesn’t load.')]
+    : [
+      row(!blocked.length, blocked.length
+        ? `Your robots.txt blocks ${escapeHtml(blocked.map((b) => b.who).join(', '))}.`
+        : 'AI crawlers are allowed to read your site.'),
+      row(!!(sc.schema && sc.schema.found), sc.schema && sc.schema.found ? 'Business details are marked up for search engines and AI (schema).' : 'No business markup (schema) that tells AI your name, phone and address.'),
+      row(!!(sc.onSite && sc.onSite.phone), sc.onSite && sc.onSite.phone ? `Your phone number is on the page: ${escapeHtml(sc.onSite.phone)}.` : 'We couldn’t find your phone number on the page.'),
+      row(!!(sc.onSite && sc.onSite.address), sc.onSite && sc.onSite.address ? `Your address is on the page: ${escapeHtml(sc.onSite.address)}.` : 'We couldn’t find your street address on the page.'),
+      row(!!sc.sitemap, sc.sitemap ? 'A sitemap helps crawlers find every page.' : 'No sitemap, so crawlers may miss pages.'),
+    ];
+  return `
+    <section class="report-section r2-site">
+      <h2>Can AI read your website?</h2>
+      <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI crawler would.</p>
+      <ul class="r2-site-list">${rows.join('')}</ul>
     </section>`;
 }
 

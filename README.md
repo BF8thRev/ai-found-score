@@ -72,6 +72,13 @@ The hero shows one real, dated AI answer to "What's the best <trade> in <town>, 
 3. It prints each excerpt. The excerpt is the start of the answer word for word (markdown links removed), cut at a sentence end, ~60 words, and stopped before any phone number or street address. An answer that names no business is skipped.
 4. Takedown ("remove my business"): set that row's `active` to false in Supabase. The weekly refresh never turns it back on.
 
+## Website and Google listing checks
+
+Every report build (`scanner/extract/build.js`) runs `scanner/owner-checks.js` first:
+- **Website** (no key): robots.txt (which AI crawlers are blocked), sitemap, schema.org business markup, and the phone and address the site shows. Fills `business.facts` when the owner didn't give them, so AI facts get compared too.
+- **Google listing** (`GOOGLE_PLACES_API_KEY`, Places API (New) Text Search): name, phone and address compared with the website. Set the key as a Worker secret and in `.dev.vars` for PC scans; without it the Google check is skipped.
+- Findings become fixes (`site_blocks_ai`, `site_missing_nap`, `google_missing`, `listing_differs`), the report's listings section and a "Can AI read your website?" section.
+
 ## Running scans from your PC (Free plan)
 
 On the Workers Free plan a full scan can't run on Cloudflare (10 ms CPU, 50 subrequests per invocation). Until that changes, run scans from Node on your own PC: `scanner/run.js` does exactly what the Workflow does (same `scans` / `scan_raw` / `scan_usage` / `scan_results` rows, same row ids, same report gate), so `/admin` and `/report/<token>` show the results as if the Workflow had run. No hosting cost; you pay only the API calls.

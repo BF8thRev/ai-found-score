@@ -23,6 +23,7 @@ import { groupEntities } from './entities.js';
 import { normalizeName } from './normalize.js';
 import { buildSources } from './sources.js';
 import { buildIssues } from './issues.js';
+import { runOwnerChecks } from '../owner-checks.js';
 
 const ENGINE_API = {
   chatgpt: 'openai-responses+web_search',
@@ -175,6 +176,18 @@ export async function buildReport({
   scan, business, listings = [], issues = [], baseline = null, proposalsByAnswer = {},
   env = {}, fetchImpl, id, now, maxFetch = 5, onExtract, headlineConfirmation = null,
 }) {
+  // The owner's website (robots.txt, schema, phone and address) and Google listing (scanner/owner-checks.js).
+  // Skipped on a pre-build (maxFetch 0) and when the caller already supplies listings.
+  let siteCheck = null;
+  if (maxFetch !== 0 && !listings.length && business && (business.website || business.name)) {
+    const oc = await runOwnerChecks(business, env, { fetchImpl: fetchImpl || fetch });
+    siteCheck = oc.siteCheck;
+    listings = oc.listings;
+    issues = [...issues, ...oc.issues];
+    // What the owner told us wins; the website fills the gaps.
+    const facts = { ...oc.facts, ...(business.facts || {}) };
+    if (Object.keys(facts).length) business = { ...business, facts };
+  }
   const questions = (scan.questions || []).map((q) => ({ id: q.id, intent: q.intent, text: q.text }));
   const qById = new Map(questions.map((q) => [q.id, q]));
   const qIndex = (qid) => questions.findIndex((q) => q.id === qid);
@@ -311,6 +324,7 @@ export async function buildReport({
     aiFacts,
     ownerDescriptors: pickDescriptors(descriptorsRaw, engineOf),
     listings,
+    ...(siteCheck ? { siteCheck } : {}),
     issues: [],
     method: {
       engines: methodEngines,
