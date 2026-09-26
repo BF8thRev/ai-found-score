@@ -34,7 +34,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /**
  * Send one email. → { ok: true, id } | { ok: false, reason }. Never throws.
  * `transactional: true` (receipts) skips the unsubscribe check; everything else is skipped for an
- * address that unsubscribed, and when the check itself fails.
+ * address that unsubscribed, a report token whose "Stop these emails" link was used, and when the
+ * check itself fails.
  */
 export async function sendEmail(env, { to, subject, text, html, idempotencyKey, token = null, transactional = false }, { fetchImpl = (...a) => fetch(...a) } = {}) {
   try {
@@ -43,7 +44,7 @@ export async function sendEmail(env, { to, subject, text, html, idempotencyKey, 
     if (!EMAIL_RE.test(addr)) return { ok: false, reason: 'bad address' };
     if (!transactional) {
       let suppressed = true;
-      try { suppressed = await isSuppressed(env, { email: addr }, fetchImpl); } catch { suppressed = true; }
+      try { suppressed = await isSuppressed(env, { email: addr, ...(token ? { reportToken: token } : {}) }, fetchImpl); } catch { suppressed = true; }
       if (suppressed) return { ok: false, reason: 'suppressed' };
     }
     const unsub = `${siteUrl(env)}/unsubscribe${token ? `?t=${encodeURIComponent(token)}` : ''}`;
