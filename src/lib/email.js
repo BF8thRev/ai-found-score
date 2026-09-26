@@ -5,8 +5,8 @@
 //
 //   RESEND_API_KEY   Worker secret (`npx wrangler secret put RESEND_API_KEY`). Unset → nothing is sent,
 //                    every caller carries on (email is never the reason a request fails).
-//   EMAIL_FROM       optional, default "AI Found Score <reports@aifoundscore.com>" (the domain must be
-//                    verified in Resend: DNS records on aifoundscore.com).
+//   EMAIL_FROM       optional, default "AI Found Score <reports@mail.aifoundscore.com>" (the domain must be
+//                    verified in Resend: mail.aifoundscore.com is, since Sep 2026).
 //   SITE_URL         optional, default https://aifoundscore.com (links in the mail).
 //
 // Every send carries an Idempotency-Key (Resend keeps it 24 h), so a retried workflow step or two
@@ -16,7 +16,7 @@
 import { isSuppressed } from '../../outreach/suppression.js';
 
 export const RESEND_URL = 'https://api.resend.com/emails';
-export const DEFAULT_FROM = 'AI Found Score <reports@aifoundscore.com>';
+export const DEFAULT_FROM = 'AI Found Score <reports@mail.aifoundscore.com>';
 export const REPLY_TO = 'hello@aifoundscore.com';
 export const POSTAL = 'Fields Holding d/b/a GetAiFound Score · 120 Terminal Drive, Plainview, NY 11803';
 
