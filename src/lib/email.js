@@ -17,7 +17,8 @@ import { isSuppressed } from '../../outreach/suppression.js';
 
 export const RESEND_URL = 'https://api.resend.com/emails';
 export const DEFAULT_FROM = 'AI Found Score <reports@mail.aifoundscore.com>';
-export const REPLY_TO = 'hello@aifoundscore.com';
+// aifoundscore.com has no mailbox; the team inbox is Google Workspace on getaifoundscore.com.
+export const REPLY_TO = 'hello@getaifoundscore.com';
 export const POSTAL = 'Fields Holding d/b/a GetAiFound Score · 120 Terminal Drive, Plainview, NY 11803';
 
 export function emailConfigured(env) {
