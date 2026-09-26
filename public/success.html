@@ -49,12 +49,16 @@
   (function () {
     // Plan names by tier key (?tier= from the Stripe redirect, or the saved checkout).
     var TIER_LABEL = {
-      xray: 'AI Visibility X-Ray',
+      xray: 'AI Visibility Audit',
+      fix_kit: 'Fix Kit',
+      be_the_answer: 'Be the Answer',
       snapshot: 'Fix steps',
       before_after: 'Fix it and re-check'
     };
     var TIER_NEXT = {
-      xray: 'Your X-Ray (fix steps, competitor gap sheet and fix checklist) arrives within 24 hours of purchase. If we can’t show you 3 things to fix, it’s free.'
+      xray: 'Your report is unlocked now. We’re also asking all 5 customer questions on every AI assistant we check; your report updates with those answers when they’re ready, usually within the hour. If we can’t show you 3 things to fix, it’s free.',
+      fix_kit: 'Next: check your business details and download your kit.',
+      be_the_answer: 'Next: check your business details and download your kit. Your full audit is being made too.'
     };
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem('afs_checkout') || 'null'); } catch (e) {}
@@ -67,10 +71,12 @@
     if (!saved || !saved.token) return;
     var msg = document.getElementById('success-msg');
     var link = document.getElementById('success-link');
-    var url = '/report/' + encodeURIComponent(saved.token);
+    // Fix Kit buyers go on to confirm their details and download the kit (public/fix-kit.html).
+    var kit = tier === 'fix_kit' || tier === 'be_the_answer';
+    var url = (kit ? '/fix-kit/' : '/report/') + encodeURIComponent(saved.token);
     msg.textContent = 'Unlocking your full report…';
     link.href = url;
-    link.textContent = 'Open my report';
+    link.textContent = kit ? 'Get my Fix Kit' : 'Open my report';
     link.className = 'btn';
     var tries = 0;
     (function poll() {
@@ -125,7 +131,7 @@
   </div>
 </footer>
 
-<script src="/js/config.js?v=8"></script>
+<script src="/js/config.js?v=9"></script>
 <script src="/js/analytics.js?v=8"></script>
 </body>
 </html>

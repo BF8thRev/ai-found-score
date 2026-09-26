@@ -236,6 +236,19 @@ function xrayOffer(lead = '') {
     </div>`;
 }
 
+// After the audit: the $149 Fix Kit (src/lib/fix-kit.js). Only on paid reports; the owner
+// confirms their details on /fix-kit/<token> and downloads the files.
+function fixKitOffer(report) {
+  const kitUrl = '/fix-kit/' + encodeURIComponent(String(report.id || ''));
+  return `
+    <div class="cta-band r2-xray-offer">
+      <h2>Want the fixes ready to install? Fix Kit — $149 one-time.</h2>
+      <p>You check your business details, and we build the files for you: robots.txt, llms.txt, schema code, an FAQ page, your Google profile text and a review QR code, with a one-page guide for whoever runs your website.</p>
+      <p><a class="btn big" data-tier="fix_kit" href="#">Get my Fix Kit — $149</a></p>
+      <p class="fine">Already bought it? <a href="${kitUrl}">Open your Fix Kit</a></p>
+    </div>`;
+}
+
 // Real reports linked from the public pages as examples ("See a real report"): never sold from.
 const SHOWCASE_TOKENS = ['mega-wash-and-dry'];
 function isDemoReport(report) {
@@ -563,6 +576,7 @@ function renderV2(root, report) {
     listingsV2({ listings, badListings }),
     issuesV2({ issues, locked, xrayOk }),
     xrayV2({ report, aById, cw, N }),
+    paid && !isDemoReport(report) && tierOn('fix_kit') ? fixKitOffer(report) : '',
     offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }),
     answersV2({ questions, answers }),
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
