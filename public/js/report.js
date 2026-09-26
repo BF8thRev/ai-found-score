@@ -212,7 +212,7 @@ function blurred(text) {
 const XRAY = {
   name: 'AI Visibility Audit',
   price: '$49 one-time',
-  what: 'We ask all 5 customer questions again on every AI assistant we check, and you get every answer word for word, every website AI cited, exactly what’s wrong on your website and Google listing, every fix step by step with copy-paste text, the competitor gap sheet, and your fix checklist.',
+  what: 'We ask all 5 customer questions again on every AI assistant we check, and you get every answer word for word, every website AI cited, exactly what’s wrong on your website and Google listing, every fix step by step with copy-paste text, the competitor gap sheet, your fix checklist, and a free re-scan 30 days later to see what changed.',
   promise: 'If we can’t show you 3 things to fix, it’s free.',
   button: 'Get my audit — $49',
 };
@@ -233,6 +233,17 @@ function xrayOffer(lead = '') {
       <p>${lead ? `${lead} ` : ''}${XRAY.what} ${XRAY.promise}</p>
       <p><a class="btn big" data-tier="xray" href="#">${XRAY.button}</a></p>
       <p class="fine">Secure checkout by Stripe. One-time payment, no subscription. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
+    </div>`;
+}
+
+// The 30-day re-check (a rescan compared with the audit): the moment to offer Be the Answer. It
+// opens soon, so the button is an email for now.
+function recheckOffer(report) {
+  const subject = encodeURIComponent('Be the Answer: ' + (report.business?.name || ''));
+  return `
+    <div class="r2-upsell">
+      <p><strong>Want us to do the rest?</strong> Be the Answer ($499): we check every town you serve, submit your details to 30+ directories and data providers, and re-scan every month for a year. Your $49 counts toward it.</p>
+      <a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${subject}">Tell me when it opens</a>
     </div>`;
 }
 
@@ -566,6 +577,7 @@ function renderV2(root, report) {
     heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
     scoreV2(report),
     baselineV2(report, t),
+    paid && report.baseline && !isDemoReport(report) ? recheckOffer(report) : '',
     report.sample ? '' : leadForm('top'),
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
     nobodyTwice ? '' : whoAiNamesV2({ b, t, N, cw, proven }),

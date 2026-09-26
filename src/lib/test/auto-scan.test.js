@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey,
   newRequestToken, requestScanId, autoScanOn, autoScanLimits, estimateRequestScanUsd, REQUEST_TOKEN_RE,
-  DRY_RUN_REQUESTS, startPaidScan, paidScanRunning,
+  DRY_RUN_REQUESTS, startPaidScan, paidScanRunning, startDueRechecks,
 } from '../auto-scan.js';
 import { freeEngines, activeEngines } from '../../../scanner/config.js';
 import { handleReportRequest } from '../report-request.js';
@@ -14,8 +14,9 @@ import { REQUEST_ACTION } from '../turnstile.js';
 // ---------------------------------------------------------------------------
 // A fake Supabase `scans` table (PostgREST subset used by auto-scan.js / store.js)
 // ---------------------------------------------------------------------------
-function fakeDb(seed = [], reportSeed = []) {
+function fakeDb(seed = [], reportSeed = [], paymentSeed = []) {
   const rows = seed.map((r) => ({ ...r }));
+  const payments = paymentSeed.map((r) => ({ ...r }));
   const reports = reportSeed.map((r) => ({ ...r })); // scan_results
   let clock = Date.parse('2026-09-24T12:00:00Z');
   const tick = () => new Date(clock++).toISOString();
@@ -28,6 +29,8 @@ function fakeDb(seed = [], reportSeed = []) {
       if (op === 'eq' && cur !== val) return false;
       if (op === 'neq' && cur === val) return false;
       if (op === 'gte' && !(cur >= val)) return false;
+      if (op === 'lte' && !(cur <= val)) return false;
+      if (op === 'not' && val === 'is.null' && r[k] == null) return false;
       if (op === 'in' && !val.replace(/[()]/g, '').split(',').includes(cur)) return false;
     }
     return true;
@@ -37,6 +40,10 @@ function fakeDb(seed = [], reportSeed = []) {
     const u = new URL(String(input));
     const method = init.method || 'GET';
     const params = [...u.searchParams.entries()];
+    if (u.pathname.endsWith('/rest/v1/payments')) {
+      // Repeated keys (paid_at=lte… & paid_at=gte…) are all applied.
+      return Response.json(payments.filter((r) => match(r, params)));
+    }
     if (u.pathname.endsWith('/rest/v1/scan_results')) {
       if (method === 'POST') { const body = JSON.parse(init.body); reports.push(body); return Response.json([body], { status: 201 }); }
       return Response.json(reports.filter((r) => match(r, params)).map((r) => ({ ...r })));
@@ -440,4 +447,37 @@ test('paid scan: every question, every engine, same token; once per token; never
   const bad = await startPaidScan(env2, { token: q2.token, sessionId: 'cs_3', tier: 'xray' }, { fetchImpl: db2.fetch });
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /boom/);
+});
+
+test('30-day re-check: due live payments get one full rescan each; test mode, too early and too late are skipped', async () => {
+  const now = Date.parse('2026-10-30T14:00:00Z');
+  const day = 86400_000;
+  const env = baseEnv({ AUTO_SCAN: 'off' });
+  const seedDb = fakeDb();
+  const due = await startRequestScan(env, req({ businessName: 'Due Plumbing' }), { now: NOW, fetchImpl: seedDb.fetch });
+  const early = await startRequestScan(env, req({ businessName: 'Early Plumbing' }), { now: NOW, fetchImpl: seedDb.fetch });
+  const test = await startRequestScan(env, req({ businessName: 'Test Plumbing' }), { now: NOW, fetchImpl: seedDb.fetch });
+  const old = await startRequestScan(env, req({ businessName: 'Old Plumbing' }), { now: NOW, fetchImpl: seedDb.fetch });
+  const pay = (token, daysAgo, over = {}) => ({ report_token: token, tier: 'xray', livemode: true, paid_at: new Date(now - daysAgo * day).toISOString(), ...over });
+  const db = fakeDb(seedDb.rows, [], [
+    pay(due.token, 31), pay(due.token, 31), // a duplicate payment row
+    pay(early.token, 10),
+    pay(test.token, 31, { livemode: false }),
+    pay(old.token, 90),
+    pay(due.token, 31, { tier: 'snapshot' }),
+  ]);
+  const r = await startDueRechecks(env, { now, fetchImpl: db.fetch });
+  assert.deepEqual(r.started, [due.token]);
+  const row = db.rows.find((x) => x.trigger === 'recheck');
+  assert.equal(row.report_token, due.token);
+  assert.equal(row.questions, 5);
+  const wf = env.SCAN_WORKFLOW.created.at(-1);
+  assert.equal(wf.params.questionLimit, null);
+  assert.equal(wf.params.business.name, 'Due Plumbing');
+  // The next day's run starts nothing new for the same token.
+  const again = await startDueRechecks(env, { now: now + day, fetchImpl: db.fetch });
+  assert.deepEqual(again.started, []);
+  assert.equal(again.skipped.already, 1);
+  // Off switch.
+  assert.equal((await startDueRechecks({ ...env, RECHECK_SCAN: 'off' }, { now, fetchImpl: db.fetch })).error, 'off');
 });

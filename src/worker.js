@@ -24,6 +24,7 @@
 //   GET|POST /api/fix-kit/[token], GET /api/fix-kit/[token].zip -> Fix Kit details form + zip download
 //                                ($149 fix_kit / $499 be_the_answer); src/lib/fix-kit-route.js
 //   GET  /fix-kit/[token]     -> the Fix Kit page (public/fix-kit.html)
+//   cron (daily)              -> the free 30-day re-check of every paid report (src/lib/auto-scan.js startDueRechecks)
 //   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h
 //   GET  /                    -> homepage; the hero's real AI answer card comes from showcase_answers
 //                                (src/lib/showcase.js, filled by `node scanner/showcase.js`), cached 1 h
@@ -44,7 +45,7 @@ import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
 import { reportBody } from './lib/lock.js';
-import { pendingReportStatus, startPaidScan, paidScanRunning } from './lib/auto-scan.js';
+import { pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks } from './lib/auto-scan.js';
 import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
@@ -147,6 +148,12 @@ export default {
 
     // Static assets (landing, report, success pages).
     return serveAsset(env, request, undefined, undefined, ctx);
+  },
+
+  // Daily cron (wrangler.jsonc triggers): the free 30-day re-check for every paid report
+  // (src/lib/auto-scan.js startDueRechecks). RECHECK_SCAN=off turns it off.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(startDueRechecks(env).then((r) => console.log('[recheck]', JSON.stringify(r))));
   },
 };
 

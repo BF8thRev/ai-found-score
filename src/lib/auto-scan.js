@@ -436,37 +436,99 @@ export async function startPaidScan(env, { token, sessionId, tier }, { fetchImpl
   try {
     if (!FULL_SCAN_TIERS.includes(tier)) return { ok: false, reason: 'tier' };
     if (!token || !LOOKUP_TOKEN_RE.test(String(token)) || !sessionId) return { ok: false, reason: 'no-token' };
-    if (!env.SCAN_WORKFLOW) return { ok: false, reason: 'no-workflow' };
-    if (!canStore(env)) return { ok: false, reason: 'no-store' };
-    const rows = await readByToken(env, token, { fetchImpl });
-    if (rows.some((r) => r.trigger === 'paid' && r.status !== 'failed')) return { ok: false, reason: 'already' };
-    const engines = activeEngines(env);
-    if (!engines.length) return { ok: false, reason: 'no-engine' };
-    let business = await readScanBusiness(env, token, fetchImpl).catch(() => null);
-    if (!business) business = (await readStoredReport(env, token, fetchImpl))?.report?.business || null;
-    const parsed = parseScanRequest({ business: business || {}, engines, runs: 1, trigger: 'paid', notes: `paid ${tier} ${sessionId}` });
-    if (!parsed.ok) return { ok: false, reason: `business: ${parsed.error}` };
-    const scanId = await paidScanId(sessionId);
-    const questions = 5;
-    await upsertScan(env, {
-      id: scanId, business_name: parsed.params.business.name, report_token: token, trigger: 'paid', status: 'running',
-      engines, runs: 1, questions, calls_total: questions * engines.length, notes: parsed.params.notes,
-      business: parsed.params.business, est_cost_usd: estimateScanCost({ engines, questions, runs: 1 }).total,
-    }, { fetchImpl });
-    try {
-      await env.SCAN_WORKFLOW.create({
-        id: scanId,
-        params: { ...parsed.params, engines, scanId, reportToken: token, questionLimit: null, dryRun: false },
-      });
-    } catch (e) {
-      const error = String(e?.message || e).slice(0, 300);
-      await upsertScan(env, { id: scanId, status: 'failed', est_cost_usd: 0, errors: [{ kind: 'workflow', error }] }, { fetchImpl }).catch(() => {});
-      return { ok: false, reason: `workflow: ${error}` };
-    }
-    return { ok: true, scanId };
+    return await startFullScan(env, { token, trigger: 'paid', scanId: await paidScanId(sessionId), notes: `paid ${tier} ${sessionId}` }, { fetchImpl });
   } catch (e) {
     return { ok: false, reason: String(e?.message || e).slice(0, 300) };
   }
+}
+
+/**
+ * A full scan (every question, every engine with a key, 1 run) under an existing report token.
+ * `trigger` 'paid' (after payment) or 'recheck' (30 days later); one of each per token. Throws on
+ * a store failure; a workflow that won't start marks the row failed and returns { ok: false }.
+ */
+async function startFullScan(env, { token, trigger, scanId, notes }, { fetchImpl }) {
+  if (!env.SCAN_WORKFLOW) return { ok: false, reason: 'no-workflow' };
+  if (!canStore(env)) return { ok: false, reason: 'no-store' };
+  const rows = await readByToken(env, token, { fetchImpl });
+  if (rows.some((r) => r.trigger === trigger && r.status !== 'failed')) return { ok: false, reason: 'already' };
+  const engines = activeEngines(env);
+  if (!engines.length) return { ok: false, reason: 'no-engine' };
+  let business = await readScanBusiness(env, token, fetchImpl).catch(() => null);
+  if (!business) business = (await readStoredReport(env, token, fetchImpl))?.report?.business || null;
+  const parsed = parseScanRequest({ business: business || {}, engines, runs: 1, trigger, notes });
+  if (!parsed.ok) return { ok: false, reason: `business: ${parsed.error}` };
+  const questions = 5;
+  await upsertScan(env, {
+    id: scanId, business_name: parsed.params.business.name, report_token: token, trigger, status: 'running',
+    engines, runs: 1, questions, calls_total: questions * engines.length, notes: parsed.params.notes,
+    business: parsed.params.business, est_cost_usd: estimateScanCost({ engines, questions, runs: 1 }).total,
+  }, { fetchImpl });
+  try {
+    await env.SCAN_WORKFLOW.create({
+      id: scanId,
+      params: { ...parsed.params, engines, scanId, reportToken: token, questionLimit: null, dryRun: false },
+    });
+  } catch (e) {
+    const error = String(e?.message || e).slice(0, 300);
+    await upsertScan(env, { id: scanId, status: 'failed', est_cost_usd: 0, errors: [{ kind: 'workflow', error }] }, { fetchImpl }).catch(() => {});
+    return { ok: false, reason: `workflow: ${error}` };
+  }
+  return { ok: true, scanId };
+}
+
+// ---------------------------------------------------------------------------
+// The free 30-day re-check (every paid plan): run daily by the Worker's cron (src/worker.js scheduled)
+// ---------------------------------------------------------------------------
+
+export const RECHECK_DAYS = 30;
+/** Payments older than this are never re-checked (a missed day catches up; an old backlog doesn't). */
+export const RECHECK_WINDOW_DAYS = 14;
+/** Most re-checks started per run: a brake on a burst of sales a month ago. */
+export const RECHECK_MAX_PER_RUN = 20;
+
+/** Live payments for a full-scan plan made RECHECK_DAYS ago (within the window), oldest first. */
+export function readDuePayments(env, nowMs, { fetchImpl = fetch } = {}) {
+  const until = new Date(nowMs - RECHECK_DAYS * 86400_000).toISOString();
+  const since = new Date(nowMs - (RECHECK_DAYS + RECHECK_WINDOW_DAYS) * 86400_000).toISOString();
+  const { base, headers } = supa(env);
+  const q = `tier=in.(${FULL_SCAN_TIERS.join(',')})&livemode=eq.true&report_token=not.is.null&paid_at=lte.${encodeURIComponent(until)}&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=200`;
+  return fetchImpl(`${base}/payments?${q}`, { headers, signal: AbortSignal.timeout(8000) }).then(async (res) => {
+    if (!res.ok) throw new Error(`payments read failed: ${res.status}`);
+    return res.json();
+  });
+}
+
+/**
+ * Start the 30-day re-check for every paid report that's due: a full scan under the same token,
+ * compared against the audit (scan-workflow baseline by token). Once per token, at most
+ * RECHECK_MAX_PER_RUN per run, never throws. RECHECK_SCAN=off turns it off.
+ * → { started: [token], skipped: { reason: n }, error? }
+ */
+export async function startDueRechecks(env, { now = Date.now(), fetchImpl = (...a) => fetch(...a) } = {}) {
+  const out = { started: [], skipped: {} };
+  const skip = (why) => { out.skipped[why] = (out.skipped[why] || 0) + 1; };
+  if (String(env?.RECHECK_SCAN ?? '').trim().toLowerCase() === 'off') return { ...out, error: 'off' };
+  if (!canStore(env) || !env.SCAN_WORKFLOW) return { ...out, error: 'not configured' };
+  let due;
+  try {
+    due = await readDuePayments(env, now, { fetchImpl });
+  } catch (e) {
+    return { ...out, error: String(e?.message || e).slice(0, 200) };
+  }
+  const tokens = [...new Set(due.map((p) => p.report_token).filter((t) => LOOKUP_TOKEN_RE.test(String(t))))];
+  for (const token of tokens) {
+    if (out.started.length >= RECHECK_MAX_PER_RUN) { skip('max-per-run'); continue; }
+    try {
+      const r = await startFullScan(env, { token, trigger: 'recheck', scanId: await stableUuid(`recheck-scan:${token}`), notes: '30-day re-check' }, { fetchImpl });
+      if (r.ok) out.started.push(token);
+      else skip(r.reason.split(':')[0]);
+    } catch (e) {
+      skip('error');
+      console.error('[recheck] start failed', String(e?.message || e).slice(0, 200));
+    }
+  }
+  return out;
 }
 
 /** True while a paid full scan for this token is running (the report page says the full audit is on its way). */

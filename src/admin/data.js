@@ -61,7 +61,28 @@ export async function loadDashboard(env) {
     else errors[keys[i]] = redact(env, r.reason?.message || r.reason, 300);
   });
   data.kpis = Array.isArray(data.kpis) ? data.kpis[0] || null : null;
+  try {
+    data.rechecks = await loadRechecks(env, s);
+  } catch (e) {
+    errors.rechecks = redact(env, e?.message || e, 300);
+  }
   return { configured: true, data, errors };
+}
+
+/**
+ * The free 30-day re-checks (src/lib/auto-scan.js startDueRechecks), newest first, each with the
+ * re-check's totals and the audit's (the report's baseline): who to offer Be the Answer.
+ * → [{ id, business_name, report_token, status, created_at, now: {namedYou, answers} | null, before: {…} | null }]
+ */
+export async function loadRechecks(env, s = supa(env)) {
+  if (!s) return [];
+  const scans = await get(env, s, 'scans?select=id,business_name,report_token,status,created_at&trigger=eq.recheck&order=created_at.desc&limit=30');
+  const ids = scans.map((r) => r.id).filter(Boolean);
+  const results = ids.length
+    ? await get(env, s, `scan_results?select=scan_id,totals:report->totals,before:report->baseline->totals&scan_id=in.(${ids.join(',')})`)
+    : [];
+  const byScan = new Map(results.map((r) => [r.scan_id, r]));
+  return scans.map((r) => ({ ...r, now: byScan.get(r.id)?.totals || null, before: byScan.get(r.id)?.before || null }));
 }
 
 /** Insert one expense row (already validated by parseExpenseForm). Throws on failure. */

@@ -195,6 +195,23 @@ export async function getBaseline(env, businessId, { excludeScanId, beforeIso, f
   return { generatedAt: prev.generatedAt || prev.scanned_at, totals: prev.totals };
 }
 
+/**
+ * The baseline for a rescan of the same report link: the newest earlier v2 report under this token
+ * that asked the same number of questions (so the free 3-question report is never the baseline for
+ * the 5-question audit). → { generatedAt, totals } | null. Throws on a failed read.
+ */
+export async function getBaselineByToken(env, token, { excludeScanId, questionCount, fetchImpl = fetch } = {}) {
+  if (!token) return null;
+  const { base, headers } = supa(env);
+  const q = `report_token=eq.${encodeURIComponent(token)}&version=eq.2&report=not.is.null&select=scan_id,scanned_at,report->generatedAt,report->totals,report->questions&order=scanned_at.desc&limit=10`;
+  const res = await fetchImpl(`${base}/scan_results?${q}`, { headers });
+  if (!res.ok) throw new Error(`scan_results baseline read failed: ${res.status} ${await failText(res)}`);
+  const rows = await res.json();
+  const prev = rows.find((r) => (!excludeScanId || r.scan_id !== excludeScanId) && r.totals
+    && (questionCount == null || (Array.isArray(r.questions) && r.questions.length === questionCount)));
+  return prev ? { generatedAt: prev.generatedAt || prev.scanned_at, totals: prev.totals } : null;
+}
+
 // ---------------------------------------------------------------------------
 // Cost & business tracking (supabase/admin_v3.sql): scans, scan_usage.
 // ---------------------------------------------------------------------------

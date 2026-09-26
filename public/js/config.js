@@ -6,7 +6,7 @@
 const STRIPE_LINKS = {
   // Keys are stable ids (analytics, webhook TIER_BY_CENTS); only the labels changed.
   fix_kit: '#',         // Fix Kit — $149 one-time, offered on paid reports (TIER_BY_CENTS 14900; paste the live Stripe Payment Link here)
-  xray: '#',            // AI Visibility Audit (was the X-Ray) — $49 one-time, optional +$19 30-day re-check add-on (paste the live Stripe Payment Link here)
+  xray: '#',            // AI Visibility Audit (was the X-Ray) — $49 one-time, includes a free 30-day re-scan (paste the live Stripe Payment Link here)
   // Off sale since the Sep 2026 offer ladder; keys kept so old analytics/webhook keys still resolve.
   snapshot: '#',        // Fix steps (off sale; its Stripe link is kept out of the page source) — $29 one-time
   before_after: '#',    // Fix it and re-check (off sale; its Stripe link is kept out of the page source) — $59 one-time
