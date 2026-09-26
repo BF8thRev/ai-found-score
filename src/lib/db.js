@@ -25,6 +25,11 @@
 //   EXECUTE report_unlocked(token), attach_report_request_email(id, email)
 // (see "worker read/insert" policies in Supabase). Env vars SUPABASE_URL and
 // SUPABASE_ANON_KEY are stored as Worker secrets, never in the repo.
+// The Fix Kit helpers at the bottom (getPaidTiers, getFixKitDetails, saveFixKitDetails) use
+// SUPABASE_SERVICE_KEY instead: payments and fix_kit_details (supabase/v6_fix_kit.sql) have no anon access.
+
+import { resolveKeys } from '../../scanner/config.js';
+import { TIER_BY_CENTS } from './stripe.js';
 
 export const TABLES = {
   BUSINESSES: 'businesses',
@@ -36,6 +41,7 @@ export const TABLES = {
   REPORT_REQUESTS: 'report_requests',
   REPORT_LINKS: 'report_links',
   LEADS: 'leads',
+  FIX_KIT_DETAILS: 'fix_kit_details',
 };
 
 /** Insert one row; throws with the Supabase error text on failure. */
@@ -401,4 +407,57 @@ export async function getReport(env, reportId, mockReports) {
   );
   if (!business) return null;
   return shapeRealReport(reportId, rows, business);
+}
+
+// ---------------------------------------------------------------------------
+// Fix Kit (supabase/v6_fix_kit.sql; routes in src/lib/fix-kit-route.js)
+// ---------------------------------------------------------------------------
+// payments and fix_kit_details are service-key only (anon can't read either), so these use
+// SUPABASE_SERVICE_KEY, server-side only. Without it they throw; the route treats that as "not paid".
+
+function supaService(env) {
+  const k = resolveKeys(env);
+  if (!k.supabaseUrl || !k.supabaseServiceKey) throw new Error('SUPABASE_SERVICE_KEY is not set');
+  return {
+    base: `${k.supabaseUrl}/rest/v1`,
+    headers: { apikey: k.supabaseServiceKey, Authorization: `Bearer ${k.supabaseServiceKey}`, 'Content-Type': 'application/json' },
+  };
+}
+
+/**
+ * The plans paid for on this report token, e.g. ['xray', 'fix_kit']: each payment's tier, or the tier
+ * for its amount (TIER_BY_CENTS) when no tier was recorded. Test-mode payments count too, as in
+ * report_unlocked(), so a sandbox checkout can be tried end to end.
+ */
+export async function getPaidTiers(env, token) {
+  const s = supaService(env);
+  const res = await fetch(`${s.base}/${TABLES.PAYMENTS}?report_token=eq.${encodeURIComponent(token)}&select=tier,amount_cents`, { headers: s.headers });
+  if (!res.ok) throw new Error(`Supabase GET payments failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  const tiers = new Set();
+  for (const p of await res.json()) {
+    const t = p.tier && p.tier !== 'unknown' ? p.tier : TIER_BY_CENTS[p.amount_cents];
+    if (t) tiers.add(t);
+  }
+  return [...tiers];
+}
+
+/** The confirmed Fix Kit details for a token → { details, confirmed_at, updated_at } or null. */
+export async function getFixKitDetails(env, token) {
+  const s = supaService(env);
+  const res = await fetch(`${s.base}/${TABLES.FIX_KIT_DETAILS}?report_token=eq.${encodeURIComponent(token)}&select=details,confirmed_at,updated_at&limit=1`, { headers: s.headers });
+  if (!res.ok) throw new Error(`Supabase GET fix_kit_details failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  const [row] = await res.json();
+  return row || null;
+}
+
+/** Save (insert or replace) the owner's confirmed details for a token. */
+export async function saveFixKitDetails(env, token, details) {
+  const s = supaService(env);
+  const now = new Date().toISOString();
+  const res = await fetch(`${s.base}/${TABLES.FIX_KIT_DETAILS}?on_conflict=report_token`, {
+    method: 'POST',
+    headers: { ...s.headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ report_token: token, details, confirmed_at: now, updated_at: now }),
+  });
+  if (!res.ok) throw new Error(`Supabase fix_kit_details upsert failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
 }

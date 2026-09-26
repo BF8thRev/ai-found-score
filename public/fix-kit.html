@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Your Fix Kit — AI Found Score</title>
+  <meta name="description" content="Confirm your business details and download your Fix Kit: ready-to-install files for your website and Google profile.">
+  <link rel="icon" type="image/svg+xml" href="/img/mark.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css?v=7">
+  <style>
+    /* Fix Kit page only (kept here so styles.css keeps its version). */
+    .fk { padding: 40px 0 72px; }
+    .fk h1 { font-size: clamp(30px, 4vw, 40px); margin: 0 0 12px; }
+    .fk .lede-page { font-size: 19px; line-height: 1.55; margin: 0 0 22px; }
+    .fk-note { background: #EEF4FE; border: 1px solid #C9DBFA; border-radius: var(--radius); padding: 14px 18px; font-weight: 600; color: var(--navy); margin: 0 0 24px; }
+    .fk-note.sample { background: var(--wash); border-color: var(--line); font-weight: 500; }
+    .fk-form { display: grid; gap: 18px; }
+    .fk-form fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; margin: 0; display: grid; gap: 14px; }
+    .fk-form legend { font-weight: 800; color: var(--navy); padding: 0 6px; }
+    .fk-field { display: grid; gap: 6px; }
+    .fk-field label { font-weight: 700; color: var(--navy); }
+    .fk-field .hint { font-size: 14px; color: var(--muted); margin: 0; }
+    .fk-field input, .fk-field textarea { font: inherit; width: 100%; padding: 11px 13px; border: 2px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+    .fk-field textarea { min-height: 96px; resize: vertical; }
+    .fk-field input:focus, .fk-field textarea:focus { outline: none; border-color: var(--blue); }
+    .fk-field.has-error input, .fk-field.has-error textarea { border-color: var(--red); }
+    .fk-err { color: var(--red); font-size: 14px; font-weight: 600; margin: 0; }
+    .fk-err:empty { display: none; }
+    .fk-row { display: grid; gap: 14px; grid-template-columns: 2fr 1fr 1fr; }
+    @media (max-width: 620px) { .fk-row { grid-template-columns: 1fr 1fr; } .fk-row .fk-field:first-child { grid-column: 1 / -1; } }
+    .fk-confirm { display: flex; gap: 12px; align-items: flex-start; font-weight: 600; color: var(--navy); }
+    .fk-confirm input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; }
+    .fk-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+    .fk-status { margin: 0; font-weight: 600; }
+    .fk-status.ok { color: var(--green); }
+    .fk-status.bad { color: var(--red); }
+    .fk-download { border: 2px solid var(--green); border-radius: var(--radius); padding: 20px 22px; margin: 0 0 26px; background: #F1FAF5; }
+    .fk-download h2 { margin: 0 0 6px; font-size: 22px; }
+    .fk-download p { margin: 0 0 14px; }
+    .fk-list { margin: 8px 0 0; padding-left: 22px; }
+    .fk-list li { margin-bottom: 6px; }
+    [hidden] { display: none !important; }
+  </style>
+  <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-K58KFVJC');</script>
+  <!-- End Google Tag Manager -->
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-K58KFVJC" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/img/logo.svg" alt="AI Found Score" width="249" height="40"></a>
+    <nav class="nav" aria-label="Main">
+      <a href="/#how">How it works</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="/report/sample-001">Sample report</a>
+      <a href="/#faq">FAQ</a>
+    </nav>
+    <a class="header-cta" href="/#request">Get my free report</a>
+  </div>
+</header>
+
+<main class="fk">
+  <div class="wrap narrow">
+    <div data-state="loading">
+      <p>Loading your details…</p>
+    </div>
+
+    <div data-state="notfound" hidden>
+      <h1>We couldn't find that report.</h1>
+      <p>Check the link in your email. Still stuck? Email <a href="mailto:hello@aifoundscore.com?subject=Fix%20Kit">hello@aifoundscore.com</a> and we'll sort it out.</p>
+    </div>
+
+    <div data-state="unpaid" hidden>
+      <h1>Your Fix Kit</h1>
+      <p class="lede-page">The Fix Kit comes with the Fix Kit and Be the Answer plans. Once you've bought one for this report, this page is where you pick it up.</p>
+      <p>Just paid? It can take a minute to come through. Reload this page.</p>
+      <p><a class="btn-secondary" data-report-link href="/">Back to your report</a></p>
+    </div>
+
+    <div data-state="error" hidden>
+      <h1>Something went wrong.</h1>
+      <p>Reload the page in a minute. If it keeps happening, email <a href="mailto:hello@aifoundscore.com?subject=Fix%20Kit">hello@aifoundscore.com</a>.</p>
+    </div>
+
+    <div data-state="form" hidden>
+      <h1>Your Fix Kit</h1>
+      <p class="lede-page">Ready-to-install files that help AI assistants and Google get your business right. Check your details, confirm them, then download the kit and hand it to whoever looks after your website.</p>
+
+      <div class="fk-download" data-download hidden>
+        <h2>Your Fix Kit is ready</h2>
+        <p data-download-note>Built from the details below. Change anything and confirm again to get a fresh copy.</p>
+        <a class="btn" data-download-link href="#" download>Download your Fix Kit</a>
+      </div>
+
+      <p class="fk-note sample" data-sample-note hidden>This is the sample. You can try the form, but the download always uses the sample business's details.</p>
+      <p class="fk-note">Check every detail. We only use what you confirm here.</p>
+
+      <form class="fk-form" novalidate>
+        <fieldset>
+          <legend>Your business</legend>
+          <div class="fk-field" data-field="name">
+            <label for="fk-name">Business name</label>
+            <input id="fk-name" name="name" type="text" maxlength="120" autocomplete="organization" required>
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="trade">
+            <label for="fk-trade">What you do</label>
+            <input id="fk-trade" name="trade" type="text" maxlength="60" placeholder="plumber">
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="phone">
+            <label for="fk-phone">Phone number</label>
+            <input id="fk-phone" name="phone" type="tel" maxlength="40" autocomplete="tel" required>
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="website">
+            <label for="fk-website">Website</label>
+            <input id="fk-website" name="website" type="text" inputmode="url" maxlength="300" placeholder="yourbusiness.com" autocapitalize="off" spellcheck="false">
+            <p class="fk-err"></p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Where you are</legend>
+          <div class="fk-field" data-field="street">
+            <label for="fk-street">Street address</label>
+            <p class="hint">Leave it blank if customers don't visit you.</p>
+            <input id="fk-street" name="street" type="text" maxlength="160" autocomplete="address-line1">
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-row">
+            <div class="fk-field" data-field="town">
+              <label for="fk-town">Town</label>
+              <input id="fk-town" name="town" type="text" maxlength="60" autocomplete="address-level2" required>
+              <p class="fk-err"></p>
+            </div>
+            <div class="fk-field" data-field="state">
+              <label for="fk-state">State</label>
+              <input id="fk-state" name="state" type="text" maxlength="2" autocomplete="address-level1" autocapitalize="characters" placeholder="NY" required>
+              <p class="fk-err"></p>
+            </div>
+            <div class="fk-field" data-field="zip">
+              <label for="fk-zip">ZIP</label>
+              <input id="fk-zip" name="zip" type="text" inputmode="numeric" maxlength="10" autocomplete="postal-code">
+              <p class="fk-err"></p>
+            </div>
+          </div>
+          <div class="fk-field" data-field="serviceTowns">
+            <label for="fk-towns">Towns you serve</label>
+            <p class="hint">One per line, up to 15.</p>
+            <textarea id="fk-towns" name="serviceTowns" rows="4"></textarea>
+            <p class="fk-err"></p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>What you offer</legend>
+          <div class="fk-field" data-field="services">
+            <label for="fk-services">Services</label>
+            <p class="hint">One per line, up to 15. Only list work you actually do.</p>
+            <textarea id="fk-services" name="services" rows="5"></textarea>
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="hours">
+            <label for="fk-hours">Hours</label>
+            <p class="hint">Like: Mon–Fri 8am–6pm, Sat 9am–2pm, Sun closed</p>
+            <input id="fk-hours" name="hours" type="text" maxlength="300">
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="description">
+            <label for="fk-description">Short description</label>
+            <p class="hint">A sentence or two about your business, in your words. <span data-count>0</span> of 750 characters.</p>
+            <textarea id="fk-description" name="description" rows="4" maxlength="750"></textarea>
+            <p class="fk-err"></p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Google (optional)</legend>
+          <div class="fk-field" data-field="googleMapsUrl">
+            <label for="fk-maps">Your Google Maps link</label>
+            <p class="hint">Open your business on Google Maps, tap Share and paste the link here.</p>
+            <input id="fk-maps" name="googleMapsUrl" type="url" maxlength="500" placeholder="https://maps.app.goo.gl/…" autocapitalize="off" spellcheck="false">
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="googleReviewUrl">
+            <label for="fk-review">Your Google review link</label>
+            <p class="hint">In your Google Business Profile, look for "Ask for reviews" and copy the link. We turn it into a QR code you can print.</p>
+            <input id="fk-review" name="googleReviewUrl" type="url" maxlength="500" placeholder="https://g.page/r/…/review" autocapitalize="off" spellcheck="false">
+            <p class="fk-err"></p>
+          </div>
+        </fieldset>
+
+        <div class="fk-field" data-field="confirm">
+          <label class="fk-confirm"><input type="checkbox" name="confirm"> I own or manage this business and these details are correct.</label>
+          <p class="fk-err"></p>
+        </div>
+
+        <div class="fk-actions">
+          <button class="btn" type="submit">Confirm my details</button>
+          <p class="fk-status" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+
+      <h2 style="margin-top:40px">What's in the kit</h2>
+      <ul class="fk-list">
+        <li><strong>robots.txt</strong>: lets ChatGPT, Claude, Perplexity, Gemini, Google and Bing read your website.</li>
+        <li><strong>llms.txt</strong>: a plain summary of your business written for AI assistants.</li>
+        <li><strong>Business schema</strong>: your name, phone, address and service area in the code format Google reads.</li>
+        <li><strong>FAQ page</strong>: answers to the questions people ask AI about businesses like yours.</li>
+        <li><strong>Google Business Profile text</strong>: description, categories, services and service areas to copy in.</li>
+        <li><strong>Review QR code</strong>: if you add your review link, a code to print on invoices and cards.</li>
+        <li><strong>README</strong>: where each file goes, in plain words.</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/"><img src="/img/logo.svg" alt="AI Found Score" width="187" height="30"></a>
+        <p>Free AI visibility reports for local businesses. Public data only. No promises about what AI will say.</p>
+      </div>
+      <div class="col">
+        <h4>Company</h4>
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/refunds">Refunds</a>
+      </div>
+      <div class="col">
+        <h4>Report</h4>
+        <a href="/#how">How it works</a>
+        <a href="/#pricing">Pricing</a>
+        <a href="/report/sample-001">Sample report</a>
+      </div>
+      <div class="col">
+        <h4>Contact</h4>
+        <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a>
+        <address>AI Found Score<br>120 Terminal Drive<br>Plainview, NY 11803</address>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Fields Holding d/b/a GetAiFound Score</span>
+      <span><a href="/unsubscribe">Unsubscribe from emails</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/fix-kit.js"></script>
+</body>
+</html>
