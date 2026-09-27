@@ -4,7 +4,10 @@
 // removed server-side; this page only draws the blurred stand-ins.
 // `version: 2` reports use renderV2 (the searched-answers report); anything
 // else is a legacy v1 report. A free-report request whose report is still being made gets a
-// 202 {status} and renders the "in progress" page (renderPending), which re-checks every 30 s.
+// 202 {status, business?, hasEmail?} and renders the "in progress" page (renderPending), which
+// re-checks every 30 s.
+// ?offer=xray or ?offer=be_the_answer (links from emails and the homepage) scrolls to that plan's
+// buy button and highlights it (focusOffer).
 // The only paid tier offered is the $49 AI Visibility X-Ray (tier `xray`, see XRAY below).
 document.addEventListener('DOMContentLoaded', async () => {
   const id = window.location.pathname.split('/').filter(Boolean).pop() || 'sample-001';
@@ -17,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // A free-report request whose scan is queued or running: 202 {status}. Show "in progress".
     if (res.status === 202) {
       const j = await res.json().catch(() => ({}));
-      renderPending(root, id, j.status === 'queued' ? 'queued' : 'running');
+      renderPending(root, id, j);
       return;
     }
     if (!res.ok) throw new Error(res.status === 404 ? 'not found' : res.status === 503 ? 'not ready' : 'error');
@@ -36,6 +39,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.title = `AI Found Score — ${report.business.name}`;
+  // Someone reading their own report doesn't need "Get my free report" again. Examples keep it.
+  if (!isDemoReport(report)) setHeaderCta('Check another business');
 
   if (report.version === 2) renderV2(root, report);
   else renderV1(root, report);
@@ -53,6 +58,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   wireReportTools(root, report);
   window.wireCheckout?.(root, report.sample ? null : report.id);
   root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', (e) => submitLead(e, report.id)));
+  wireOfferScroll(root);
+  focusOffer(root, new URLSearchParams(window.location.search).get('offer'));
 
   // One server-side visit per render, after the JS has run. Link scanners
   // that only fetch the HTML never get here.
@@ -67,39 +74,83 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ---------- A report that is still being made (free-report request) ----------
-// GET /api/report/<token> answers 202 {status: 'running'|'queued'} until the report is saved.
+// GET /api/report/<token> answers 202 {status, business?: {name, town, state}, hasEmail?} until the
+// report is saved. status: 'running' | 'queued' | 'failed' (failed after its automatic retry; we re-run
+// it) | 'paid' (a paid full audit is being made). Anything else is treated as 'running'.
 // Re-checks every 30 seconds and reloads once the report (or anything other than 202) is there.
 const PENDING_POLL_MS = 30000;
-const PENDING_COPY = {
-  running: {
-    h: 'We’re asking the AI assistants now.',
-    p: 'This page updates when your report is ready — bookmark it.',
-  },
-  queued: {
-    h: 'Your report is in line.',
-    p: 'We’ll ask the AI assistants soon. This page updates when your report is ready — bookmark it.',
-  },
-};
+const PENDING_STATUSES = ['running', 'queued', 'failed', 'paid'];
 
-function renderPending(root, token, status) {
-  const c = PENDING_COPY[status] || PENDING_COPY.running;
-  document.title = 'AI Found Score — your report is on its way';
+function pendingCopy(status, hasEmail) {
+  if (status === 'queued') {
+    return { h: 'Your report is in line.', p: `Ready by ${nextBusinessDay()}. This page updates when it’s ready, so you can bookmark it.`, spin: true };
+  }
+  if (status === 'failed') {
+    return {
+      h: 'Something went wrong making your report.',
+      p: hasEmail
+        ? 'We’ve been alerted and we’ll re-run it. You’ll get an email when it’s ready.'
+        : 'We’ve been alerted and we’ll re-run it. Leave your email below and we’ll send it when it’s ready.',
+      spin: false,
+    };
+  }
+  if (status === 'paid') {
+    return { h: 'Your full audit is being made.', p: 'Usually ready within the hour. This page updates when it’s ready.', spin: true };
+  }
+  return { h: 'We’re asking the AI assistants now.', p: 'Usually ready within the hour, often sooner. This page updates when it’s ready, so you can bookmark it.', spin: true };
+}
+
+// The next weekday after today, New York time: "Monday, Sep 28". Holidays aren't counted.
+function nextBusinessDay(now = new Date()) {
+  const ny = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const d = new Date(ny.getFullYear(), ny.getMonth(), ny.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+function pendingState(j) {
+  const b = j && j.business && typeof j.business === 'object' ? j.business : null;
+  return {
+    status: PENDING_STATUSES.includes(j && j.status) ? j.status : 'running',
+    business: b && b.name ? b : null,
+    hasEmail: !!(j && j.hasEmail),
+  };
+}
+
+function renderPending(root, token, j, prev = null) {
+  const st = pendingState(j);
+  // Once they've given an email on this page, keep the box hidden even if the next check lags.
+  if (prev && prev.hasEmail) st.hasEmail = true;
+  if (!st.business && prev && prev.business) st.business = prev.business;
+  const c = pendingCopy(st.status, st.hasEmail);
+  const b = st.business;
+  const where = b ? [b.town, b.state].filter(Boolean).join(', ') : '';
+  setHeaderCta('Check another business');
+  document.title = b ? `AI Found Score — ${b.name}` : 'AI Found Score — your report is on its way';
   root.innerHTML = `
-    <div class="wrap page-msg r2-pending" data-status="${escapeHtml(status)}">
-      <p class="r2-pending-mark" aria-hidden="true"></p>
+    <div class="wrap page-msg r2-pending" data-status="${escapeHtml(st.status)}">
+      ${b ? `<p class="r2-pending-biz">${escapeHtml(b.name)}${where ? ` · ${escapeHtml(where)}` : ''}</p>` : ''}
+      ${c.spin ? '<p class="r2-pending-mark" aria-hidden="true"></p>' : ''}
       <h1>${escapeHtml(c.h)}</h1>
       <p>${escapeHtml(c.p)}</p>
       <p class="fine" role="status">We check again every 30 seconds. You can close this page and come back to the same link.</p>
-      ${leadForm('top')}
+      ${st.hasEmail ? '' : leadForm('pending')}
     </div>`;
-  root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', (e) => submitLead(e, token)));
+  root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', async (e) => {
+    if (await submitLead(e, token, { pending: true })) st.hasEmail = true;
+  }));
   const check = async () => {
     try {
       const res = await fetch('/api/report/' + encodeURIComponent(token), { cache: 'no-store' });
       if (res.status === 202) {
-        const j = await res.json().catch(() => ({}));
-        const next = j.status === 'queued' ? 'queued' : 'running';
-        if (next !== status) { renderPending(root, token, next); return; }
+        const next = pendingState(await res.json().catch(() => ({})));
+        // Re-draw only when something shown changes, so a half-typed email isn't wiped.
+        const bizChanged = !!next.business && !st.business;
+        const emailNow = next.hasEmail && !st.hasEmail && !root.querySelector('.lead-form input[name="email"]')?.value;
+        if (next.status !== st.status || bizChanged || emailNow) {
+          renderPending(root, token, { ...next, hasEmail: next.hasEmail || st.hasEmail }, st);
+          return;
+        }
       } else {
         location.reload();
         return;
@@ -108,6 +159,12 @@ function renderPending(root, token, status) {
     setTimeout(check, PENDING_POLL_MS);
   };
   setTimeout(check, PENDING_POLL_MS);
+}
+
+// The header button. On a report page "Get my free report" is redundant: it becomes "Check another business".
+function setHeaderCta(text) {
+  const a = document.querySelector('.site-header .header-cta');
+  if (a) a.textContent = text;
 }
 
 // ---------- v1 (legacy, no `version`): rendered exactly as before ----------
@@ -147,8 +204,6 @@ function renderV1(root, report) {
           <p>${escapeHtml(report.scoreExplanation)}</p>
         </div>
       </div>
-
-      ${report.sample ? '' : leadForm('top')}
 
       <section class="report-section">
         <h2>Does AI name you?</h2>
@@ -196,7 +251,7 @@ function renderV1(root, report) {
 
       ${xrayOk ? xrayOffer() : ''}
 
-      ${report.sample ? '' : leadForm('bottom')}
+      ${bottomLead(report)}
     </div>`;
 
 }
@@ -218,12 +273,44 @@ const XRAY = {
   button: 'Get my audit — $49',
 };
 
+// Teaser under "What to fix": one sentence and a link down to the offer band, the page's one buy button.
 function unlockPanel() {
   return `
     <div class="unlock-panel">
-      <p><strong>The fix steps are in the ${XRAY.name}.</strong> ${XRAY.what} ${XRAY.promise}</p>
-      <a class="btn" data-tier="xray" href="#">${XRAY.button}</a>
+      <p><strong>The fix steps are in the ${XRAY.name}.</strong> Every problem by name, in order, with the exact steps and text you can copy and paste. ${XRAY.promise}</p>
+      <a class="btn-secondary" href="#offer" data-scroll-offer>See what the audit includes</a>
     </div>`;
+}
+
+// "See what the audit includes" and similar links: scroll to the offer band instead of a second checkout.
+function wireOfferScroll(root) {
+  root.addEventListener('click', (e) => {
+    const a = e.target.closest('a[data-scroll-offer]');
+    if (!a) return;
+    const band = root.querySelector('[data-offer-band]');
+    if (!band) return;
+    e.preventDefault();
+    band.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    band.querySelector('[data-tier]')?.focus({ preventScroll: true });
+  });
+}
+
+// ?offer=xray | ?offer=be_the_answer: scroll to that plan's buy button and highlight it. Falls back to
+// the offer band when that plan isn't offered on this report. Runs after the tier filters above.
+function focusOffer(root, offer) {
+  if (offer !== 'xray' && offer !== 'be_the_answer') return;
+  const btn = root.querySelector(`[data-tier="${offer}"]`);
+  const target = btn ? (btn.closest('[data-offer-band], .r2-upsell') || btn) : root.querySelector('[data-offer-band]');
+  if (!target) return;
+  if (btn) btn.classList.add('r2-offer-focus');
+  requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+}
+
+// At most one email box on a ready report, at the bottom: free reports only, and only when the request
+// has no email on file yet (hasEmail from the API; the address itself is never sent to the page).
+function bottomLead(report) {
+  if (report.sample || !report.locked || report.hasEmail) return '';
+  return leadForm('bottom');
 }
 
 // Trust row next to every buy button. Only claims that are true of every checkout: Stripe's hosted
@@ -255,7 +342,7 @@ function xrayOffer(lead = '') {
     ? '<p class="r2-addon"><label><input type="checkbox" data-addon="competitor_breakdown"> Add the Competitor Breakdown, +$25: the top 3 businesses AI names instead of you, side by side with you.</label></p>'
     : '';
   return `
-    <div class="cta-band r2-xray-offer" data-offer-band>
+    <div class="cta-band r2-xray-offer" id="offer" data-offer-band>
       <h2>${XRAY.name} — ${XRAY.price}.</h2>
       <p>${lead ? `${lead} ` : ''}${XRAY.what} ${XRAY.promise}</p>
       ${addon}
@@ -397,20 +484,25 @@ function wireReportTools(root, report) {
 // Text behind each copy button (kept out of HTML attributes, so nothing needs escaping twice).
 const COPY_STORE = [];
 
+// The one email box on a page. 'pending': the report is still being made, so the email goes on the
+// request and the "report ready" email reaches it (POST /api/lead attaches it; nothing is sent now).
+// 'bottom': the bottom of a free report, "keep a copy" (the report link by email).
 function leadForm(where) {
+  const pending = where === 'pending';
   return `
     <form class="lead-form" data-where="${where}" novalidate>
-      <label for="lead-email-${where}">${where === 'top' ? 'Want this in your inbox?' : 'Not ready? Keep a copy.'}</label>
+      <label for="lead-email-${where}">${pending ? 'Email me when it’s ready' : 'Not ready? Keep a copy.'}</label>
       <div class="lead-row">
         <input id="lead-email-${where}" name="email" type="email" required autocomplete="email" placeholder="you@yourbusiness.com">
         <input class="hp" name="company_url" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <button class="btn-secondary" type="submit">Email me this report</button>
+        <button class="btn-secondary" type="submit">${pending ? 'Email me' : 'Email me this report'}</button>
       </div>
       <p class="lead-status" role="status"></p>
     </form>`;
 }
 
-async function submitLead(e, token) {
+// → true once saved.
+async function submitLead(e, token, { pending = false } = {}) {
   e.preventDefault();
   const f = e.currentTarget;
   const status = f.querySelector('.lead-status');
@@ -419,7 +511,7 @@ async function submitLead(e, token) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
     status.textContent = 'Please enter a valid email.';
     status.className = 'lead-status error';
-    return;
+    return false;
   }
   btn.disabled = true;
   try {
@@ -430,14 +522,18 @@ async function submitLead(e, token) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) throw new Error(data.error || 'Could not save that. Try again.');
-    status.textContent = `Done. We’ll send the link to ${email}.`;
+    status.textContent = pending || data.attached
+      ? `Done. We’ll email ${email} when your report is ready.`
+      : `Done. We’ll send the link to ${email}.`;
     status.className = 'lead-status ok';
     f.querySelector('.lead-row').hidden = true;
     window.dataLayer?.push({ event: 'generate_lead', report_token: token });
+    return true;
   } catch (err) {
     status.textContent = err.message;
     status.className = 'lead-status error';
     btn.disabled = false;
+    return false;
   }
 }
 
@@ -625,12 +721,11 @@ function renderV2(root, report) {
     headerV2(report, b, meta),
     '<div class="wrap r2">',
     report.fullScanPending ? fullScanNote() : '',
+    verdictV2(report, { t, N, cw, proven, zero, allNamed }),
     heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
-    scoreV2(report),
     baselineV2(report, t),
     report.plan ? planPanel(report) : '',
     paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
-    report.sample ? '' : leadForm('top'),
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
     nobodyTwice ? '' : whoAiNamesV2({ b, t, N, cw, proven }),
     gridV2({ questions, answers, engines, failedNote }),
@@ -645,7 +740,8 @@ function renderV2(root, report) {
     offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }),
     answersV2({ questions, answers }),
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
-    report.sample ? '' : leadForm('bottom'),
+    bottomLead(report),
+    reportTools(),
     '</div>',
   ].join('');
 
@@ -675,7 +771,6 @@ function headerV2(report, b, meta) {
         <h1>${escapeHtml(b.name)}</h1>
         <p class="biz-meta">${meta}</p>
         <p class="fine">Checked ${escapeHtml(fmtDate(report.generatedAt))}</p>
-        ${reportTools()}
       </div>
     </section>`;
 }
@@ -725,8 +820,31 @@ function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, prov
     </div>`;
 }
 
+// The 5-second answer, first on the page: one literal verdict line next to the AI Found Score.
+// "Named" is a literal name match in the answer text, so the line only says what the answers did.
+// The top competitor is the most-named business with proof (named in 2+ answers, provenEntities).
+function verdictV2(report, { t, N, cw, proven, zero, allNamed }) {
+  if (!N) return '';
+  const you = zero
+    ? `AI didn’t name you in any of the ${N} ${cw.unit}.`
+    : allNamed
+      ? `AI named you in all ${N} ${cw.unit}.`
+      : `AI named you in ${t.namedYou} of ${N} ${cw.unit}.`;
+  const top = proven[0];
+  const them = top && num(top.named) > 0
+    ? ` It named ${escapeHtml(top.name)} ${num(top.named)} ${plural(num(top.named), 'time', 'times')}.`
+    : '';
+  return `
+    <section class="r2-verdict" aria-label="Your result">
+      <div class="r2-verdict-main">
+        <p class="r2-verdict-line">${you}${them}</p>
+      </div>
+      ${scoreV2(report)}
+    </section>`;
+}
+
 // The AI Found Score: computed by the Worker from this report's own answers
-// (shared/report-v2.js computeVisibilityScore). The footnote says exactly how.
+// (shared/report-v2.js computeVisibilityScore). Shown in the verdict; the weights sit behind "How we score".
 function scoreV2(report) {
   const sc = report.score;
   if (!sc || !Array.isArray(sc.parts) || !Number.isFinite(Number(sc.score))) return '';
@@ -736,7 +854,7 @@ function scoreV2(report) {
   const rows = sc.parts.map((p) => `
         <li><span class="k">${escapeHtml(p.label)}</span><span class="v">${escapeHtml(p.detail)}</span><span class="w">${num(Math.round(p.weight * p.value))} / ${num(p.weight)}</span></li>`).join('');
   return `
-    <section class="report-section r2-score" aria-label="AI Found Score">
+    <div class="r2-score" aria-label="AI Found Score">
       <div class="r2-score-top">
         <div class="r2-score-ring ${band}" style="--pct:${n}"><span>${n}</span><small>of 100</small></div>
         <div>
@@ -744,10 +862,14 @@ function scoreV2(report) {
           <p class="sub">${bandText}</p>
         </div>
       </div>
-      <ul class="r2-score-parts">${rows}
-      </ul>
-      <p class="r2-score-note">* The AI Found Score is our own internal measure, not a rating from any AI company. We compute it only from the answers in this report: how often you were named (50%), named first (25%), whether the facts AI stated about you were right (15%) and whether AI cited your website (10%). A part we couldn&rsquo;t check is left out and the rest are scaled to 100. AI answers change, so the score can change from scan to scan.</p>
-    </section>`;
+      <p class="r2-score-note">* The AI Found Score is our own internal measure, not a rating from any AI company.</p>
+      <details class="r2-score-how">
+        <summary>How we score</summary>
+        <ul class="r2-score-parts">${rows}
+        </ul>
+        <p class="r2-score-note">We compute it only from the answers in this report: how often you were named (50%), named first (25%), whether the facts AI stated about you were right (15%) and whether AI cited your website (10%). A part we couldn&rsquo;t check is left out and the rest are scaled to 100. AI answers change, so the score can change from scan to scan.</p>
+      </details>
+    </div>`;
 }
 
 // Step 6: before/after strip when this scan has a baseline.

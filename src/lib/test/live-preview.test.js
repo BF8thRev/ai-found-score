@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   handleLivePreview, livePreviewStatus, signPreviewToken, verifyPreviewToken, nameRanges, citedDomains,
   capCheck, dailyCapUsd, pickEngine, ipCode, startOfUtcDay, MSG, PER_IP_DAILY, TOKEN_TTL_S,
+  billingSkip, previewTries, FALLBACK_PREFIX,
 } from '../live-preview.js';
 import { handleReportRequest } from '../report-request.js';
 import { fixtureFetch, jsonResponse } from '../../../scanner/dry-run.js';
@@ -25,6 +26,7 @@ const ENV = {
 const BIZ = { id: REQ_ID, businessName: 'Suds & Bubbles Laundromat', trade: 'laundromat', town: 'North Babylon', zip: '11703', state: 'NY' };
 
 async function call(env, body, deps = {}) {
+  if (!deps.keepSkips) billingSkip.clear();
   const saved = [];
   const req = new Request('https://aifoundscore.com/api/live-preview', {
     method: 'POST',
@@ -150,6 +152,39 @@ test('preview: asks the cheapest engine once, returns verbatim text, highlights 
   assert.ok(!row.answer_ref.includes(IP), 'no raw IP stored');
 });
 
+test('preview: cheapest engine out of credits -> the next engine answers; each engine spend on its own row', async () => {
+  const fetchImpl = fixtureFetch(undefined, { gemini: () => jsonResponse({ error: { message: 'Your prepayment credits are depleted.' } }, 402) });
+  const seen = [];
+  const r = await call(ENV, await good(), { fetchImpl, onEngineError: (e, err) => seen.push([e, err]) });
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.engine, 'chatgpt');
+  assert.equal(r.saved.length, 2);
+  const [main, first] = r.saved;
+  assert.equal(main.provider, 'chatgpt');
+  assert.equal(main.ok, true);
+  assert.ok(main.answer_ref.startsWith(`live-preview:${REQ_ID}:`));
+  assert.equal(first.provider, 'gemini');
+  assert.equal(first.ok, false);
+  assert.ok(first.answer_ref.startsWith(`${FALLBACK_PREFIX}:`), 'the failed engine is not another try for this visitor');
+  assert.equal(seen[0][0], 'gemini');
+  // Gemini just said it's out of credits: the next visitor goes straight to ChatGPT.
+  assert.deepEqual(previewTries(ENV), ['chatgpt']);
+  const r2 = await call(ENV, await good(), { fetchImpl: fixtureFetch(), keepSkips: true });
+  assert.equal(r2.body.engine, 'chatgpt');
+  assert.equal(r2.saved.length, 1);
+});
+
+test('preview: no fallback without enough time left for a real answer', async () => {
+  let t = 0;
+  const clock = () => t;
+  const fetchImpl = fixtureFetch(undefined, { gemini: () => { t = 25_000; return jsonResponse({ error: { message: 'overloaded' } }, 500); } });
+  const r = await call(ENV, await good(), { fetchImpl, clock });
+  assert.equal(r.body.ok, false);
+  assert.equal(fetchImpl.calls.filter((c) => /openai/.test(c.url)).length, 0);
+  assert.equal(r.saved.length, 1);
+  assert.equal(r.saved[0].provider, 'gemini');
+});
+
 test('preview: name not in the answer -> named false, no ranges', async () => {
   const token = await signPreviewToken(ENV, { ...BIZ, businessName: 'A&B Plumbing' });
   const r = await call(ENV, { request_id: REQ_ID, question_id: 'q2', token });
@@ -217,13 +252,14 @@ test('preview: usage read fails -> fail closed', async () => {
   assert.equal(fetchImpl.calls.length, 0);
 });
 
-test('preview: engine failure -> fallback message, failure recorded', async () => {
-  const fetchImpl = fixtureFetch(undefined, { gemini: () => jsonResponse({ error: { message: 'bad request' } }, 400) });
+test('preview: every engine fails -> fallback message, failure recorded', async () => {
+  const down = () => jsonResponse({ error: { message: 'bad request' } }, 400);
+  const fetchImpl = fixtureFetch(undefined, { gemini: down, openai: down });
   const r = await call(ENV, await good(), { fetchImpl });
   assert.equal(r.body.ok, false);
   assert.equal(r.body.message, MSG.fallback);
-  assert.equal(r.saved.length, 1);
-  assert.equal(r.saved[0].ok, false);
+  assert.equal(r.saved.length, 2, 'one row per engine tried');
+  assert.ok(r.saved.every((row) => row.ok === false));
 });
 
 test('preview: engine timeout -> fallback within the cap', async () => {

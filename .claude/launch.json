@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["wrangler", "dev", "--port", "8787"],
       "port": 8787
+    },
+    {
+      "name": "worker-dry",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["wrangler", "dev", "--port", "8788", "--var", "SCANNER_DRY_RUN:1", "--var", "AUTO_SCAN:on", "--var", "TURNSTILE_SITE_KEY:1x00000000000000000000AA", "--var", "TURNSTILE_SECRET_KEY:1x0000000000000000000000000000000AA"],
+      "port": 8788
     }
   ]
 }

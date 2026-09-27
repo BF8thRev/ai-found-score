@@ -235,11 +235,11 @@ test('request: email attach to a verified request needs no token', async () => {
   assert.equal(d.fetchImpl.calls.length, 0);
 });
 
-test('request: attach fallback cannot create an unverified row', async () => {
+test('request: attach fallback cannot create an unverified row; it asks to try again', async () => {
   for (const opt of [{ attachResult: false }, { attachThrows: true }]) {
     const d = deps(opt);
     const res = await quiet(() => handleReportRequest(post({ ...FORM, request_id: RID, email: 'owner@example.com' }), URL_, CONFIGURED, d));
-    assert.equal(res.status, 403, JSON.stringify(opt));
+    assert.equal(res.status, 503, JSON.stringify(opt)); // "try again", not a false "couldn't confirm you're a person"
     assert.equal(d.rows.length, 0);
     assert.equal(d.attaches.length, 1);
   }

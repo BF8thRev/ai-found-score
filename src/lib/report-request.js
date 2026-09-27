@@ -1,8 +1,9 @@
 // POST /api/request: the landing page's free-report request. Accepts JSON (fetch) or a plain
 // form post (no-JS fallback). Email is optional: the page asks for it only after the owner has
 // seen the questions.
-//   {business_name, trade, town, zip, state?, website?, phone?, email?, cf-turnstile-response}
-//       -> Turnstile check, then a new row; returns {ok, id}
+//   {business_name, trade, town, zip, state?, website?, phone?, email?, intent?, cf-turnstile-response}
+//       -> Turnstile check, then a new row; returns {ok, id}. intent 'xray' | 'be_the_answer': the
+//          visitor is on the way to checkout, so the free scan is queued, not started (auto-scan.js).
 //   {request_id, email}
 //       -> attaches the email to that row (the row came from a Turnstile-checked first submit,
 //          so this needs no token). If the attach can't be done (row missing, first save failed)
@@ -26,6 +27,8 @@ import { turnstileConfigured, verifyTurnstile, warnUnconfiguredOnce, REQUEST_ACT
 import { livePreviewStatus, signPreviewToken } from './live-preview.js';
 import { startRequestScan } from './auto-scan.js';
 
+/** Plans a visitor can head straight to checkout for (the form's `intent`). */
+export const PAID_INTENTS = ['xray', 'be_the_answer'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -93,6 +96,9 @@ export async function handleReportRequest(request, url, env, deps = {}) {
       console.error('[request] email attach failed', e);
     }
     // Couldn't attach: fall through and save a fresh row with the email (Turnstile-checked below).
+    // Without a fresh bot-check token that save can only fail the check, so say what actually
+    // happened instead of "we couldn't confirm you're a person".
+    if (turnstileConfigured(env) && !data['cf-turnstile-response']) return fail(503, 'We couldn\'t save your email just now. Try again in a minute.');
   }
 
   // A button, else the words typed in "Something else" (the no-JS form posts both).
@@ -155,6 +161,8 @@ export async function handleReportRequest(request, url, env, deps = {}) {
     try {
       const r = await (deps.startRequestScan || startRequestScan)(env, req, {
         request, dryRun: !!deps.scanDryRun, dryEnv: deps.dryEnv, fetchImpl: deps.scanFetchImpl,
+        // On the way to checkout ("Get my audit" / "Be the answer"): the paid scan starts on payment.
+        paidIntent: PAID_INTENTS.includes(String(data.intent || '')),
       });
       if (r && r.token) reportUrl = `/report/${encodeURIComponent(r.token)}`;
     } catch (e) {

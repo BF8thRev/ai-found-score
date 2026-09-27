@@ -473,6 +473,19 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .rq-email h3, .rq-email .rq-sub { margin-bottom: 0; }
 .request .rq-email .btn { grid-column: auto; }
 .request-next > .status:empty { display: none; }
+/* The one next step after submit: their report page. */
+.rq-next { border-color: rgba(127, 211, 163, .45); }
+.rq-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin: 16px 0 0; }
+.rq-actions[hidden], .rq-count[hidden], .rq-sub[hidden], .rq-list[hidden], .rq-toggle[hidden] { display: none; }
+.request .rq-actions .btn { padding: 14px 24px; }
+.rq-next .link-btn, .rq-toggle.link-btn { color: #fff; margin-left: 0; }
+.rq-toggle { display: inline-block; margin: 0 0 12px; }
+/* Paid path: which plan the form is for, and the way back to the free report. */
+.plan-chip { display: inline-block; margin: 0 0 12px; padding: 6px 12px; border-radius: 999px; background: rgba(127, 211, 163, .16); border: 1px solid rgba(127, 211, 163, .45); color: #D7F5E3; font-size: 14px; font-weight: 700; }
+.plan-chip[hidden], .plan-switch[hidden], .ts-help[hidden] { display: none; }
+.plan-switch { margin: 14px 0 0; }
+.plan-switch .link-btn { margin-left: 0; }
+.ts-help { color: #fff; font-size: 16px; font-weight: 600; margin: 14px 0 0; }
 /* Example questions in "How it works" (index.html; the Worker fills in the visitor's town). */
 .example-q { margin-top: 32px; max-width: 760px; }
 .example-q p { color: var(--muted); font-size: 17px; margin: 0 0 14px; }
@@ -531,8 +544,6 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .live-answer mark { background: #FFE58A; color: inherit; padding: 0 2px; border-radius: 3px; font-weight: 700; }
 .live-cites { color: #C8D6E8; font-size: 14px; margin: 12px 0 0; overflow-wrap: anywhere; }
 .live-note { color: #A9BAD3; font-size: 13px; margin: 8px 0 0; }
-.live-msg { color: #FBE0DC; font-size: 15px; margin: 12px 0 0; }
-.live-msg:empty { display: none; }
 @media (max-width: 520px) {
   .live-answer { padding: 12px; font-size: 15px; max-height: 360px; }
 }

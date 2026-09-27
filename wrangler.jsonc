@@ -12,7 +12,7 @@
   ],
   // Daily at 14:00 UTC (10am New York): start the free 30-day re-check for every paid report that's due
   // (src/worker.js scheduled → src/lib/auto-scan.js startDueRechecks). Needs SUPABASE_SERVICE_KEY.
-  "triggers": { "crons": ["0 14 * * *"] },
+  "triggers": { "crons": ["0 14 * * *", "*/30 * * * *"] },
   // Per-IP brake on the public form endpoints (POST /api/request, GET /api/questions), src/lib/rate-limit.js.
   // 20 calls per minute per IP per endpoint: a real owner makes 1-3. Per Cloudflare location and
   // eventually consistent, so it stops floods, not the odd extra request.
@@ -36,7 +36,12 @@
     // Free-report requests (src/lib/auto-scan.js): "on" scans each verified request at once (Workers
     // Paid + supabase/v4_ladder.sql first); anything else queues it for Run now in /admin. Optional caps:
     // AUTO_SCAN_DAILY_MAX (default 25), AUTO_SCAN_DAILY_USD (default 20). Set here, not in the dashboard.
-    "AUTO_SCAN": "off"
+    "AUTO_SCAN": "off",
+    // Who gets "engine credits are low / out" emails (src/lib/alerts.js), comma-separated.
+    // Optional per-engine budgets for low warnings: CREDIT_BUDGET_GEMINI / _OPENAI / _ANTHROPIC /
+    // _PERPLEXITY = "<usd>@<YYYY-MM-DD>" (README "Credit alerts").
+    "ALERT_EMAILS": "bryan.fields@8threv.com,bryan@getaifoundscore.com",
+    "CREDIT_BUDGET_GEMINI": "20@2026-09-27"
   },
   // PR preview builds (Workers Builds on non-production branches). Wrangler requires this block and
   // never copies production vars or ratelimits into it. Preview-safe values: Cloudflare's always-pass

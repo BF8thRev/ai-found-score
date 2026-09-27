@@ -4,6 +4,7 @@
 
 import { resolveKeys } from '../../scanner/config.js';
 import { redact } from './redact.js';
+import { creditStatus } from '../lib/alerts.js';
 
 function supa(env) {
   const k = resolveKeys(env);
@@ -53,7 +54,11 @@ export async function loadDashboard(env) {
   const s = supa(env);
   if (!s) return { configured: false, data: {}, errors: {} };
   const keys = Object.keys(QUERIES);
-  const settled = await Promise.allSettled(keys.map((k) => get(env, s, QUERIES[k])));
+  // Credits (src/lib/alerts.js): the red/amber banner at the top. creditStatus never throws.
+  const [settled, credits] = await Promise.all([
+    Promise.allSettled(keys.map((k) => get(env, s, QUERIES[k]))),
+    creditStatus(env).catch(() => []),
+  ]);
   const data = {};
   const errors = {};
   settled.forEach((r, i) => {
@@ -61,6 +66,7 @@ export async function loadDashboard(env) {
     else errors[keys[i]] = redact(env, r.reason?.message || r.reason, 300);
   });
   data.kpis = Array.isArray(data.kpis) ? data.kpis[0] || null : null;
+  data.credits = credits;
   try {
     data.rechecks = await loadRechecks(env, s);
   } catch (e) {

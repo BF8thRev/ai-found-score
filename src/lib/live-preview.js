@@ -16,9 +16,12 @@
 //        this IP       >= PER_IP_DAILY attempts                 -> "try tomorrow"
 //        this request  >= PER_REQUEST_OK answers                -> "already asked"
 //      The IP is stored only as a keyed one-way code (ipCode), never the address.
-//   5. One engine call (cheapest with a key: PREVIEW_ORDER), ~40 s cap, no extractor call. Its cost
-//      is recorded as scan_usage {kind 'other', provider <engine>, answer_ref
-//      'live-preview:<request_id>:<question_id>:<ipcode>'}.
+//   5. One engine call (cheapest with a key: PREVIEW_ORDER), no extractor call, 40 s for the whole
+//      request. A quick failure (spent credits, an outage) moves on to the next engine when at least
+//      FALLBACK_MIN_MS is left (PREVIEW_ATTEMPTS in all); an engine that failed on billing is skipped
+//      for BILLING_SKIP_MS. The answering engine's cost is recorded as scan_usage {kind 'other',
+//      provider <engine>, answer_ref 'live-preview:<request_id>:<question_id>:<ipcode>'}; an engine
+//      that failed first gets its own row under 'live-preview-fallback:...' (spend, not a try).
 // Any failure -> 200 {ok:false, message} ("We'll include it in your full report.").
 //
 // Local testing: SCANNER_DRY_RUN=1 + a localhost request answers from the recorded fixtures and
@@ -30,15 +33,25 @@ import { ENGINES } from '../../scanner/engines/index.js';
 import { usageRow, saveUsage } from '../../scanner/store.js';
 import { turnstileConfigured } from './turnstile.js';
 import { displayText } from '../../scanner/answer-text.js';
+import { BILLING_ERROR_RE } from '../../scanner/engines/_common.js';
+import { noteBillingError } from './alerts.js';
 
 /** Cheapest first. */
 export const PREVIEW_ORDER = ['gemini', 'chatgpt', 'google_ai_mode', 'perplexity', 'claude'];
+/** The whole request's budget, from arrival to answer (the page waits CLIENT_WAIT_MS). */
 export const PREVIEW_TIMEOUT_MS = 40_000;
+export const CLIENT_WAIT_MS = 50_000;
+/** A fallback engine is only asked with at least this much time left: less almost always times out. */
+export const FALLBACK_MIN_MS = 20_000;
+/** An engine that just failed on billing (out of credits) is skipped for this long, per isolate. */
+export const BILLING_SKIP_MS = 10 * 60_000;
 export const DEFAULT_DAILY_USD = 1;
 export const PER_IP_DAILY = 3;
 export const PER_REQUEST_OK = 1;
 export const TOKEN_TTL_S = 60 * 60;
 export const REF_PREFIX = 'live-preview';
+/** usage rows for an engine that failed before another answered: counted in spend, not as a try. */
+export const FALLBACK_PREFIX = 'live-preview-fallback';
 
 export const MSG = {
   off: 'Live answers are switched off right now. We\'ll include every answer in your full report.',
@@ -69,10 +82,28 @@ export function dailyCapUsd(env) {
   return raw !== '' && Number.isFinite(n) && n >= 0 ? n : DEFAULT_DAILY_USD;
 }
 
+/** Every engine in PREVIEW_ORDER with a key, cheapest first. */
+export function previewEngines(env) {
+  const on = enginesConfigured(env);
+  return PREVIEW_ORDER.filter((e) => on[e] && ENGINES[e]);
+}
+
 /** First engine in PREVIEW_ORDER with a key, or null. */
 export function pickEngine(env) {
-  const on = enginesConfigured(env);
-  return PREVIEW_ORDER.find((e) => on[e] && ENGINES[e]) || null;
+  return previewEngines(env)[0] || null;
+}
+
+/** How many engines one preview may try: a quick failure (billing, outage) moves on to the next. */
+export const PREVIEW_ATTEMPTS = 2;
+
+/** engine → time until which it's skipped (it just said it's out of credits). Per isolate, best effort. */
+export const billingSkip = new Map();
+
+/** The engines one preview will try, in order: skipping any that just failed on billing, unless that's all of them. */
+export function previewTries(env, now = Date.now()) {
+  const all = previewEngines(env);
+  const fresh = all.filter((e) => !(billingSkip.get(e) > now));
+  return (fresh.length ? fresh : all).slice(0, PREVIEW_ATTEMPTS);
 }
 
 /**
@@ -278,6 +309,7 @@ function withTimeout(promise, ms) {
  *   limiter ({limit({key})} ; default env.PREVIEW_LIMITER), dryRun (skip Supabase), timeoutMs, waitUntil
  */
 export async function handleLivePreview(request, env, deps = {}) {
+  const started = (deps.clock || Date.now)();
   const now = deps.now ?? Date.now();
   const dryRun = !!deps.dryRun;
   const status = livePreviewStatus(env, { dryRun });
@@ -310,8 +342,13 @@ export async function handleLivePreview(request, env, deps = {}) {
   } catch { /* no town: treated as a bad request */ }
   if (!question) return reply({ ok: false, reason: 'bad', message: MSG.bad }, 400);
 
-  const engine = pickEngine(env);
+  // Cheapest engine first; one that failed on billing a moment ago is skipped for a while.
+  const tries = previewTries(env, now);
+  if (!tries.length) return soft(MSG.fallback, 'engine');
+  const engine = tries[0];
   const code = await ipCode(env, ip);
+  // Reserve for the dearest engine we might ask, so a fallback can't push spend past the cap.
+  const estimateUsd = Math.max(...tries.map((e) => priceCall(e, TYPICAL_CALL[e])));
 
   // Daily caps from scan_usage. Fail closed: if they can't be counted, nothing is spent.
   if (!dryRun) {
@@ -322,16 +359,14 @@ export async function handleLivePreview(request, env, deps = {}) {
       console.error('[live-preview] usage read failed', String(e?.message || e).slice(0, 200));
       return soft(MSG.fallback, 'store');
     }
-    const stop = capCheck(rows, {
-      capUsd: dailyCapUsd(env), requestId, ip: code, estimateUsd: priceCall(engine, TYPICAL_CALL[engine]),
-    });
+    const stop = capCheck(rows, { capUsd: dailyCapUsd(env), requestId, ip: code, estimateUsd });
     if (stop) return soft(stop.message, stop.reason);
   }
 
   // Reserve the estimated cost BEFORE spending, then re-count including every other reservation.
-  const estimateUsd = priceCall(engine, TYPICAL_CALL[engine]);
   const answerRef = `${REF_PREFIX}:${requestId}:${question.id}:${code}`;
-  const reservationId = (deps.uuid || (() => crypto.randomUUID()))();
+  const newId = deps.uuid || (() => crypto.randomUUID());
+  const reservationId = newId();
   if (!dryRun) {
     const reserved = await (deps.saveUsage || saveUsage)(env, [usageRow({
       id: reservationId, kind: 'other', provider: engine, model: null, costUsd: estimateUsd,
@@ -359,37 +394,73 @@ export async function handleLivePreview(request, env, deps = {}) {
   }
 
   const business = { name: tok.name, town: tok.town, state: tok.state, zip: tok.zip, trade: tok.trade };
-  const timeoutMs = deps.timeoutMs ?? PREVIEW_TIMEOUT_MS;
+  // One budget for the whole request, counted from when it arrived, so the page (which waits
+  // CLIENT_WAIT_MS) always hears back before it gives up.
+  const clock = deps.clock || Date.now;
+  const deadline = started + (deps.timeoutMs ?? PREVIEW_TIMEOUT_MS);
+  // If the first engine fails fast (out of credits, an outage), ask the next one, but only with
+  // enough time left for a real answer. A timeout ends it.
   let result;
-  try {
-    result = await withTimeout(ENGINES[engine].ask({
-      question: { id: question.id, text: question.text },
-      business,
-      env,
-      fetchImpl: deps.fetchImpl || fetch,
-      timeoutMs,
-      // Gemini: don't follow each citation redirect (up to a dozen extra subrequests); titles carry the domain.
-      resolveRedirects: false,
-      retries: 0,
-    }), timeoutMs);
-  } catch (e) {
-    result = { ok: false, error: `adapter error: ${e?.message || e}`, costUsd: 0 };
+  let used = engine;
+  const failed = []; // [{ engine, result }] engines that didn't answer before the one that did
+  for (const eng of tries) {
+    const left = deadline - clock();
+    if (failed.length && left < FALLBACK_MIN_MS) break;
+    if (left <= 0) break;
+    used = eng;
+    try {
+      result = await withTimeout(ENGINES[eng].ask({
+        question: { id: question.id, text: question.text },
+        business,
+        env,
+        fetchImpl: deps.fetchImpl || fetch,
+        timeoutMs: left,
+        // Gemini: don't follow each citation redirect (up to a dozen extra subrequests); titles carry the domain.
+        resolveRedirects: false,
+        retries: 0,
+      }), left);
+    } catch (e) {
+      result = { ok: false, error: `adapter error: ${e?.message || e}`, costUsd: 0 };
+    }
+    if (result?.ok && String(result.text || '').trim()) break;
+    const err = String(result?.error || 'failed');
+    console.warn('[live-preview] engine failed', eng, err.slice(0, 200));
+    if (BILLING_ERROR_RE.test(err)) {
+      billingSkip.set(eng, now + BILLING_SKIP_MS);
+      // Tell the owner now, not at the next cron (src/lib/alerts.js; at most one email a day per engine).
+      const alert = (deps.noteBillingError || noteBillingError)(env, eng, err).catch(() => {});
+      if (deps.waitUntil) deps.waitUntil(alert);
+    }
+    if (deps.onEngineError) deps.onEngineError(eng, err);
+    failed.push({ engine: eng, result });
+    if (result?.timedOut) break;
   }
+  const answered = !!(result?.ok && String(result.text || '').trim());
 
   if (!dryRun) {
     // A timed-out call reports cost 0 but the provider may still bill it: keep the estimate.
-    const cost = result?.timedOut ? estimateUsd : (result?.costUsd || 0);
-    const write = (deps.patchUsage || patchUsage)(env, reservationId, {
-      provider: engine, model: result?.model || null, cost_usd: cost,
-      ok: result?.ok === true, error: result?.ok ? null : String(result?.error || 'failed').slice(0, 500),
-    }).then((r) => { if (r && r.ok === false) console.error('[live-preview] usage update failed', String(r.error).slice(0, 200)); });
+    const costOf = (eng, r) => (r?.timedOut ? priceCall(eng, TYPICAL_CALL[eng]) : (r?.costUsd || 0));
+    // The reservation row stands for the engine that answered (or the last one tried); an engine
+    // that failed first gets its own row under a separate prefix, so its spend counts toward the
+    // cap under its own name without counting as another try for this visitor.
+    const earlier = answered ? failed : failed.slice(0, -1);
+    const writes = [(deps.patchUsage || patchUsage)(env, reservationId, {
+      provider: used, model: result?.model || null, cost_usd: costOf(used, result),
+      ok: answered, error: answered ? null : String(result?.error || 'failed').slice(0, 500),
+    })];
+    if (earlier.length) {
+      writes.push((deps.saveUsage || saveUsage)(env, earlier.map((f) => usageRow({
+        id: newId(), kind: 'other', provider: f.engine, model: f.result?.model || null, costUsd: costOf(f.engine, f.result),
+        ok: false, error: String(f.result?.error || 'failed').slice(0, 500), answerRef: `${FALLBACK_PREFIX}:${requestId}:${question.id}:${code}`,
+      }))));
+    }
+    const write = Promise.all(writes.map((w) => Promise.resolve(w).catch((e) => ({ ok: false, error: String(e?.message || e) }))))
+      .then((rs) => rs.forEach((r) => { if (r && r.ok === false) console.error('[live-preview] usage update failed', String(r.error).slice(0, 200)); }));
     if (deps.waitUntil) deps.waitUntil(write); else await write;
   }
 
-  if (!result?.ok || !String(result.text || '').trim()) {
-    console.warn('[live-preview] engine failed', engine, String(result?.error || '').slice(0, 200));
-    return soft(MSG.fallback, result?.timedOut ? 'timeout' : 'engine');
-  }
+  if (!answered) return soft(MSG.fallback, result?.timedOut ? 'timeout' : 'engine');
+  const answeredBy = used;
 
   const text = String(result.text);
   const ranges = nameRanges(text, tok.name);
@@ -397,8 +468,8 @@ export async function handleLivePreview(request, env, deps = {}) {
   const display = displayText(text);
   return reply({
     ok: true,
-    engine,
-    assistant: ENGINE_NAMES[engine] || engine,
+    engine: answeredBy,
+    assistant: ENGINE_NAMES[answeredBy] || answeredBy,
     question: question.text,
     questionId: question.id,
     answer: text,
