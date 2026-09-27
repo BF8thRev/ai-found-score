@@ -64,7 +64,7 @@ async function buyerEmails(env, s, token, fetchImpl) {
 
 /** Whether a token has a Be the Answer payment. */
 async function onPlan(env, s, token, fetchImpl) {
-  const rows = await read(env, s, `payments?report_token=eq.${encodeURIComponent(token)}&select=tier,amount_cents&limit=20`, fetchImpl);
+  const rows = await read(env, s, `payments?report_token=eq.${encodeURIComponent(token)}&revoked_at=is.null&select=tier,amount_cents&limit=20`, fetchImpl);
   return rows.some((r) => r.tier === 'be_the_answer' || ((!r.tier || r.tier === 'unknown') && r.amount_cents === 49900));
 }
 
@@ -131,7 +131,7 @@ export async function monthlyGooglePost(env, s, planToken, fetchImpl, now = new 
   if (!saved?.details) return null;
   const v = validateDetails(saved.details);
   if (!v.details) return null;
-  const [paid] = await read(env, s, `payments?report_token=eq.${encodeURIComponent(planToken)}&or=(tier.eq.be_the_answer,amount_cents.eq.49900)&select=paid_at&order=paid_at.asc&limit=1`, fetchImpl).catch(() => []);
+  const [paid] = await read(env, s, `payments?report_token=eq.${encodeURIComponent(planToken)}&or=(tier.eq.be_the_answer,amount_cents.eq.49900)&revoked_at=is.null&select=paid_at&order=paid_at.asc&limit=1`, fetchImpl).catch(() => []);
   const start = paid?.paid_at ? new Date(paid.paid_at) : now;
   const i = (now.getUTCFullYear() * 12 + now.getUTCMonth()) - (start.getUTCFullYear() * 12 + start.getUTCMonth());
   return googlePosts(v.details, { start })[Math.min(Math.max(i, 0), PLAN_MONTHS - 1)] || null;

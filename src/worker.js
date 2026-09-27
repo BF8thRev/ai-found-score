@@ -67,6 +67,7 @@ import { handleZip } from './lib/zip.js';
 import { handleFixKit } from './lib/fix-kit-route.js';
 import { handlePlan } from './lib/plan-route.js';
 import { handleCheckout } from './lib/checkout.js';
+import { handleRefundEvent, REFUND_EVENTS } from './lib/refunds.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 
@@ -556,6 +557,19 @@ async function handleStripeWebhook(request, env) {
   // A sandbox secret may only ever vouch for sandbox events.
   if (viaTestSecret && event.livemode !== false) {
     return Response.json({ error: 'Invalid signature' }, { status: 400 });
+  }
+
+  // A refund or lost dispute takes back what the payment unlocked (src/lib/refunds.js). 500 on a
+  // failed write so Stripe retries.
+  if (REFUND_EVENTS.includes(event.type)) {
+    try {
+      const result = await handleRefundEvent(env, event);
+      console.log('[webhook] refund', event.type, JSON.stringify(result));
+      return Response.json({ received: true });
+    } catch (e) {
+      console.error('[webhook] refund write failed', e);
+      return Response.json({ error: 'Refund write failed' }, { status: 500 });
+    }
   }
 
   // A checkout counts once the money is in: card payments are 'paid' at

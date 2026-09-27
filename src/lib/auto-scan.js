@@ -613,7 +613,7 @@ export function readDuePayments(env, nowMs, { fetchImpl = fetch } = {}) {
   const until = new Date(nowMs - RECHECK_DAYS * 86400_000).toISOString();
   const since = new Date(nowMs - (RECHECK_DAYS + RECHECK_WINDOW_DAYS) * 86400_000).toISOString();
   const { base, headers } = supa(env);
-  const q = `tier=in.(${FULL_SCAN_TIERS.join(',')})&livemode=eq.true&report_token=not.is.null&paid_at=lte.${encodeURIComponent(until)}&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=200`;
+  const q = `tier=in.(${FULL_SCAN_TIERS.join(',')})&livemode=eq.true&revoked_at=is.null&report_token=not.is.null&paid_at=lte.${encodeURIComponent(until)}&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=200`;
   return fetchImpl(`${base}/payments?${q}`, { headers, signal: AbortSignal.timeout(8000) }).then(async (res) => {
     if (!res.ok) throw new Error(`payments read failed: ${res.status}`);
     return res.json();
@@ -688,7 +688,7 @@ export function planMonthDue(paidAtMs, nowMs) {
 export function readPlanPayments(env, nowMs, { fetchImpl = fetch } = {}) {
   const since = new Date(nowMs - ((PLAN_MONTHS * MONTH_DAYS) + RECHECK_WINDOW_DAYS) * 86400_000).toISOString();
   const { base, headers } = supa(env);
-  const q = `or=(tier.eq.${PLAN_TIER},amount_cents.eq.49900)&livemode=eq.true&report_token=not.is.null&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=500`;
+  const q = `or=(tier.eq.${PLAN_TIER},amount_cents.eq.49900)&livemode=eq.true&revoked_at=is.null&report_token=not.is.null&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=500`;
   return fetchImpl(`${base}/payments?${q}`, { headers, signal: AbortSignal.timeout(8000) }).then(async (res) => {
     if (!res.ok) throw new Error(`payments read failed: ${res.status}`);
     return res.json();

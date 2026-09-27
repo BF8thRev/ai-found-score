@@ -252,7 +252,7 @@ function refundsSection(d, errors) {
   const rows = d.refunds || [];
   return `<section id="refunds">
   <h2>Refund requests</h2>
-  <p class="sub">“If we can’t show you 3 things to fix, it’s free.” Check the report, refund the payment in Stripe, then set the row’s status (open → refunded or declined) in Supabase.</p>
+  <p class="sub">Check the report, then refund the payment in Stripe. A full refund locks the report again and marks this row refunded on its own (src/lib/refunds.js); set declined by hand in Supabase.</p>
   ${sectionError(errors, 'refunds')}
   ${rows.length ? `<div class="tw"><table>
     <thead><tr><th>When</th><th>Email</th><th>Reason</th><th>Status</th><th>Report</th><th>Payment</th></tr></thead>

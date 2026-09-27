@@ -38,7 +38,7 @@ function supa(env) {
 /** The first Be the Answer payment's date for a token, or null. */
 async function planStartedAt(env, token, fetchImpl) {
   const { base, headers } = supa(env);
-  const res = await fetchImpl(`${base}/payments?report_token=eq.${encodeURIComponent(token)}&or=(tier.eq.${PLAN_TIER},amount_cents.eq.49900)&select=paid_at&order=paid_at.asc&limit=1`, { headers });
+  const res = await fetchImpl(`${base}/payments?report_token=eq.${encodeURIComponent(token)}&or=(tier.eq.${PLAN_TIER},amount_cents.eq.49900)&revoked_at=is.null&select=paid_at&order=paid_at.asc&limit=1`, { headers });
   if (!res.ok) return null;
   const [row] = await res.json();
   return row?.paid_at || null;

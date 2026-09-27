@@ -24,8 +24,9 @@
     { "name": "PREVIEW_LIMITER", "namespace_id": "1002", "simple": { "limit": 3, "period": 60 } }
   ],
   // Plain vars live here: `wrangler deploy` replaces dashboard Text vars with
-  // this block. Secrets (SUPABASE_ANON_KEY, STRIPE_WEBHOOK_SECRET) stay in the
-  // dashboard and survive deploys.
+  // this block. Secrets stay in the dashboard and survive deploys: SUPABASE_ANON_KEY,
+  // SUPABASE_SERVICE_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY, TURNSTILE_SECRET_KEY,
+  // ADMIN_TOKEN, GOOGLE_PLACES_API_KEY and the engine keys (README "Env vars").
   // TURNSTILE_SITE_KEY is public (it goes into the page): the owner's widget in Cloudflare
   // dashboard -> Turnstile (Managed; aifoundscore.com, www.aifoundscore.com). Its secret is the Worker
   // secret TURNSTILE_SECRET_KEY (`npx wrangler secret put TURNSTILE_SECRET_KEY`), never in this file.

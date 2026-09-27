@@ -28,6 +28,12 @@ function fakeFetch(reply) {
   fn.calls = calls;
   return fn;
 }
+// Never answers; only the abort signal ends it. AbortSignal.timeout's timer doesn't keep Node's event
+// loop alive, so a ref'd timer does until the abort (otherwise the runner exits and cancels the file).
+const hangUntilAbort = (init) => new Promise((_, reject) => {
+  const alive = setInterval(() => {}, 1000);
+  init.signal.addEventListener('abort', () => { clearInterval(alive); reject(init.signal.reason); });
+});
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const good = (over = {}) => json({ success: true, 'error-codes': [], hostname: HOST, action: REQUEST_ACTION, ...over });
 
@@ -76,10 +82,7 @@ test('siteverify: missing / oversized token never calls Cloudflare', async () =>
 });
 
 test('siteverify: timeout fails closed after one retry with the same idempotency key', async () => {
-  // Never answers; only the abort signal ends it.
-  const f = fakeFetch((i, p, init) => new Promise((_, reject) => {
-    init.signal.addEventListener('abort', () => reject(init.signal.reason));
-  }));
+  const f = fakeFetch((i, p, init) => hangUntilAbort(init));
   const started = Date.now();
   const r = await verifyTurnstile({ ...base, fetchImpl: f, timeoutMs: 30 });
   assert.deepEqual(r, { ok: false, reason: 'unavailable' });
@@ -198,7 +201,7 @@ test('request: token solved on another hostname -> 403, nothing saved', async ()
 });
 
 test('request: siteverify timeout -> 503 with a friendly message, nothing saved', async () => {
-  const d = deps({ verify: (i, p, init) => new Promise((_, rej) => init.signal.addEventListener('abort', () => rej(init.signal.reason))) });
+  const d = deps({ verify: (i, p, init) => hangUntilAbort(init) });
   const res = await quiet(() => handleReportRequest(post({ ...FORM, 'cf-turnstile-response': 'tok' }), URL_, CONFIGURED, d));
   assert.equal(res.status, 503);
   assert.deepEqual(await res.json(), { ok: false, error: BOT_CHECK_UNAVAILABLE });

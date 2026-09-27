@@ -207,6 +207,8 @@ export async function recordPayment(env, payment) {
     tier: payment.tier ?? 'unknown',
     amount_cents: payment.amountCents ?? null,
     stripe_session_id: payment.stripeSessionId ?? null,
+    // How a refund or dispute event finds this row (supabase/v9_refunds.sql, src/lib/refunds.js).
+    stripe_payment_intent: payment.stripePaymentIntent ?? null,
     livemode: payment.livemode ?? true,
     // The checkout email, for the receipt, the full-audit and 30-day re-check emails (supabase/v7_email.sql).
     customer_email: payment.customerEmail ? String(payment.customerEmail).trim().toLowerCase().slice(0, 200) : null,
@@ -451,10 +453,10 @@ export async function getPaidTiers(env, token) {
   return [...tiers];
 }
 
-/** Every payment on a report token: [{ tier, amount_cents, addons, livemode }]. Service key. */
+/** Every payment on a report token that isn't refunded in full: [{ tier, amount_cents, addons, livemode }]. Service key. */
 export async function getPayments(env, token) {
   const s = supaService(env);
-  const res = await fetch(`${s.base}/${TABLES.PAYMENTS}?report_token=eq.${encodeURIComponent(token)}&select=tier,amount_cents,addons,livemode`, { headers: s.headers });
+  const res = await fetch(`${s.base}/${TABLES.PAYMENTS}?report_token=eq.${encodeURIComponent(token)}&revoked_at=is.null&select=tier,amount_cents,addons,livemode`, { headers: s.headers });
   if (!res.ok) throw new Error(`Supabase GET payments failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
   return res.json();
 }
