@@ -40,7 +40,7 @@ import {
   recordPayment, recordUnsubscribe, recordVisit, recordLead,
   getReport, getReportLink, isReportUnlocked, getPaidTiers,
 } from './lib/db.js';
-import { freeQuestions, normalizeTrade } from '../scanner/questions.js';
+import { handleQuestions } from './lib/questions-route.js';
 import { handleReportRequest } from './lib/report-request.js';
 import { turnstileConfigured, turnstileSiteKey } from './lib/turnstile.js';
 import { rateLimit } from './lib/rate-limit.js';
@@ -387,24 +387,8 @@ async function handleLead(request, env) {
   return Response.json({ ok: true });
 }
 
-const TOWN_RE = /^[\p{L}\p{M}0-9 .,'’-]{1,60}$/u;
+// GET /api/questions lives in src/lib/questions-route.js.
 
-// The exact questions the free scan asks for this trade and town, built
-// from the scanner's own templates. Pure function of the query: no DB, no keys.
-function handleQuestions(url) {
-  const p = url.searchParams;
-  const trade = normalizeTrade(String(p.get('trade') || '').slice(0, 40));
-  const town = String(p.get('town') || '').trim().replace(/\s+/g, ' ').replace(/,\s*[A-Za-z]{2}$/, '');
-  const zip = String(p.get('zip') || '').trim();
-  const state = String(p.get('state') || 'NY').trim();
-  const bad = (error) => Response.json({ ok: false, error }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
-  if (!trade) return bad('Unknown trade.');
-  if (!TOWN_RE.test(town)) return bad('Please enter your town.');
-  if (zip && !/^\d{5}$/.test(zip)) return bad('ZIP must be 5 digits.');
-  if (!/^[A-Za-z]{2}$/.test(state)) return bad('State must be a 2-letter code.');
-  const questions = freeQuestions({ trade, town, zip, state }).map(({ id, intent, text }) => ({ id, intent, text }));
-  return Response.json({ ok: true, trade, questions }, { headers: { 'Cache-Control': 'public, max-age=300' } });
-}
 
 // POST /api/request lives in src/lib/report-request.js (Turnstile-checked).
 

@@ -20,7 +20,8 @@
 
 import { notifyRequestEmail } from './notify.js';
 import { recordReportRequest, attachReportRequestEmail } from './db.js';
-import { normalizeTrade } from '../../scanner/questions.js';
+import { tradeOrKind } from '../../scanner/questions.js';
+import { guessKind } from '../../scanner/kind.js';
 import { turnstileConfigured, verifyTurnstile, warnUnconfiguredOnce, REQUEST_ACTION } from './turnstile.js';
 import { livePreviewStatus, signPreviewToken } from './live-preview.js';
 import { startRequestScan } from './auto-scan.js';
@@ -94,7 +95,8 @@ export async function handleReportRequest(request, url, env, deps = {}) {
     // Couldn't attach: fall through and save a fresh row with the email (Turnstile-checked below).
   }
 
-  const rawTrade = clean(data.trade, 40);
+  // A button, else the words typed in "Something else" (the no-JS form posts both).
+  const rawTrade = clean(data.trade || data.trade_other, 40);
   const zip = clean(data.zip, 10);
   const state = clean(data.state, 2).toUpperCase() || 'NY';
   const req = {
@@ -104,7 +106,7 @@ export async function handleReportRequest(request, url, env, deps = {}) {
     zip: zip || null,
     state: /^[A-Z]{2}$/.test(state) ? state : 'NY',
     email: emailOk ? email : null,
-    trade: normalizeTrade(rawTrade) || rawTrade || null,
+    trade: tradeOrKind(rawTrade) || guessKind(data.business_name) || null,
     website: clean(data.website, 160) || null,
     phone: clean(data.phone, 30) || null,
     userAgent: request.headers.get('User-Agent') || null,

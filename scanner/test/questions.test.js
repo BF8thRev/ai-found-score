@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildQuestions, normalizeTrade, TRADES, INTENTS } from '../questions.js';
+import { buildQuestions, normalizeTrade, tradeOrKind, TRADES, INTENTS } from '../questions.js';
 
 const laundromat = { name: 'Fictional Wash', trade: 'laundromat', town: 'North Babylon', nearbyTown: 'Deer Park', state: 'NY', zip: '11703' };
 
@@ -68,6 +68,19 @@ test('unknown trade still yields 5 plain questions', () => {
   const qs = buildQuestions({ trade: 'Pest Control', town: 'Bethpage', state: 'NY' });
   assert.equal(qs[0].text, "What's the best pest control in Bethpage, NY?");
   assert.equal(qs.length, 5);
+  const bakery = buildQuestions({ trade: 'bakery', town: 'Bohemia', state: 'NY' }).map((q) => q.text);
+  assert.deepEqual(bakery.slice(0, 3), ["What's the best bakery in Bohemia, NY?", 'Bakery open now near Bohemia NY', 'Can you recommend a bakery in Bohemia NY?']);
+  assert.equal(buildQuestions({ trade: 'insurance agency', town: 'Islip' })[2].text, 'Can you recommend an insurance agency in Islip NY?');
+});
+
+test('tradeOrKind: known trades, else the plain words the owner typed, never junk', () => {
+  assert.equal(tradeOrKind('Plumber'), 'plumbing');
+  assert.equal(tradeOrKind('  Bakery '), 'bakery');
+  assert.equal(tradeOrKind('Nail salon'), 'nail salon');
+  assert.equal(tradeOrKind('Arts & crafts'), 'arts & crafts');
+  assert.equal(tradeOrKind(''), null);
+  assert.equal(tradeOrKind('<script>'), null);
+  assert.equal(tradeOrKind('x'.repeat(41)), null);
 });
 
 test('town is required', () => {
