@@ -310,6 +310,17 @@ test('statusFromRows: running / queued / failed-or-blocked waits for a person', 
   assert.equal(statusFromRows([{ status: 'done', report_valid: true, errors: [{ kind: 'store' }] }]), 'queued');
 });
 
+test('statusFromRows: once paid, the paid scan decides, not the request row queued on the way to checkout', () => {
+  const queuedReq = { trigger: 'request', status: 'queued' };
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'running' }, queuedReq]), 'paid');
+  // First paid attempt failed: the cron retries it, so it still reads as being made.
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'failed' }, queuedReq]), 'paid');
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'done', report_valid: false }, queuedReq]), 'paid');
+  // Both paid attempts failed: the page says so (a person has been alerted).
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'failed' }, { trigger: 'paid', status: 'failed' }, queuedReq]), 'failed');
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'done', report_valid: true }, queuedReq]), 'paid');
+});
+
 test('pendingReportStatus: reads the token\'s scans rows; unknown tokens are null (404)', async () => {
   const db = fakeDb();
   const env = baseEnv();

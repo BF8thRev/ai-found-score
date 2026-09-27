@@ -53,7 +53,7 @@ import {
   pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent,
   retryFailedScans, startAbandonedCheckout, REQUEST_TOKEN_RE,
 } from './lib/auto-scan.js';
-import { sendCreditAlerts } from './lib/alerts.js';
+import { sendCreditAlerts, sendPaidScanAlert } from './lib/alerts.js';
 
 /** wrangler.jsonc triggers: this one is the half-hourly recovery + credit check; the other is daily. */
 const RECOVERY_CRON = '*/30 * * * *';
@@ -616,6 +616,10 @@ async function handleStripeWebhook(request, env) {
   // same token. Never fails the webhook (the payment is recorded); a miss shows in the log and /admin.
   const full = await startPaidScan(env, { token: reportToken, sessionId: session.id, tier: tierForSession(session) });
   console.log('[webhook] full scan', JSON.stringify(full));
+  // A paid audit that didn't start has no scans row, so no cron will retry it: tell a person.
+  if (!full.ok && !['tier', 'already'].includes(full.reason)) {
+    await sendPaidScanAlert(env, { token: reportToken, stage: 'start', reason: full.reason, key: session.id });
+  }
   // The receipt (src/lib/notify.js). Nothing is sent until RESEND_API_KEY is set.
   const addons = String(session.metadata?.addons || '').split(',').filter((a) => a === 'competitor_breakdown');
   const receipt = await notifyPayment(env, { token: reportToken, email: session.customer_details?.email, tier: tierForSession(session), addons, sessionId: session.id });

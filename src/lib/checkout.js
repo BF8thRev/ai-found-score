@@ -110,7 +110,10 @@ export function sessionForm({ items, credit, token, tier, addons, origin, prepay
   const f = new URLSearchParams();
   f.set('mode', 'payment');
   f.set('client_reference_id', token);
-  f.set('success_url', `${origin}/success?tier=${encodeURIComponent(tier)}&session_id={CHECKOUT_SESSION_ID}`);
+  // t: the report link, so /success works on any device (not only where localStorage has it);
+  // v: dollars charged, for the purchase event (public/js/analytics.js).
+  const charged = Math.max(0, (items || []).reduce((sum, i) => sum + (Number(i.cents) || 0), 0) - (Number(credit) || 0)) / 100;
+  f.set('success_url', `${origin}/success?tier=${encodeURIComponent(tier)}&t=${encodeURIComponent(token)}&v=${charged}${prepay ? '&prepay=1' : ''}&session_id={CHECKOUT_SESSION_ID}`);
   // Left checkout before a report existed: /api/checkout/cancel starts the free report, then shows it.
   f.set('cancel_url', prepay ? `${origin}/api/checkout/cancel?t=${encodeURIComponent(token)}` : `${origin}/report/${encodeURIComponent(token)}`);
   if (prepay) f.set('metadata[prepay]', '1');

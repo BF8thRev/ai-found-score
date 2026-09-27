@@ -38,7 +38,7 @@ import {
 } from './admin/scan-core.js';
 import { dryRunEnabled, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 import { redact } from './admin/redact.js';
-import { isBillingError, noteBillingError } from './lib/alerts.js';
+import { isBillingError, noteBillingError, sendPaidScanAlert } from './lib/alerts.js';
 
 // Batch sizes and retry counts live in scan-core.js (shared with scanner/run.js, the local runner).
 // Attempts are counted by ctx.attempt (1-indexed). A step retries only by throwing, and it throws
@@ -305,6 +305,12 @@ export class ScanWorkflow extends WorkflowEntrypoint {
         await step.do('email', STEP_DB, async () => notifyScanDone(env, { trigger: p.trigger, token: build.reportToken, scanId }, { fetchImpl }))
           .catch((e) => console.error('[email] scan-done step failed', safe(e)));
       }
+      // A paid audit that finished without a valid report: the buyer is waiting (src/lib/alerts.js).
+      if (store && !dry && p.trigger === 'paid' && !(build.saved && build.valid)) {
+        await step.do('paid alert', STEP_DB, async () => sendPaidScanAlert(env, {
+          token: build.reportToken || p.reportToken, stage: 'scan', reason: `report not saved: ${(build.errors || []).slice(0, 3).join('; ') || 'invalid'}`, key: scanId,
+        }, { fetchImpl })).catch(() => {});
+      }
       return fin;
     } catch (e) {
       const message = safe(e);
@@ -317,6 +323,10 @@ export class ScanWorkflow extends WorkflowEntrypoint {
         }
         return { ok: true };
       }).catch(() => {});
+      if (store && !dry && p.trigger === 'paid') {
+        await step.do('paid alert', STEP_DB, async () => sendPaidScanAlert(env, { token: p.reportToken, stage: 'scan', reason: message, key: scanId }, { fetchImpl }))
+          .catch(() => {});
+      }
       throw new Error(message);
     }
   }

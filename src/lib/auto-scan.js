@@ -134,6 +134,13 @@ export function statusFromRows(rows) {
   if (!list.length) return null;
   const running = list.filter((r) => r.status === 'running');
   if (running.length) return running.some((r) => r.trigger === 'paid') ? 'paid' : 'running';
+  // Paid for: the paid scan decides, not the free request row left queued on the way to checkout.
+  // A failed paid attempt is retried once by the cron (still 'paid'); after MAX_ATTEMPTS it's 'failed'.
+  const paid = list.filter((r) => r.trigger === 'paid');
+  if (paid.length) {
+    if (paid.some((r) => r.status === 'queued' || (r.status === 'done' && r.report_valid === true))) return 'paid';
+    return paid.length >= MAX_ATTEMPTS ? 'failed' : 'paid';
+  }
   if (list.some((r) => r.status === 'queued')) return 'queued';
   const storeFailed = (r) => (Array.isArray(r.errors) ? r.errors : []).some((e) => e && e.kind === 'store');
   // Done and valid: the report row is being written (or the read raced it).
