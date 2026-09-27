@@ -66,7 +66,7 @@ import { handleProof } from './lib/proof.js';
 import { handleZip } from './lib/zip.js';
 import { handleFixKit } from './lib/fix-kit-route.js';
 import { handlePlan } from './lib/plan-route.js';
-import { handleCheckout } from './lib/checkout.js';
+import { handleCheckout, SHOWCASE_TOKENS } from './lib/checkout.js';
 import { handleRefundEvent, REFUND_EVENTS } from './lib/refunds.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
@@ -304,7 +304,10 @@ async function handleGetReport(id, url, env, dryRun = false) {
   }
   try {
     report = await getReport(env, id, MOCK_REPORTS);
-    if (report && !isSample) {
+    // The showcase (homepage "See what you get: a real full report") is open to everyone, like the sample.
+    if (report && SHOWCASE_TOKENS.includes(id)) {
+      unlocked = true;
+    } else if (report && !isSample) {
       // If the check itself fails, show the locked page rather than an error.
       unlocked = await isReportUnlocked(env, id).catch((e) => {
         console.error('[report] unlock check failed', e);
@@ -343,7 +346,7 @@ async function handleGetReport(id, url, env, dryRun = false) {
   const onPlan = tiers.includes('be_the_answer');
   // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
   // The sample shows the Competitor Breakdown too, as a demo.
-  const body = reportBody(report, unlocked, { breakdown: isSample || tiers.some((t) => BREAKDOWN_TIERS.includes(t)) });
+  const body = reportBody(report, unlocked, { breakdown: isSample || SHOWCASE_TOKENS.includes(id) || tiers.some((t) => BREAKDOWN_TIERS.includes(t)) });
   // Be the Answer: the page links to the plan (and its Fix Kit) instead of offering the plan again.
   if (onPlan) body.plan = { token: planToken || id, town: !!planToken };
   // Paid, and the full scan (every question, every assistant) is still running: the page says so.

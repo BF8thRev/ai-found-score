@@ -45,7 +45,8 @@ export const MIN_CENTS = 100;
 const AUDIT_TIERS = ['xray', 'fix_kit', 'be_the_answer'];
 /** Plans that can be bought before the report exists (the paid path from the pricing buttons). */
 export const PREPAY_TIERS = ['xray', 'be_the_answer'];
-const SHOWCASE_TOKENS = ['mega-wash-and-dry'];
+/** Real reports shown in full to everyone (homepage "See what you get"); never sold. */
+export const SHOWCASE_TOKENS = ['mega-wash-and-dry'];
 const TOKEN_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const json = (body, status = 200) => Response.json(body, { status, headers: NO_STORE });
