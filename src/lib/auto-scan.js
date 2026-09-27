@@ -458,9 +458,10 @@ export function pickRecoveries(rows, { now = Date.now(), autoScan = false } = {}
   }
   const out = [];
   for (const [token, list] of byToken) {
-    const busy = list.some((r) => r.status === 'running' || (r.status === 'done' && r.report_valid === true && !storeFailed(r)));
-    if (busy) continue;
+    // Paid for: only the paid rows decide (the free report that came first is done, not busy).
     const paid = list.filter((r) => r.trigger === 'paid');
+    const busy = (paid.length ? paid : list).some((r) => r.status === 'running' || (r.status === 'done' && r.report_valid === true && !storeFailed(r)));
+    if (busy) continue;
     if (paid.length) {
       if (paid.length < MAX_ATTEMPTS && paid.every(attemptFailed)) out.push({ kind: 'paid-retry', id: paid[0].id, token });
       continue;
@@ -572,7 +573,7 @@ export async function startPaidScan(env, { token, sessionId, tier }, { fetchImpl
  * `trigger` 'paid' (after payment) or 'recheck' (30 days later); one of each per token. Throws on
  * a store failure; a workflow that won't start marks the row failed and returns { ok: false }.
  */
-async function startFullScan(env, { token, trigger, scanId, notes, business: given = null }, { fetchImpl }) {
+export async function startFullScan(env, { token, trigger, scanId, notes, business: given = null }, { fetchImpl = (...a) => fetch(...a) } = {}) {
   if (!env.SCAN_WORKFLOW) return { ok: false, reason: 'no-workflow' };
   if (!canStore(env)) return { ok: false, reason: 'no-store' };
   // 'paid' and 'recheck' run once per token; a 'monthly' scan once per scan id (one per month).
@@ -650,7 +651,12 @@ export async function startDueRechecks(env, { now = Date.now(), fetchImpl = (...
   for (const token of tokens) {
     if (out.started.length >= RECHECK_MAX_PER_RUN) { skip('max-per-run'); continue; }
     try {
-      const r = await startFullScan(env, { token, trigger: 'recheck', scanId: await stableUuid(`recheck-scan:${token}`), notes: '30-day re-check' }, { fetchImpl });
+      // Workflow ids are single-use: a retry after a failed re-check needs a new one. MAX_ATTEMPTS in all.
+      const tries = (await readByToken(env, token, { fetchImpl })).filter((r) => r.trigger === 'recheck');
+      if (tries.length >= MAX_ATTEMPTS && tries.every(attemptFailed)) { skip('gave-up'); continue; }
+      const n = tries.filter(attemptFailed).length + 1;
+      const scanId = await stableUuid(n === 1 ? `recheck-scan:${token}` : `recheck-scan:${token}:${n}`);
+      const r = await startFullScan(env, { token, trigger: 'recheck', scanId, notes: '30-day re-check' }, { fetchImpl });
       if (r.ok) out.started.push(token);
       else skip(r.reason.split(':')[0]);
     } catch (e) {

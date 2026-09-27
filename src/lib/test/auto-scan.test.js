@@ -451,6 +451,11 @@ test('paid scan: an attempt with no usable report (guardrails, not stored) is re
   Object.assign(db.rows.find((x) => x.id === first.scanId), { status: 'done', report_valid: false });
   const retry = await retryFailedScans(env, { now: Date.parse('2026-09-24T13:00:00Z'), fetchImpl: db.fetch });
   assert.deepEqual(retry.results.map((r) => `${r.kind}:${r.ok}`), ['paid-retry:true'], JSON.stringify(retry));
+  // Free report first, then paid: the finished free scan doesn't make a failed paid scan look busy.
+  assert.deepEqual(pickRecoveries([
+    { id: 'x1', report_token: 'X', trigger: 'paid', status: 'failed', created_at: at },
+    { id: 'x0', report_token: 'X', trigger: 'request', status: 'done', report_valid: true, created_at: at },
+  ], { now }).map((p) => `${p.kind}:${p.token}`), ['paid-retry:X']);
   // A paid scan that worked still blocks a second one.
   Object.assign(db.rows.find((x) => x.id === first.scanId), { status: 'done', report_valid: true });
   assert.equal((await startPaidScan(env, { token: q.token, sessionId: 'cs_r2', tier: 'xray' }, { fetchImpl: db.fetch })).reason, 'already');
@@ -513,6 +518,17 @@ test('30-day re-check: due live payments get one full rescan each; test mode, to
   const again = await startDueRechecks(env, { now: now + day, fetchImpl: db.fetch });
   assert.deepEqual(again.started, []);
   assert.equal(again.skipped.already, 1);
+  assert.equal(wf.params.trigger, 'recheck');
+  // A failed re-check is started once more under a new Workflow id (ids are single-use), then left.
+  const firstId = row.id;
+  row.status = 'failed';
+  const retry = await startDueRechecks(env, { now: now + day, fetchImpl: db.fetch });
+  assert.deepEqual(retry.started, [due.token]);
+  assert.notEqual(env.SCAN_WORKFLOW.created.at(-1).id, firstId);
+  db.rows.filter((x) => x.trigger === 'recheck').forEach((x) => { x.status = 'failed'; });
+  const gaveUp = await startDueRechecks(env, { now: now + 2 * day, fetchImpl: db.fetch });
+  assert.deepEqual(gaveUp.started, []);
+  assert.equal(gaveUp.skipped['gave-up'], 1);
   // Off switch.
   assert.equal((await startDueRechecks({ ...env, RECHECK_SCAN: 'off' }, { now, fetchImpl: db.fetch })).error, 'off');
 });
@@ -534,6 +550,8 @@ test('Be the Answer monthly scan: a failed month is started once more, then left
   const retry = await monthlyScanId(plan.token, 1, 2);
   assert.notEqual(retry, first);
   assert.equal(env.SCAN_WORKFLOW.created.at(-1).id, retry);
+  // The workflow runs it as 'monthly' (not 'admin'), so the monthly email goes out when it's done.
+  assert.equal(env.SCAN_WORKFLOW.created.at(-1).params.trigger, 'monthly');
   assert.equal(db.rows.find((x) => x.id === retry).notes, 'Be the Answer month 1');
   // The retry fails too: nothing more starts that month.
   db.rows.find((x) => x.id === retry).status = 'failed';

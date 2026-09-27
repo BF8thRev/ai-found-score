@@ -385,7 +385,7 @@ export async function noteBillingError(env, engine, errorText, deps = {}) {
 
 /** The alert email for a paid scan that didn't start or didn't finish. Pure. */
 export function paidScanAlertEmail(env, { token, stage, reason }) {
-  const admin = `${siteUrl(env)}/admin#scans`;
+  const admin = `${siteUrl(env)}/admin#run`;
   const report = token ? `${siteUrl(env)}/report/${encodeURIComponent(token)}` : '(no report token)';
   const what = stage === 'start' ? 'didn’t start' : 'failed';
   const subject = `Paid audit ${what}: a customer is waiting`;
@@ -394,13 +394,13 @@ export function paidScanAlertEmail(env, { token, stage, reason }) {
     `Report: ${report}`,
     `Reason: ${reason || 'unknown'}`,
     stage === 'start'
-      ? 'Nothing will retry this on its own. Open /admin and use Run now for this report.'
-      : 'A failed paid scan is retried once by the 30-minute cron; if this was the retry, use Run now in /admin.',
+      ? 'Nothing will retry this on its own. In /admin, "Re-run a paid audit" with this report\'s token.'
+      : 'A failed paid scan is retried once by the 30-minute cron; if this was the retry, use "Re-run a paid audit" in /admin with this report\'s token.',
     `Admin: ${admin}`,
   ].join('\n\n');
   const html = `<!doctype html><html><body style="font-family:sans-serif"><p><strong>A paid scan ${escHtml(what)}.</strong> The customer has paid and is waiting for their full audit.</p>
 <p>Report: <a href="${escHtml(report)}">${escHtml(report)}</a><br>Reason: ${escHtml(reason || 'unknown')}</p>
-<p>${stage === 'start' ? 'Nothing will retry this on its own. Use <strong>Run now</strong> in /admin for this report.' : 'A failed paid scan is retried once by the 30-minute cron; if this was the retry, use <strong>Run now</strong> in /admin.'}</p>
+<p>${stage === 'start' ? 'Nothing will retry this on its own. In /admin, use <strong>Re-run a paid audit</strong> with this report’s token.' : 'A failed paid scan is retried once by the 30-minute cron; if this was the retry, use <strong>Re-run a paid audit</strong> in /admin with this report’s token.'}</p>
 <p><a href="${escHtml(admin)}">Open /admin</a></p></body></html>`;
   return { subject, text, html };
 }

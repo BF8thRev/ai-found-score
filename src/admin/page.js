@@ -171,6 +171,12 @@ function runSection(d, { watch = [], engineIds, flash, activeIds = ACTIVE_ENGINE
     <div class="full"><button class="primary" type="submit">Start scan</button>
       <span class="small" id="run-estimate">Estimated cost: ${usd(est.total)} (typical usage)</span></div>
   </form>
+  <h3>Re-run a paid audit</h3>
+  <p class="sub">For a “Paid audit failed / didn’t start” alert: the full scan for that report, under the same link. Refused while one is running or already done.</p>
+  <form class="grid" method="post" action="/admin/scan/paid">
+    <label>Report token<input type="text" name="token" required pattern="[A-Za-z0-9_-]{6,64}" maxlength="64" placeholder="from the /report/… link"></label>
+    <div class="full"><button class="primary" type="submit">Re-run paid audit</button></div>
+  </form>
 </section>`;
 }
 
