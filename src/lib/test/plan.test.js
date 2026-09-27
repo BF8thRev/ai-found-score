@@ -10,7 +10,7 @@ import { buildCompetitorBreakdown } from '../../../shared/report-v2.js';
 import { lintText } from '../../../shared/report-v2.js';
 import { MOCK_REPORTS } from '../../mock/sample-reports.js';
 import { monthlyEmail } from '../email.js';
-import { topCompetitor } from '../notify.js';
+import { topCompetitor, competitorAlert } from '../notify.js';
 
 const v2 = MOCK_REPORTS['sample-001'];
 const details = validateDetails({ ...prefillDetails(v2), googleReviewUrl: 'https://g.page/r/abc/review' }).details;
@@ -166,4 +166,32 @@ test('monthly email: what changed, the competitor alert, the next 3 fixes and th
   assert.deepEqual(lintText(m.text).map((h) => h.match), []);
   assert.equal(topCompetitor([{ name: 'Me', isYou: true, named: 9 }, { name: 'A', named: 3, first: 1 }, { name: 'B', named: 3, first: 2 }, { name: 'C', named: 1 }]), 'B');
   assert.equal(topCompetitor([{ name: 'C', named: 1 }]), null);
+});
+
+test('competitor alert: only a real change of leader, never a tie flipping order or a first reading', () => {
+  const A3 = { name: 'Alpha Plumbing', named: 3, first: 1 };
+  const B3 = { name: 'Beta Plumbing', named: 3, first: 1 };
+  const C4 = { name: 'Gamma Plumbing', named: 4, first: 2 };
+  assert.deepEqual(competitorAlert([C4, A3], [A3, B3]), { now: 'Gamma Plumbing', before: 'Alpha Plumbing' });
+  assert.equal(competitorAlert([B3, A3], [A3]), null, 'Alpha is still tied for the lead');
+  assert.equal(competitorAlert([A3], [A3, B3]), null, 'Beta dropped out of a tie: not a new leader');
+  assert.equal(competitorAlert([C4], [{ name: 'Once Only', named: 1 }]), null, 'last time had no clear leader');
+  assert.equal(competitorAlert([], [A3]), null);
+  assert.equal(topCompetitor([B3, A3]), 'Alpha Plumbing', 'ties resolve the same way every time');
+});
+
+test('monthly email: a new town gets its own opener, and the month\'s Google post rides along', () => {
+  const env = { SITE_URL: 'https://aifoundscore.com' };
+  const t = monthlyEmail(env, { token: 'town1', planToken: 'tok', name: 'Otter Plumbing', town: 'Seaford', totals: { namedYou: 2, answers: 15 }, before: null, newTown: true });
+  assert.match(t.subject, /Your new town/);
+  assert.doesNotMatch(t.text, /asked the AI assistants again/);
+  assert.match(t.text, /Seaford/);
+  const m = monthlyEmail(env, {
+    token: 'tok', planToken: 'tok', name: 'Otter Plumbing', town: 'Wantagh', totals: { namedYou: 6, answers: 15 }, before: { namedYou: 6, answers: 15 },
+    post: { title: 'Who we are', text: 'Otter Plumbing is a plumber serving Wantagh. Call 516-555-0100.' },
+  });
+  assert.match(m.text, /Google post/);
+  assert.match(m.text, /Otter Plumbing is a plumber serving Wantagh/);
+  assert.deepEqual(lintText(m.text).map((h) => h.match), []);
+  assert.deepEqual(lintText(t.text).map((h) => h.match), []);
 });

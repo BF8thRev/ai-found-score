@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey,
   newRequestToken, requestScanId, autoScanOn, autoScanLimits, estimateRequestScanUsd, REQUEST_TOKEN_RE,
-  DRY_RUN_REQUESTS, startPaidScan, paidScanRunning, startDueRechecks,
+  DRY_RUN_REQUESTS, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, monthlyScanId,
 } from '../auto-scan.js';
 import { freeEngines, activeEngines } from '../../../scanner/config.js';
 import { handleReportRequest } from '../report-request.js';
@@ -44,6 +44,7 @@ function fakeDb(seed = [], reportSeed = [], paymentSeed = []) {
       // Repeated keys (paid_at=lte… & paid_at=gte…) are all applied.
       return Response.json(payments.filter((r) => match(r, params)));
     }
+    if (u.pathname.endsWith('/rest/v1/plan_towns')) return Response.json([]);
     if (u.pathname.endsWith('/rest/v1/scan_results')) {
       if (method === 'POST') { const body = JSON.parse(init.body); reports.push(body); return Response.json([body], { status: 201 }); }
       return Response.json(reports.filter((r) => match(r, params)).map((r) => ({ ...r })));
@@ -480,4 +481,29 @@ test('30-day re-check: due live payments get one full rescan each; test mode, to
   assert.equal(again.skipped.already, 1);
   // Off switch.
   assert.equal((await startDueRechecks({ ...env, RECHECK_SCAN: 'off' }, { now, fetchImpl: db.fetch })).error, 'off');
+});
+
+test('Be the Answer monthly scan: a failed month is started once more, then left for /admin', async () => {
+  const day = 86400_000;
+  const now = Date.parse('2026-11-01T14:00:00Z');
+  const env = baseEnv({ AUTO_SCAN: 'off' });
+  const seedDb = fakeDb();
+  const plan = await startRequestScan(env, req({ businessName: 'Plan Plumbing' }), { now: NOW, fetchImpl: seedDb.fetch });
+  const first = await monthlyScanId(plan.token, 1);
+  const db = fakeDb(
+    [...seedDb.rows, { id: first, report_token: plan.token, trigger: 'monthly', status: 'failed', created_at: new Date(now - day).toISOString() }],
+    [],
+    [{ report_token: plan.token, tier: 'be_the_answer', livemode: true, paid_at: new Date(now - 31 * day).toISOString() }],
+  );
+  const r = await startDueMonthly(env, { now, fetchImpl: db.fetch });
+  assert.deepEqual(r.started, [plan.token]);
+  const retry = await monthlyScanId(plan.token, 1, 2);
+  assert.notEqual(retry, first);
+  assert.equal(env.SCAN_WORKFLOW.created.at(-1).id, retry);
+  assert.equal(db.rows.find((x) => x.id === retry).notes, 'Be the Answer month 1');
+  // The retry fails too: nothing more starts that month.
+  db.rows.find((x) => x.id === retry).status = 'failed';
+  const again = await startDueMonthly(env, { now: now + day, fetchImpl: db.fetch });
+  assert.deepEqual(again.started, []);
+  assert.equal(again.skipped.already, 1);
 });

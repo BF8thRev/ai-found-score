@@ -34,16 +34,24 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /**
  * Send one email. → { ok: true, id } | { ok: false, reason }. Never throws.
  * `transactional: true` (receipts) skips the unsubscribe check; everything else is skipped for an
- * address that unsubscribed, and when the check itself fails.
+ * address that unsubscribed, a report token whose "Stop these emails" link was used, and when the
+ * check itself fails. `alsoTokens`: more report tokens whose stop link also stops this email (a
+ * Be the Answer plan's own report and its towns).
  */
-export async function sendEmail(env, { to, subject, text, html, idempotencyKey, token = null, transactional = false }, { fetchImpl = (...a) => fetch(...a) } = {}) {
+export async function sendEmail(env, { to, subject, text, html, idempotencyKey, token = null, alsoTokens = [], transactional = false }, { fetchImpl = (...a) => fetch(...a) } = {}) {
   try {
     if (!emailConfigured(env)) return { ok: false, reason: 'not configured' };
     const addr = String(to || '').trim().toLowerCase();
     if (!EMAIL_RE.test(addr)) return { ok: false, reason: 'bad address' };
     if (!transactional) {
       let suppressed = true;
-      try { suppressed = await isSuppressed(env, { email: addr }, fetchImpl); } catch { suppressed = true; }
+      try {
+        suppressed = await isSuppressed(env, { email: addr, ...(token ? { reportToken: token } : {}) }, fetchImpl);
+        for (const t of alsoTokens) {
+          if (suppressed) break;
+          if (t && t !== token) suppressed = await isSuppressed(env, { reportToken: t }, fetchImpl);
+        }
+      } catch { suppressed = true; }
       if (suppressed) return { ok: false, reason: 'suppressed' };
     }
     const unsub = `${siteUrl(env)}/unsubscribe${token ? `?t=${encodeURIComponent(token)}` : ''}`;
@@ -212,9 +220,10 @@ export function recheckEmail(env, { token, name, totals, before }) {
 /**
  * Be the Answer's monthly email (and its first re-check): what changed, an alert when the business AI
  * names most is a new one, and the next 3 fixes. `planToken` is the plan's own report (a town report's
- * parent), for the plan link.
+ * parent), for the plan link. `newTown`: a town's first scan, just added on /plan (nothing to compare
+ * yet). `post`: this month's ready-to-paste Google post { title, text } (src/lib/plan.js googlePosts), or null.
  */
-export function monthlyEmail(env, { token, planToken, name, town, totals, before, next3 = [], alert = null }) {
+export function monthlyEmail(env, { token, planToken, name, town, totals, before, next3 = [], alert = null, newTown = false, post = null }) {
   const n = named(totals);
   const b = named(before);
   let line = 'Your report shows this month’s answers.';
@@ -228,13 +237,18 @@ export function monthlyEmail(env, { token, planToken, name, town, totals, before
     line = `AI named you in ${n} answers.`;
   }
   const where = town ? ` in ${town}` : '';
-  const paragraphs = [`We asked the AI assistants again${where}.`, line];
+  const paragraphs = newTown
+    ? [`Your new town is on your plan. Here’s what AI says when customers${where} ask.`, n ? `AI named you in ${n} answers.` : 'Your report shows every answer.', 'We’ll ask again every month and tell you what changed.']
+    : [`We asked the AI assistants again${where}.`, line];
   if (alert) paragraphs.push(`Heads up: the business AI names most${where} is now ${alert.now}${alert.before ? ` (it was ${alert.before})` : ''}. Your report shows where they’re listed and you’re not.`);
   if (next3.length) paragraphs.push(`Your next ${next3.length === 1 ? 'fix' : `${next3.length} fixes`}:`, ...next3.map((t, i) => `${i + 1}. ${t}`));
+  if (post && post.text) paragraphs.push('This month’s Google post. Paste it into your Google Business Profile (Add update):', post.text);
   return layout({
-    subject: alert ? `Heads up: AI now names ${alert.now} most${where}` : `This month: what AI says about ${name || 'you'}${where}`,
+    subject: alert ? `Heads up: AI now names ${alert.now} most${where}`
+      : newTown ? `Your new town: what AI says about ${name || 'you'}${where}`
+        : `This month: what AI says about ${name || 'you'}${where}`,
     paragraphs,
-    button: 'See what changed',
+    button: newTown ? 'See your report' : 'See what changed',
     url: reportUrl(env, token),
     unsubUrl: unsubFor(env, token),
     note: `Your plan (directory checklist, Google posts, towns): ${siteUrl(env)}/plan/${encodeURIComponent(planToken || token)}`,
