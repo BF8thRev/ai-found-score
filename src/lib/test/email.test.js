@@ -98,3 +98,20 @@ test('notifyPayment: a receipt keyed by the checkout session', async () => {
   assert.equal(x.sent[0].headers['Idempotency-Key'], 'receipt:cs_1');
   assert.equal((await notifyPayment(ENV, { token: 'tok', email: null, tier: 'xray' }, { fetchImpl: x.fetch })).skipped, 'not configured');
 });
+
+test('sendEmail: "Stop these emails" on any of a plan\'s reports stops the others too', async () => {
+  const sent = [];
+  const stopped = new Set(['town_tok']);
+  const f = async (input, init = {}) => {
+    if (String(input) === RESEND_URL) { sent.push(JSON.parse(init.body)); return Response.json({ id: 'em' }); }
+    const u = new URL(String(input));
+    if (u.pathname.endsWith('/report_links')) return Response.json([]);
+    const or = u.searchParams.get('or') || '';
+    return Response.json([...stopped].some((t) => or.includes(t)) ? [{ id: 1 }] : []);
+  };
+  const mail = { to: 'owner@shop.com', subject: 's', text: 't', html: 'h' };
+  assert.equal((await sendEmail(ENV, { ...mail, token: 'plan_tok', alsoTokens: ['town_tok'] }, { fetchImpl: f })).reason, 'suppressed');
+  assert.equal((await sendEmail(ENV, { ...mail, token: 'town_tok' }, { fetchImpl: f })).reason, 'suppressed');
+  assert.equal((await sendEmail(ENV, { ...mail, token: 'plan_tok', alsoTokens: ['other_tok'] }, { fetchImpl: f })).ok, true);
+  assert.equal(sent.length, 1);
+});

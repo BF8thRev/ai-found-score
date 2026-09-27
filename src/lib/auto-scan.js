@@ -622,6 +622,27 @@ export async function startTownScan(env, { townToken, business }, { fetchImpl = 
   }
 }
 
+/** Attempts per (token, month): a month whose scan failed is started once more, under a second id. */
+export const MONTHLY_ATTEMPTS = 2;
+
+/** The scan id for attempt `attempt` (1-based) of month `month` on `token`. Attempt 1 keeps the original id. */
+export function monthlyScanId(token, month, attempt = 1) {
+  return stableUuid(attempt === 1 ? `monthly:${token}:${month}` : `monthly:${token}:${month}:${attempt}`);
+}
+
+/** Start month `month` for one report, retrying under the next id when an earlier attempt failed. */
+async function startMonthlyScan(env, { token, month, business }, { fetchImpl }) {
+  let r = { ok: false, reason: 'already' };
+  for (let attempt = 1; attempt <= MONTHLY_ATTEMPTS; attempt++) {
+    const scanId = await monthlyScanId(token, month, attempt);
+    r = await startFullScan(env, { token, trigger: 'monthly', scanId, notes: `Be the Answer month ${month}`, business }, { fetchImpl });
+    if (r.ok || r.reason !== 'already') return r;
+    const [row] = await readRows(env, `id=eq.${scanId}&select=status`, fetchImpl);
+    if (row?.status !== 'failed') return r;
+  }
+  return r;
+}
+
 /**
  * Start every monthly Be the Answer scan that's due: for each plan, month m (1..12, counted from the
  * payment), its own report and each extra town. Once per (token, month); skipped when that report
@@ -656,9 +677,7 @@ export async function startDueMonthly(env, { now = Date.now(), fetchImpl = (...a
         const recent = (await readByToken(env, t.token, { fetchImpl })).some((r) => ['paid', 'recheck', 'monthly'].includes(r.trigger)
           && r.status !== 'failed' && now - Date.parse(r.created_at) < MONTHLY_MIN_GAP_DAYS * 86400_000);
         if (recent) { skip('recent'); continue; }
-        const r = await startFullScan(env, {
-          token: t.token, trigger: 'monthly', scanId: await stableUuid(`monthly:${t.token}:${m}`), notes: `Be the Answer month ${m}`, business: t.business || null,
-        }, { fetchImpl });
+        const r = await startMonthlyScan(env, { token: t.token, month: m, business: t.business || null }, { fetchImpl });
         if (r.ok) out.started.push(t.token);
         else skip(r.reason.split(':')[0]);
       } catch (e) {

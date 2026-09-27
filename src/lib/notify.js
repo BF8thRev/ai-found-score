@@ -18,6 +18,8 @@ import {
   sendEmail, emailConfigured, reportReadyEmail, leadEmail, receiptEmail, fullAuditEmail, recheckEmail, monthlyEmail,
 } from './email.js';
 import { normalizeBizName } from '../../shared/report-v2.js';
+import { validateDetails } from './fix-kit.js';
+import { googlePosts, PLAN_MONTHS } from './plan.js';
 
 function supa(env) {
   const k = resolveKeys(env);
@@ -72,11 +74,34 @@ async function planParent(env, s, token, fetchImpl) {
   return row?.report_token || null;
 }
 
-/** The business AI named most in a stored report (not the owner), or null. */
-export function topCompetitor(entities) {
+/** Every business tied for "AI named it most" in a stored report (not the owner), best first; [] when none was named twice. */
+export function topCompetitors(entities) {
   const list = (Array.isArray(entities) ? entities : []).filter((e) => e && !e.isYou && e.name && (e.named || 0) >= 2);
-  list.sort((a, b) => (b.named || 0) - (a.named || 0) || (b.first || 0) - (a.first || 0));
-  return list[0]?.name || null;
+  list.sort((a, b) => (b.named || 0) - (a.named || 0) || (b.first || 0) - (a.first || 0) || String(a.name).localeCompare(String(b.name)));
+  if (!list.length) return [];
+  const [best] = list;
+  return list.filter((e) => (e.named || 0) === (best.named || 0) && (e.first || 0) === (best.first || 0)).map((e) => e.name);
+}
+
+/** The business AI named most in a stored report (not the owner), or null. Ties go to the first name alphabetically. */
+export function topCompetitor(entities) {
+  return topCompetitors(entities)[0] || null;
+}
+
+/**
+ * The monthly competitor alert: a new business now leads where another one led last time. None on a
+ * first scan, when last time had no clear leader, or when this month's and last month's leaders are
+ * tied (a tie flipping order is not news).
+ */
+export function competitorAlert(nowEntities, prevEntities) {
+  const now = topCompetitors(nowEntities);
+  const was = topCompetitors(prevEntities);
+  if (!now.length || !was.length) return null;
+  const norm = (list) => new Set(list.map((n) => normalizeBizName(n)));
+  const nowSet = norm(now);
+  const wasSet = norm(was);
+  if (now.some((n) => wasSet.has(normalizeBizName(n))) || was.some((n) => nowSet.has(normalizeBizName(n)))) return null;
+  return { now: now[0], before: was[0] };
 }
 
 /** For the monthly email: the town, the next 3 fixes, and an alert when the top competitor changed. */
@@ -87,10 +112,29 @@ export async function monthlyDetail(env, token, { fetchImpl = (...a) => fetch(..
   if (!rows.length) return null;
   const [now, prev] = rows;
   const next3 = (Array.isArray(now.issues) ? now.issues : []).map((i) => i && i.title).filter(Boolean).slice(0, 3);
-  const top = topCompetitor(now.entities);
-  const was = prev ? topCompetitor(prev.entities) : null;
-  const alert = top && prev && normalizeBizName(top) !== normalizeBizName(was || '') ? { now: top, before: was } : null;
+  const alert = prev ? competitorAlert(now.entities, prev.entities) : null;
   return { town: now.town || null, next3, alert };
+}
+
+/** Every report token on a plan: its own and each extra town's. A "Stop these emails" on any of them stops the plan's emails. */
+async function planTokens(env, s, planToken, fetchImpl) {
+  const rows = await read(env, s, `plan_towns?report_token=eq.${encodeURIComponent(planToken)}&select=town_token&limit=10`, fetchImpl).catch(() => []);
+  return [planToken, ...rows.map((r) => r.town_token).filter(Boolean)];
+}
+
+/**
+ * This month's Google post for a plan, the same one /plan shows for this calendar month:
+ * { month, title, text }, or null before the owner confirms their details.
+ */
+export async function monthlyGooglePost(env, s, planToken, fetchImpl, now = new Date()) {
+  const [saved] = await read(env, s, `fix_kit_details?report_token=eq.${encodeURIComponent(planToken)}&select=details&limit=1`, fetchImpl).catch(() => []);
+  if (!saved?.details) return null;
+  const v = validateDetails(saved.details);
+  if (!v.details) return null;
+  const [paid] = await read(env, s, `payments?report_token=eq.${encodeURIComponent(planToken)}&or=(tier.eq.be_the_answer,amount_cents.eq.49900)&select=paid_at&order=paid_at.asc&limit=1`, fetchImpl).catch(() => []);
+  const start = paid?.paid_at ? new Date(paid.paid_at) : now;
+  const i = (now.getUTCFullYear() * 12 + now.getUTCMonth()) - (start.getUTCFullYear() * 12 + start.getUTCMonth());
+  return googlePosts(v.details, { start })[Math.min(Math.max(i, 0), PLAN_MONTHS - 1)] || null;
 }
 
 /**
@@ -106,6 +150,7 @@ export async function notifyScanDone(env, { trigger, token, scanId }, { fetchImp
     if (!sum) return { sent: 0, skipped: 'no report' };
     let to = [];
     let mail;
+    let alsoTokens = [];
     if (trigger === 'request') {
       const rows = await read(env, s, `report_requests?report_token=eq.${encodeURIComponent(token)}&email=not.is.null&select=email&limit=10`, fetchImpl);
       to = uniq(rows.map((r) => r.email));
@@ -119,16 +164,22 @@ export async function notifyScanDone(env, { trigger, token, scanId }, { fetchImp
         mail = fullAuditEmail(env, { token, name: sum.name, totals: sum.totals });
       } else if (trigger === 'monthly' || await onPlan(env, s, buyerToken, fetchImpl)) {
         const d = await monthlyDetail(env, token, { fetchImpl }).catch(() => null);
+        // A town's first scan (just added on /plan) has nothing to compare with: it gets its own opener.
+        const newTown = !!parent && !sum.before;
+        // The month's Google post rides on the plan's own report email, not on each town's.
+        const post = parent ? null : await monthlyGooglePost(env, s, buyerToken, fetchImpl).catch(() => null);
         mail = monthlyEmail(env, {
           token, planToken: buyerToken, name: sum.name, totals: sum.totals, before: sum.before, town: d?.town, next3: d?.next3 || [], alert: d?.alert || null,
+          newTown, post,
         });
+        alsoTokens = (await planTokens(env, s, buyerToken, fetchImpl)).filter((t) => t !== token);
       } else {
         mail = recheckEmail(env, { token, name: sum.name, totals: sum.totals, before: sum.before });
       }
     }
     let sent = 0;
     for (const addr of to) {
-      const r = await sendEmail(env, { to: addr, ...mail, token, idempotencyKey: `${trigger}:${scanId || token}:${addr}` }, { fetchImpl });
+      const r = await sendEmail(env, { to: addr, ...mail, token, alsoTokens, idempotencyKey: `${trigger}:${scanId || token}:${addr}` }, { fetchImpl });
       if (r.ok) sent++;
       else console.warn('[email]', trigger, r.reason);
     }
