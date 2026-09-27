@@ -5,6 +5,10 @@
 --                           first scan of an extra town the owner adds (src/lib/plan-route.js)
 -- plan_towns                the extra towns on a Be the Answer plan (up to 2, plus the report's own
 --                           town). Each gets its own report token, scanned every month with the plan.
+-- payments.addons          add-ons bought in the same checkout, e.g. {competitor_breakdown} (src/lib/checkout.js)
+-- payments.stripe_session_id  unique: a retried webhook never records a payment twice
+-- payments inserts          service key only. A payments row unlocks a report, so the public (anon)
+--                           key must never be able to write one. The Worker writes with the service key.
 -- report_unlocked(token)    a payment unlocks the full report, except the $25 Competitor Breakdown
 --                           on its own (it is an add-on to the audit, never a way into it). A town
 --                           token is unlocked by its plan's Be the Answer payment.
@@ -27,6 +31,11 @@ create index if not exists plan_towns_report_token_idx on public.plan_towns(repo
 -- Service key only (the Worker reads and writes it server-side).
 alter table public.plan_towns enable row level security;
 revoke all on public.plan_towns from anon, authenticated;
+
+alter table public.payments add column if not exists addons text[] not null default '{}';
+create unique index if not exists payments_stripe_session_id_key on public.payments(stripe_session_id);
+drop policy if exists "worker insert" on public.payments;
+revoke all on public.payments from anon, authenticated;
 
 create or replace function public.report_unlocked(p_token text) returns boolean
 language sql stable security definer set search_path = public as $$

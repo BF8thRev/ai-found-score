@@ -168,11 +168,11 @@ export async function notifyLead(env, { token, email }, { fetchImpl = (...a) => 
 }
 
 /** Receipt after payment (transactional: sent even if the address unsubscribed from updates). */
-export async function notifyPayment(env, { token, email, tier, sessionId }, { fetchImpl = (...a) => fetch(...a) } = {}) {
+export async function notifyPayment(env, { token, email, tier, addons = [], sessionId }, { fetchImpl = (...a) => fetch(...a) } = {}) {
   try {
     if (!emailConfigured(env) || !email || !token) return { sent: 0, skipped: 'not configured' };
     const sum = await reportSummary(env, token, { fetchImpl }).catch(() => null);
-    const r = await sendEmail(env, { to: email, ...receiptEmail(env, { token, name: sum?.name, tier }), token, transactional: true, idempotencyKey: `receipt:${sessionId || token}` }, { fetchImpl });
+    const r = await sendEmail(env, { to: email, ...receiptEmail(env, { token, name: sum?.name, tier, addons }), token, transactional: true, idempotencyKey: `receipt:${sessionId || token}` }, { fetchImpl });
     return { sent: r.ok ? 1 : 0, ...(r.ok ? {} : { skipped: r.reason }) };
   } catch (e) {
     return { sent: 0, error: String(e?.message || e).slice(0, 200) };

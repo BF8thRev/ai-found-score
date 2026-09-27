@@ -27,7 +27,7 @@ One Cloudflare Worker serving the static site, the report API, and the admin sca
 | `POST /api/lead` | "Email me this report". Writes `leads` (status `new`) with the arm from the token |
 | `POST /api/stripe-webhook` | Stripe webhook: verifies signature, reads `client_reference_id` (report token), looks up business + arm in `report_links`, writes `payments` |
 
-`public/js/config.js` holds `STRIPE_LINKS` — the one file where real Stripe Payment Links get dropped in later.
+**Checkout** is our own (`src/lib/checkout.js`, `POST /api/checkout`): the report page sends `{ token, tier, addons }`, the Worker prices it for that report and creates a Stripe Checkout Session, and the buyer pays on Stripe's hosted page. On sale (`OFFERED_TIERS` in `public/js/config.js`): the $49 audit (`xray`, with an optional $25 Competitor Breakdown checkbox), the $25 Competitor Breakdown on its own after the audit, and Be the Answer at $499 minus what that report has already paid. Every session carries `metadata.tier` and `metadata.addons`; the webhook records both. Needs `STRIPE_SECRET_KEY`; without it the buttons say checkout opens soon.
 
 ## Supabase setup
 
@@ -136,6 +136,7 @@ npm test           # scanner, extractor and outreach tests (node --test) + sampl
 |---|---|---|
 | `SUPABASE_URL` | `src/lib/db.js` | In `wrangler.jsonc` `vars` (not secret). Don't set it in the dashboard: `wrangler deploy` replaces dashboard Text vars with the config file |
 | `SUPABASE_ANON_KEY` | `src/lib/db.js` | The project's **publishable** key (`sb_publishable_...`, Supabase → Project Settings → API Keys). Add as a Worker secret |
+| `STRIPE_SECRET_KEY` | `POST /api/checkout` (creates Checkout Sessions) | Worker secret. A restricted key with write access to Checkout Sessions is enough. `sk_test_`/`rk_test_` for sandbox |
 | `STRIPE_WEBHOOK_SECRET` | `POST /api/stripe-webhook` | **Not yet available — add when the Stripe webhook is created** |
 | `ADMIN_TOKEN` | `/api/admin/*` | Long random string, Worker secret. Unset = admin routes return 404 |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `PERPLEXITY_API_KEY`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD` | Scanner engines + extractor (`scanner/config.js`, which also accepts common alternate names) | Worker secrets |

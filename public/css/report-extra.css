@@ -46,3 +46,5 @@
 .r2-table th, .r2-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 .r2-table th { font-weight: 700; color: var(--navy); }
 .r2-quote { margin: 4px 0 12px; padding: 8px 14px; border-left: 3px solid var(--line); color: var(--ink); font-style: italic; }
+.r2-addon label { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; justify-content: center; text-align: left; }
+.r2-addon input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; }

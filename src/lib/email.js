@@ -138,7 +138,7 @@ export function leadEmail(env, { token, name }) {
 const TIER_NAMES = { xray: 'AI Visibility Audit', fix_kit: 'Fix Kit', be_the_answer: 'Be the Answer', competitor_breakdown: 'Competitor Breakdown' };
 
 /** Right after payment (a receipt: sent even to an address that unsubscribed from updates). */
-export function receiptEmail(env, { token, name, tier }) {
+export function receiptEmail(env, { token, name, tier, addons = [] }) {
   const plan = TIER_NAMES[tier] || 'your plan';
   const kitUrl = `${siteUrl(env)}/fix-kit/${encodeURIComponent(token)}`;
   const planUrl = `${siteUrl(env)}/plan/${encodeURIComponent(token)}`;
@@ -149,6 +149,7 @@ export function receiptEmail(env, { token, name, tier }) {
   if (tier === 'xray') {
     paragraphs.push('Your report is unlocked now. We’re also asking all 5 customer questions again on every AI assistant we check; we’ll email you when those answers are in, usually within the hour.');
     paragraphs.push(`Your Fix Kit is included: check your business details, then download the files and hand them to whoever runs your website. ${kitUrl}`);
+    if (addons.includes('competitor_breakdown')) paragraphs.push('Your Competitor Breakdown is in your report too: the top 3 businesses AI names instead of you, side by side with you.');
     paragraphs.push('In 30 days we re-scan for free and email you what changed.');
     note = 'Fewer than 3 problems specific to your business? Your $49 back. Just reply.';
   } else if (tier === 'be_the_answer') {

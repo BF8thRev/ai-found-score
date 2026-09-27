@@ -228,24 +228,29 @@ function unlockPanel() {
 
 // The offer band. `lead` is an optional first sentence (edge states: named everywhere, nothing missing).
 function xrayOffer(lead = '') {
+  // The $25 Competitor Breakdown rides along as a checkbox (config.js wireCheckout sends ticked add-ons).
+  const addon = tierOn('competitor_breakdown')
+    ? '<p class="r2-addon"><label><input type="checkbox" data-addon="competitor_breakdown"> Add the Competitor Breakdown, +$25: the top 3 businesses AI names instead of you, side by side with you.</label></p>'
+    : '';
   return `
-    <div class="cta-band r2-xray-offer">
+    <div class="cta-band r2-xray-offer" data-offer-band>
       <h2>${XRAY.name} — ${XRAY.price}.</h2>
       <p>${lead ? `${lead} ` : ''}${XRAY.what} ${XRAY.promise}</p>
+      ${addon}
       <p><a class="btn big" data-tier="xray" href="#">${XRAY.button}</a></p>
       <p class="fine">Secure checkout by Stripe. One-time payment, no subscription. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
     </div>`;
 }
 
-// The 30-day re-check (a rescan compared with the audit): the moment to offer Be the Answer. It
-// opens soon, so the button is an email for now.
+// Be the Answer, offered on every paid report that isn't on the plan (the 30-day re-check is the
+// moment it lands best). Checkout prices it at $499 minus what this report has already paid.
 function recheckOffer(report) {
   const subject = encodeURIComponent('Be the Answer: ' + (report.business?.name || ''));
   return `
     <div class="r2-upsell">
       <p><strong>Want us to keep watching?</strong> Be the Answer ($499): a re-scan every month for a year in up to 3 towns you serve, an email each month with what changed and your next 3 fixes, an alert when a new competitor takes the top spot, the Competitor Breakdown, your directory checklist and 12 Google posts. Everything you’ve paid us counts toward it.</p>
       ${tierOn('be_the_answer')
-        ? '<a class="btn-secondary" data-tier="be_the_answer" href="#">Get Be the Answer</a>'
+        ? '<a class="btn-secondary" data-tier="be_the_answer" href="#">Get Be the Answer</a> <span class="r2-muted">Checkout shows your price after credit.</span>'
         : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${subject}">Tell me when it opens</a>`}
     </div>`;
 }
@@ -594,7 +599,7 @@ function renderV2(root, report) {
     scoreV2(report),
     baselineV2(report, t),
     report.plan ? planPanel(report) : '',
-    paid && report.baseline && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
+    paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
     report.sample ? '' : leadForm('top'),
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
     nobodyTwice ? '' : whoAiNamesV2({ b, t, N, cw, proven }),

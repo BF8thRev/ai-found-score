@@ -210,12 +210,20 @@ export async function recordPayment(env, payment) {
     livemode: payment.livemode ?? true,
     // The checkout email, for the receipt, the full-audit and 30-day re-check emails (supabase/v7_email.sql).
     customer_email: payment.customerEmail ? String(payment.customerEmail).trim().toLowerCase().slice(0, 200) : null,
+    // Add-ons bought in the same checkout, e.g. ['competitor_breakdown'] (supabase/v8_be_the_answer.sql).
+    addons: Array.isArray(payment.addons) ? payment.addons : [],
     paid_at: new Date().toISOString(),
   };
 
-  // return=minimal: anon has no SELECT on payments, so asking for the
-  // inserted row back would fail the insert under RLS.
-  await supaInsert(env, TABLES.PAYMENTS, row);
+  // Service key only (v8 revokes anon inserts: a payment row unlocks a report). One row per
+  // Checkout Session: a retried webhook hits the unique stripe_session_id and is ignored.
+  const s = supaService(env);
+  const res = await fetch(`${s.base}/${TABLES.PAYMENTS}${row.stripe_session_id ? '?on_conflict=stripe_session_id' : ''}`, {
+    method: 'POST',
+    headers: { ...s.headers, Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) throw new Error(`Supabase ${TABLES.PAYMENTS} insert failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
   return { row };
 }
 
@@ -433,14 +441,22 @@ function supaService(env) {
  */
 export async function getPaidTiers(env, token) {
   const s = supaService(env);
-  const res = await fetch(`${s.base}/${TABLES.PAYMENTS}?report_token=eq.${encodeURIComponent(token)}&select=tier,amount_cents`, { headers: s.headers });
-  if (!res.ok) throw new Error(`Supabase GET payments failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  const rows = await getPayments(env, token);
   const tiers = new Set();
-  for (const p of await res.json()) {
+  for (const p of rows) {
     const t = p.tier && p.tier !== 'unknown' ? p.tier : TIER_BY_CENTS[p.amount_cents];
     if (t) tiers.add(t);
+    for (const a of Array.isArray(p.addons) ? p.addons : []) tiers.add(a);
   }
   return [...tiers];
+}
+
+/** Every payment on a report token: [{ tier, amount_cents, addons, livemode }]. Service key. */
+export async function getPayments(env, token) {
+  const s = supaService(env);
+  const res = await fetch(`${s.base}/${TABLES.PAYMENTS}?report_token=eq.${encodeURIComponent(token)}&select=tier,amount_cents,addons,livemode`, { headers: s.headers });
+  if (!res.ok) throw new Error(`Supabase GET payments failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  return res.json();
 }
 
 /** The confirmed Fix Kit details for a token → { details, confirmed_at, updated_at } or null. */
