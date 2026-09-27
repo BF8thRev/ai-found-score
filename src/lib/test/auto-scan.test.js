@@ -6,7 +6,7 @@ import {
   startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey,
   newRequestToken, requestScanId, autoScanOn, autoScanLimits, estimateRequestScanUsd, REQUEST_TOKEN_RE,
   DRY_RUN_REQUESTS, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, monthlyScanId,
-  pickRecoveries, PAID_INTENT, ABANDONED_CHECKOUT_MINUTES,
+  pickRecoveries, PAID_INTENT, ABANDONED_CHECKOUT_MINUTES, retryFailedScans,
 } from '../auto-scan.js';
 import { freeEngines, activeEngines } from '../../../scanner/config.js';
 import { handleReportRequest } from '../report-request.js';
@@ -310,6 +310,17 @@ test('statusFromRows: running / queued / failed-or-blocked waits for a person', 
   assert.equal(statusFromRows([{ status: 'done', report_valid: true, errors: [{ kind: 'store' }] }]), 'queued');
 });
 
+test('statusFromRows: once paid, the paid scan decides, not the request row queued on the way to checkout', () => {
+  const queuedReq = { trigger: 'request', status: 'queued' };
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'running' }, queuedReq]), 'paid');
+  // First paid attempt failed: the cron retries it, so it still reads as being made.
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'failed' }, queuedReq]), 'paid');
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'done', report_valid: false }, queuedReq]), 'paid');
+  // Both paid attempts failed: the page says so (a person has been alerted).
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'failed' }, { trigger: 'paid', status: 'failed' }, queuedReq]), 'failed');
+  assert.equal(statusFromRows([{ trigger: 'paid', status: 'done', report_valid: true }, queuedReq]), 'paid');
+});
+
 test('pendingReportStatus: reads the token\'s scans rows; unknown tokens are null (404)', async () => {
   const db = fakeDb();
   const env = baseEnv();
@@ -423,6 +434,33 @@ test('free scans ask only the free three; paid scans ask every engine with a key
   assert.ok(!env.SCAN_WORKFLOW.created[0].params.engines.includes('perplexity'));
 });
 
+test('paid scan: an attempt with no usable report (guardrails, not stored) is retried, then reads failed', async () => {
+  const now = Date.parse('2026-09-27T12:00:00Z');
+  const at = new Date(now - 30 * 60_000).toISOString();
+  const invalid = [{ id: 'p1', report_token: 'P', trigger: 'paid', status: 'done', report_valid: false, created_at: at }];
+  const unstored = [{ id: 's1', report_token: 'S', trigger: 'paid', status: 'done', report_valid: true, errors: [{ kind: 'store' }], created_at: at }];
+  assert.deepEqual(pickRecoveries([...invalid, ...unstored], { now }).map((p) => `${p.kind}:${p.token}`).sort(), ['paid-retry:P', 'paid-retry:S']);
+  assert.equal(statusFromRows(unstored), 'paid', 'the retry is coming');
+  assert.equal(statusFromRows([...unstored, { ...unstored[0], id: 's2' }]), 'failed');
+
+  // The retry is not refused as "already": the earlier attempt produced nothing.
+  const env = baseEnv({ AUTO_SCAN: 'off' });
+  const db = fakeDb();
+  const q = await startRequestScan(env, req(), { now: NOW, fetchImpl: db.fetch });
+  const first = await startPaidScan(env, { token: q.token, sessionId: 'cs_r', tier: 'xray' }, { fetchImpl: db.fetch });
+  Object.assign(db.rows.find((x) => x.id === first.scanId), { status: 'done', report_valid: false });
+  const retry = await retryFailedScans(env, { now: Date.parse('2026-09-24T13:00:00Z'), fetchImpl: db.fetch });
+  assert.deepEqual(retry.results.map((r) => `${r.kind}:${r.ok}`), ['paid-retry:true'], JSON.stringify(retry));
+  // Free report first, then paid: the finished free scan doesn't make a failed paid scan look busy.
+  assert.deepEqual(pickRecoveries([
+    { id: 'x1', report_token: 'X', trigger: 'paid', status: 'failed', created_at: at },
+    { id: 'x0', report_token: 'X', trigger: 'request', status: 'done', report_valid: true, created_at: at },
+  ], { now }).map((p) => `${p.kind}:${p.token}`), ['paid-retry:X']);
+  // A paid scan that worked still blocks a second one.
+  Object.assign(db.rows.find((x) => x.id === first.scanId), { status: 'done', report_valid: true });
+  assert.equal((await startPaidScan(env, { token: q.token, sessionId: 'cs_r2', tier: 'xray' }, { fetchImpl: db.fetch })).reason, 'already');
+});
+
 test('paid scan: every question, every engine, same token; once per token; never throws', async () => {
   const env = baseEnv({ AUTO_SCAN: 'off', PERPLEXITY_API_KEY: 'k4' });
   const db = fakeDb();
@@ -480,6 +518,17 @@ test('30-day re-check: due live payments get one full rescan each; test mode, to
   const again = await startDueRechecks(env, { now: now + day, fetchImpl: db.fetch });
   assert.deepEqual(again.started, []);
   assert.equal(again.skipped.already, 1);
+  assert.equal(wf.params.trigger, 'recheck');
+  // A failed re-check is started once more under a new Workflow id (ids are single-use), then left.
+  const firstId = row.id;
+  row.status = 'failed';
+  const retry = await startDueRechecks(env, { now: now + day, fetchImpl: db.fetch });
+  assert.deepEqual(retry.started, [due.token]);
+  assert.notEqual(env.SCAN_WORKFLOW.created.at(-1).id, firstId);
+  db.rows.filter((x) => x.trigger === 'recheck').forEach((x) => { x.status = 'failed'; });
+  const gaveUp = await startDueRechecks(env, { now: now + 2 * day, fetchImpl: db.fetch });
+  assert.deepEqual(gaveUp.started, []);
+  assert.equal(gaveUp.skipped['gave-up'], 1);
   // Off switch.
   assert.equal((await startDueRechecks({ ...env, RECHECK_SCAN: 'off' }, { now, fetchImpl: db.fetch })).error, 'off');
 });
@@ -501,6 +550,8 @@ test('Be the Answer monthly scan: a failed month is started once more, then left
   const retry = await monthlyScanId(plan.token, 1, 2);
   assert.notEqual(retry, first);
   assert.equal(env.SCAN_WORKFLOW.created.at(-1).id, retry);
+  // The workflow runs it as 'monthly' (not 'admin'), so the monthly email goes out when it's done.
+  assert.equal(env.SCAN_WORKFLOW.created.at(-1).params.trigger, 'monthly');
   assert.equal(db.rows.find((x) => x.id === retry).notes, 'Be the Answer month 1');
   // The retry fails too: nothing more starts that month.
   db.rows.find((x) => x.id === retry).status = 'failed';

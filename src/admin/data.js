@@ -39,7 +39,7 @@ const QUERIES = {
   expenses: 'expenses?select=*&order=spent_on.desc,created_at.desc&limit=10',
   requests: 'report_requests?select=business_name,town,trade,email,requested_at&order=requested_at.desc&limit=10',
   leads: 'leads?select=arm,status,created_at&order=created_at.desc&limit=10',
-  payments: 'payments?select=tier,amount_cents,arm,livemode,paid_at&order=paid_at.desc&limit=10',
+  payments: 'payments?select=tier,amount_cents,arm,livemode,paid_at,refunded_cents,revoked_at&order=paid_at.desc&limit=10',
   // Free-report request scans still waiting (queued), in progress (running) or needing a person (failed).
   requestScans: 'scans?select=id,business_name,report_token,status,created_at,started_at,notes,errors&trigger=eq.request&status=in.(queued,running,failed)&order=created_at.desc&limit=30',
   // Refund requests (supabase/v4_ladder.sql). Refunds themselves are done by a person in Stripe.

@@ -174,3 +174,19 @@ test('admin banner: red for out, amber for low, escaped, empty when fine', () =>
   assert.equal(creditBanner([{ engine: 'x', state: 'ok' }]), '');
   assert.equal(creditBanner(undefined), '');
 });
+
+test('paid scan alert: every alert address, transactional, one per scan and stage; never throws', async () => {
+  const { sendPaidScanAlert, paidScanAlertEmail } = await import('../alerts.js');
+  const sent = [];
+  const r = await sendPaidScanAlert({ ALERT_EMAILS: 'a@x.com, b@y.com' }, { token: 'tok_12345', stage: 'start', reason: 'no-engine', key: 'cs_1' }, {
+    sendEmail: async (env, m) => { sent.push(m); return { ok: true }; },
+  });
+  assert.equal(r.sent, 2);
+  assert.deepEqual(sent.map((m) => m.to), ['a@x.com', 'b@y.com']);
+  assert.ok(sent.every((m) => m.transactional === true));
+  assert.equal(sent[0].idempotencyKey, 'paid-scan-alert:start:cs_1:a@x.com');
+  assert.match(sent[0].subject, /didn’t start/);
+  assert.match(sent[0].text, /\/report\/tok_12345/);
+  assert.match(paidScanAlertEmail({}, { token: 't', stage: 'scan', reason: '<b>x</b>' }).html, /&lt;b&gt;x&lt;\/b&gt;/);
+  assert.deepEqual(await sendPaidScanAlert({}, { token: 't', stage: 'scan' }, { sendEmail: async () => { throw new Error('boom'); } }), { sent: 0 });
+});
