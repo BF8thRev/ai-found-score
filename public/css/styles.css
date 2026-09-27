@@ -667,6 +667,8 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 }
 .field-found { margin: -6px 0 0; font-size: 14.5px; font-weight: 600; color: #7FD3A3; }
 .field-found[hidden], #town-field[hidden], .trade-pick[hidden] { display: none; }
+.trade-pick .trade-other { display: block; margin-top: 12px; font-weight: 600; }
+.trade-pick .trade-other input { margin-top: 6px; }
 .link-btn { background: none; border: 0; padding: 0; margin-left: 6px; font: inherit; font-weight: 500; color: #C8D6E8; text-decoration: underline; cursor: pointer; }
 .site-more summary { cursor: pointer; font-size: 14.5px; font-weight: 600; color: #C8D6E8; list-style: none; }
 .site-more summary::-webkit-details-marker { display: none; }

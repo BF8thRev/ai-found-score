@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=9">
+  <link rel="stylesheet" href="/css/styles.css?v=10">
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Organization", "@id": "https://aifoundscore.com/#organization", "name": "AI Found Score", "url": "https://aifoundscore.com/", "logo": {"@type": "ImageObject", "url": "https://aifoundscore.com/img/logo.svg"}, "image": "https://aifoundscore.com/img/og.png", "email": "hello@aifoundscore.com", "address": {"@type": "PostalAddress", "streetAddress": "120 Terminal Drive", "addressLocality": "Plainview", "addressRegion": "NY", "postalCode": "11803", "addressCountry": "US"}, "contactPoint": {"@type": "ContactPoint", "contactType": "customer support", "email": "hello@aifoundscore.com", "availableLanguage": "en"}, "areaServed": {"@type": "Country", "name": "United States"}, "description": "AI Found Score checks whether AI assistants recommend a local business when customers ask, shows who they name instead, and gives the business ready-to-install fixes.", "knowsAbout": ["AI search visibility", "Generative engine optimization", "Local SEO", "Business listings", "Structured data"]}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "@id": "https://aifoundscore.com/#website", "name": "AI Found Score", "url": "https://aifoundscore.com/", "publisher": {"@id": "https://aifoundscore.com/#organization"}}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Service", "name": "AI Found Score report", "serviceType": "AI visibility audit", "provider": {"@type": "Organization", "name": "AI Found Score"}, "areaServed": {"@type": "Country", "name": "US"}, "description": "Asks the AI assistants local customers use the questions they ask, and shows who got named and who got named first. The audit adds every answer word for word and which websites the AI cited. Each report lists exactly which assistants were asked and when.", "offers": [{"@type": "Offer", "name": "Snapshot", "price": "0", "priceCurrency": "USD"}, {"@type": "Offer", "name": "AI Visibility Audit", "price": "49", "priceCurrency": "USD", "description": "All 5 customer questions asked fresh on every assistant we check, every answer word for word and every website AI cited, exactly what's wrong on your website and Google listing, every fix with copy-paste text, your Fix Kit of ready-to-install files, the competitor gap sheet, your fix checklist, and a free re-scan 30 days later. Fewer than 3 problems specific to your business? Your $49 back."}, {"@type": "Offer", "name": "Competitor Breakdown", "price": "25", "priceCurrency": "USD", "description": "Add-on to the AI Visibility Audit: the top 3 businesses AI names instead of you, side by side with you, and up to 3 things they have that you don't."}, {"@type": "Offer", "name": "Be the Answer", "price": "499", "priceCurrency": "USD", "description": "Everything in the AI Visibility Audit, plus a re-scan every month for a year in up to 3 towns you serve, a monthly email with what changed and your next 3 fixes, competitor alerts, the Competitor Breakdown, a directory checklist for 30+ sites with the exact text to paste, and 12 Google posts written for you. Not useful in the first 60 days? Full refund."}]}</script>
@@ -311,19 +311,8 @@
         <p class="full field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
         <label class="full" id="town-field" hidden>Town <input name="town" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
         <input name="state" type="hidden" value="NY" data-geo-value="state">
-        <p class="full field-found" id="trade-found" hidden><span id="trade-name"></span> <button type="button" class="link-btn" id="trade-change">change</button></p>
         <fieldset class="full trade-pick" id="trade-pick" hidden>
-          <legend>What do you do?</legend>
-          <div class="trade-grid">
-            <label><input type="radio" name="trade" value="plumbing" required><span>Plumbing</span></label>
-            <label><input type="radio" name="trade" value="hvac"><span>Heating &amp; AC</span></label>
-            <label><input type="radio" name="trade" value="electrical"><span>Electrical</span></label>
-            <label><input type="radio" name="trade" value="roofing"><span>Roofing</span></label>
-            <label><input type="radio" name="trade" value="landscaping"><span>Landscaping</span></label>
-            <label><input type="radio" name="trade" value="cleaning"><span>House cleaning</span></label>
-            <label><input type="radio" name="trade" value="auto_repair"><span>Auto repair</span></label>
-            <label><input type="radio" name="trade" value="laundromat"><span>Laundromat</span></label>
-          </div>
+          <label class="trade-other">What kind of business is it? <input name="trade_other" id="trade-other" type="text" maxlength="40" autocomplete="off" placeholder="bakery, dentist, plumber, salon…"></label>
         </fieldset>
         <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
         <button class="btn" type="submit">Show me who&rsquo;s getting my calls</button>
@@ -665,29 +654,43 @@
     if (!/^\S+\.\S+$/.test(data.website || '')) missing.push('your website (or your Facebook or Yelp page)');
     if (!/^\d{5}$/.test(data.zip)) missing.push('a 5-digit ZIP');
     else if (!data.town) { missing.push('your town'); showTownField(); }
-    if (!data.trade) { missing.push('what you do'); showTradeGrid(); }
+    // What the owner typed in "What kind of business is it?" (only shown when we couldn't tell), else a preset.
+    data.trade = kindText();
+    delete data.trade_other;
     if (missing.length) {
       show(status, 'error', 'Please add ' + missing.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'); return;
     }
     status.className = 'status'; status.textContent = '';
     biz = data;
-    var btn = form.querySelector('button'); btn.disabled = true; btn.textContent = 'One moment…';
+    var btn = form.querySelector('button'); var btnLabel = btn.textContent; btn.disabled = true; btn.textContent = 'One moment…';
 
-    var qs = new URLSearchParams({ trade: data.trade, town: data.town, zip: data.zip, state: data.state || 'NY' });
+    var qs = new URLSearchParams({ trade: data.trade, preset: presetKind, name: data.business_name, website: data.website, town: data.town, zip: data.zip, state: data.state || 'NY' });
     var questions = fetch('/api/questions?' + qs.toString())
       .then(function (r) {
         if (r.status === 429) return r.json().catch(function () { return {}; }).then(function (j) { return { limited: j.error || 'Too many tries. Wait a minute and try again.' }; });
+        if (r.status === 422) return r.json().catch(function () { return null; });
         return r.ok ? r.json() : null;
       })
       .catch(function () { return null; });
-    // The questions don't wait for the bot check; only the save does.
-    var saved = savedReq = tsRequest.take(30000).then(function (token) {
-      if (token) data['cf-turnstile-response'] = token;
-      return postJson('/api/request', data);
+    // The save waits for the kind of business (so the report and the live answer use it) and the bot check.
+    var saved = savedReq = questions.then(function (res) {
+      if (res && res.needKind) return null;
+      data.trade = (res && res.ok && res.trade) || data.trade || presetKind;
+      return tsRequest.take(30000).then(function (token) {
+        if (token) data['cf-turnstile-response'] = token;
+        return postJson('/api/request', data);
+      });
     });
 
     // The questions show even if the save failed: the owner still sees what we'd ask.
     questions.then(function (res) {
+      if (res && res.needKind) {
+        // Couldn't tell from the name or the website: ask, then they press the button again.
+        btn.disabled = false; btn.textContent = btnLabel;
+        show(status, 'error', 'One quick thing: what kind of business is it? Type it above, like bakery or dentist.');
+        askKind();
+        return null;
+      }
       var limited = res && res.limited;
       // With the bot check on, the save usually comes back with a live-answer token: show the
       // waiting state now so the answer area doesn't jump in later.
@@ -702,6 +705,7 @@
       try { head.focus({ preventScroll: true }); } catch (err) { head.focus(); }
       return saved;
     }).then(function (res) {
+      if (!res) return;
       if (res.ok && res.body.id) {
         requestId = res.body.id;
         markConverted();
@@ -731,64 +735,18 @@
     });
   });
 
-  // ---- Fewer fields: the town comes from the ZIP, the trade from the business name ----
-  // Both show as "Massapequa, NY · change" / "Plumbing · change"; the full inputs appear only when
-  // we can't tell or the owner taps change.
+  // ---- Fewer fields: the town comes from the ZIP; what the business does, from its name or website ----
+  // /api/questions works out the kind of business (scanner/kind.js). Only when it can't tell does the
+  // form show one box, "What kind of business is it?", and the owner presses the button again.
   var zipFound = el('zip-found'), townField = el('town-field');
-  var tradeFound = el('trade-found'), tradePick = el('trade-pick');
-  var tradeGrid = form.querySelector('.trade-grid');
-  var TRADE_LABEL = { plumbing: 'Plumbing', hvac: 'Heating & AC', electrical: 'Electrical', roofing: 'Roofing', landscaping: 'Landscaping', cleaning: 'House cleaning', auto_repair: 'Auto repair', laundromat: 'Laundromat' };
-  // First match wins (plumbing before heating: "Plumbing & Heating" is a plumber), on the name in lower case.
-  var TRADE_WORDS = [
-    ['laundromat', /laund|wash (?:&|and) (?:dry|fold)|washateria|coin wash|wash ?house/],
-    ['auto_repair', /auto|motor|mechanic|collision|tire|transmission|brake|car care|garage|muffler|lube/],
-    ['plumbing', /plumb|drain|sewer|rooter|pipe/],
-    ['hvac', /hvac|heating|cooling|air cond|\bair\b|furnace|climate|comfort/],
-    ['electrical', /electric|wiring|\bamp/],
-    ['roofing', /roof|gutter|siding/],
-    ['landscaping', /landscap|lawn|garden|tree|yard|mow|irrigation|sprinkler|hardscap/],
-    ['cleaning', /clean|maid|janitor|housekeep|sparkl|shine/],
-  ];
-  function guessTrade(name) {
-    var n = String(name || '').toLowerCase();
-    for (var i = 0; i < TRADE_WORDS.length; i++) if (TRADE_WORDS[i][1].test(n)) return TRADE_WORDS[i][0];
-    return '';
-  }
-  var tradeSource = '';   // '' | 'preset' (link / hero card) | 'guess' | 'picked'
-  var gridOpen = false;
-  function currentTrade() { var r = tradeGrid.querySelector('input:checked'); return r ? r.value : ''; }
-  function setTrade(v, source) {
-    var r = tradeGrid.querySelector('input[value="' + String(v).replace(/[^a-z_]/g, '') + '"]');
-    if (!r) return;
-    r.checked = true;
-    tradeSource = source;
-    paintTrade();
-  }
-  function paintTrade() {
-    var t = currentTrade();
-    var nameLong = String(form.elements.business_name.value || '').trim().length >= 3;
-    tradeFound.hidden = gridOpen || !t;
-    tradePick.hidden = !gridOpen && (!!t || !nameLong);
-    if (t) el('trade-name').textContent = 'Trade: ' + TRADE_LABEL[t] + ' ✓';
-  }
-  function showTradeGrid() { gridOpen = true; paintTrade(); }
-  el('trade-change').addEventListener('click', function () { showTradeGrid(); var r = tradeGrid.querySelector('input:checked') || tradeGrid.querySelector('input'); r.focus(); });
-  tradeGrid.addEventListener('change', function () { tradeSource = 'picked'; });
-  form.elements.business_name.addEventListener('input', function () {
-    if (tradeSource !== 'picked') {
-      var g = guessTrade(this.value);
-      if (g) setTrade(g, 'guess');
-      else if (tradeSource === 'guess') { var r = tradeGrid.querySelector('input:checked'); if (r) r.checked = false; tradeSource = ''; }
-    }
-    paintTrade();
-  });
+  var tradePick = el('trade-pick'), tradeOther = el('trade-other');
+  var presetKind = '';   // from a link (?trade=plumbing) or the hero card's picker
+  function kindText() { return String(tradeOther.value || '').trim().replace(/\s+/g, ' ').slice(0, 40).toLowerCase(); }
+  function askKind() { tradePick.hidden = false; tradeOther.focus(); }
   var TRADE_ALIASES = { plumber: 'plumbing', roofer: 'roofing', electrician: 'electrical', landscaper: 'landscaping', cleaner: 'cleaning', mechanic: 'auto_repair' };
-  // Trade from the link (?trade=plumbing) or the hero card's picker, until the name says otherwise.
   function presetTrade(v) {
-    v = String(v || '').toLowerCase();
-    v = TRADE_ALIASES[v] || v;
-    if (!v || tradeSource === 'picked' || tradeSource === 'guess') return;
-    setTrade(v, 'preset');
+    v = String(v || '').toLowerCase().replace(/[^a-z_]/g, '');
+    if (v) presetKind = TRADE_ALIASES[v] || v;
   }
 
   var zipInput = form.elements.zip, townInput = form.elements.town, stateInput = form.elements.state;

@@ -20,7 +20,7 @@ export const FREE_QUESTION_COUNT = 3;
 export const TEMPLATES = {
   best: "What's the best {trade} in {town}, {state}?",
   urgent: '{urgent} near {near} {state}',
-  job: 'Who can {job} in {town} {state}?',
+  job: 'Can you recommend {aTrade} in {town} {state}?',
   trust: '{Trade} with good reviews near {near}, {state}',
   price: 'Affordable {trade} near {town} {state}',
 };
@@ -107,6 +107,17 @@ export function normalizeTrade(trade) {
   return null;
 }
 
+/**
+ * Any kind of business the owner typed: a TRADES key when we know it, else the plain words
+ * ("bakery", "pest control") in lower case, else null. Letters, spaces, & ' - . only, 2-40 characters.
+ */
+export function tradeOrKind(trade) {
+  const known = normalizeTrade(trade);
+  if (known) return known;
+  const t = String(trade || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/’/g, "'");
+  return /^[a-z][a-z &'.-]{1,39}$/.test(t) ? t : null;
+}
+
 function fill(template, slots) {
   return template
     .replace(/\{(\w+)\}/g, (_, k) => (slots[k] != null ? String(slots[k]) : ''))
@@ -130,7 +141,7 @@ export function buildQuestions(business) {
   const near = String(business.nearbyTown || '').trim() || town;
   const state = stateAbbr(business.state);
   const zip = String(business.zip || '').trim();
-  const slots = { trade: set.trade, Trade: cap(set.trade), town, near, state, zip, urgent: `${cap(set.trade)} open now`, job: `help with a ${set.trade} job` };
+  const slots = { trade: set.trade, Trade: cap(set.trade), town, near, state, zip, urgent: `${cap(set.trade)} open now`, aTrade: `${/^[aeiou]/.test(set.trade) ? 'an' : 'a'} ${set.trade}` };
 
   return INTENTS.map((intent, i) => {
     let tpl = set[intent] || TEMPLATES[intent];
