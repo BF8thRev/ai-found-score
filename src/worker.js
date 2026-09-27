@@ -216,6 +216,10 @@ async function handleHealth(env) {
     stripeWebhookSecret: !!env.STRIPE_WEBHOOK_SECRET,
     stripeSecretKey: !!String(env.STRIPE_SECRET_KEY || '').trim(),
     stripeWebhookSecretTest: !!env.STRIPE_WEBHOOK_SECRET_TEST,
+    // live | test | unset, from the key's prefix (sk_live_/rk_live_ vs sk_test_/rk_test_). Never the key.
+    stripeMode: (() => { const k = String(env.STRIPE_SECRET_KEY || '').trim(); return !k ? 'unset' : /^[sr]k_live_/.test(k) ? 'live' : /^[sr]k_test_/.test(k) ? 'test' : 'unknown'; })(),
+    // Receipts, "audit ready", monthly emails and alerts all need it (src/lib/email.js).
+    resendKey: !!String(env.RESEND_API_KEY || '').trim(),
     // Scanner keys: present or not, never the values.
     // `claude` uses ANTHROPIC_API_KEY; config.js wins once it reports it itself.
     engineKeys: { claude: !!String(env.ANTHROPIC_API_KEY || '').trim(), ...enginesConfigured(env) },

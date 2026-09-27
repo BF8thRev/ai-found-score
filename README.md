@@ -205,7 +205,7 @@ Owner steps:
 1. Cloudflare dashboard → **Turnstile** → **Add widget**. Hostnames `aifoundscore.com` and `www.aifoundscore.com` (add `localhost` only if you want to test the real widget locally). Widget mode **Managed**.
 2. Copy the **site key** into `TURNSTILE_SITE_KEY` in `wrangler.jsonc` `vars` (or send it to whoever deploys). It is public.
 3. Store the **secret key** as a Worker secret (it never goes in a file): `npx wrangler secret put TURNSTILE_SECRET_KEY`
-4. Deploy, then check `https://aifoundscore.com/api/health` shows `"turnstile": true`.
+4. Deploy, then check `https://aifoundscore.com/api/health` shows `"turnstile": true`. The same page shows every other setting as true/false (never the values): `stripeMode` should read `live`, and `stripeWebhookSecret`, `supabaseServiceKey`, `resendKey` and `adminToken` should be `true`.
 
 Local dev uses Cloudflare's test keys (always pass), without touching `.dev.vars`:
 
