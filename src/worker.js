@@ -24,7 +24,10 @@
 //   GET|POST /api/fix-kit/[token], GET /api/fix-kit/[token].zip -> Fix Kit details form + zip download
 //                                ($49 xray, which includes it / $499 be_the_answer / retired $149 fix_kit); src/lib/fix-kit-route.js
 //   GET  /fix-kit/[token]     -> the Fix Kit page (public/fix-kit.html)
-//   cron (daily)              -> the free 30-day re-check of every paid report (src/lib/auto-scan.js startDueRechecks)
+//   GET|POST /api/plan/[token] -> Be the Answer: towns, directory checklist, Google posts; src/lib/plan-route.js
+//   GET  /plan/[token]        -> the Be the Answer page (public/plan.html)
+//   cron (daily)              -> the free 30-day re-check of every paid report (src/lib/auto-scan.js startDueRechecks),
+//                                then Be the Answer's monthly re-scans (startDueMonthly)
 //   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h
 //   GET  /                    -> homepage; the hero's real AI answer card comes from showcase_answers
 //                                (src/lib/showcase.js, filled by `node scanner/showcase.js`), cached 1 h
@@ -35,7 +38,7 @@
 
 import {
   recordPayment, recordUnsubscribe, recordVisit, recordLead,
-  getReport, getReportLink, isReportUnlocked,
+  getReport, getReportLink, isReportUnlocked, getPaidTiers,
 } from './lib/db.js';
 import { freeQuestions, normalizeTrade } from '../scanner/questions.js';
 import { handleReportRequest } from './lib/report-request.js';
@@ -44,8 +47,8 @@ import { rateLimit } from './lib/rate-limit.js';
 import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
-import { reportBody } from './lib/lock.js';
-import { pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks } from './lib/auto-scan.js';
+import { reportBody, BREAKDOWN_TIERS } from './lib/lock.js';
+import { pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent } from './lib/auto-scan.js';
 import { notifyPayment, notifyLead } from './lib/notify.js';
 import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
@@ -54,6 +57,7 @@ import { handleLivePreview, livePreviewStatus } from './lib/live-preview.js';
 import { handleProof } from './lib/proof.js';
 import { handleZip } from './lib/zip.js';
 import { handleFixKit } from './lib/fix-kit-route.js';
+import { handlePlan } from './lib/plan-route.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 
@@ -128,6 +132,11 @@ export default {
       return handleFixKit(request, url, env, { mockReports: MOCK_REPORTS });
     }
 
+    // Be the Answer: towns, directory checklist, Google posts (src/lib/plan-route.js; sample-* works with no database).
+    if (url.pathname.startsWith('/api/plan/') && (request.method === 'GET' || request.method === 'POST')) {
+      return handlePlan(request, url, env, { mockReports: MOCK_REPORTS });
+    }
+
     if (url.pathname.startsWith('/api/report/') && request.method === 'GET') {
       let id;
       try { id = decodeURIComponent(url.pathname.slice('/api/report/'.length)); } catch {
@@ -143,6 +152,9 @@ export default {
     if (url.pathname.startsWith('/fix-kit/') && url.pathname.length > '/fix-kit/'.length) {
       return serveAsset(env, request, '/fix-kit');
     }
+    if (url.pathname.startsWith('/plan/') && url.pathname.length > '/plan/'.length) {
+      return serveAsset(env, request, '/plan');
+    }
     if (url.pathname === '/success') {
       return serveAsset(env, request, '/success');
     }
@@ -154,7 +166,11 @@ export default {
   // Daily cron (wrangler.jsonc triggers): the free 30-day re-check for every paid report
   // (src/lib/auto-scan.js startDueRechecks). RECHECK_SCAN=off turns it off.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(startDueRechecks(env).then((r) => console.log('[recheck]', JSON.stringify(r))));
+    // One after the other: a plan's month 1 is skipped when the re-check just scanned that report.
+    ctx.waitUntil(startDueRechecks(env)
+      .then((r) => console.log('[recheck]', JSON.stringify(r)))
+      .then(() => startDueMonthly(env))
+      .then((r) => console.log('[monthly]', JSON.stringify(r))));
   },
 };
 
@@ -272,8 +288,19 @@ async function handleGetReport(id, url, env, dryRun = false) {
       });
     }
   }
+  // Paid plans on this report. A Be the Answer town report (plan_towns) takes its plan's.
+  let tiers = [];
+  let planToken = null;
+  if (unlocked && !isSample && !dryRun) {
+    planToken = await readPlanParent(env, id).catch(() => null);
+    tiers = await getPaidTiers(env, planToken || id).catch((e) => { console.error('[report] tiers read failed', e); return []; });
+  }
+  const onPlan = tiers.includes('be_the_answer');
   // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
-  const body = reportBody(report, unlocked);
+  // The sample shows the Competitor Breakdown too, as a demo.
+  const body = reportBody(report, unlocked, { breakdown: isSample || tiers.some((t) => BREAKDOWN_TIERS.includes(t)) });
+  // Be the Answer: the page links to the plan (and its Fix Kit) instead of offering the plan again.
+  if (onPlan) body.plan = { token: planToken || id, town: !!planToken };
   // Paid, and the full scan (every question, every assistant) is still running: the page says so.
   if (unlocked && !isSample && !dryRun && (await paidScanRunning(env, id))) body.fullScanPending = true;
   return Response.json(body, {

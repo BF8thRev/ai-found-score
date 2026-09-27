@@ -401,6 +401,90 @@ export function xraySections(report) {
   return { gapSheet: buildGapSheet(report), checklist: buildFixChecklist(report) };
 }
 
+// ---------------------------------------------------------------------------
+// Competitor Breakdown ($25 add-on; included in Be the Answer). Built at serve time from the report's
+// own data only, like the gap sheet: nothing fetched, nothing guessed. Never on a locked report.
+// ---------------------------------------------------------------------------
+
+/** How many competitors the breakdown covers. */
+export const BREAKDOWN_COMPETITORS = 3;
+const QUOTE_MAX_WORDS = 50;
+
+const ABBREV = new Set(['co', 'inc', 'bros', 'st', 'dr', 'mr', 'mrs', 'ms', 'jr', 'sr', 'ltd', 'llc', 'corp', 'ave', 'rd', 'blvd', 'no', 'vs', 'mt', 'ft']);
+const QUOTE_MIN_WORDS = 6;
+
+// A sentence ends at a newline, or at . ! ? followed by a space (or the end) unless the word before
+// the period is an abbreviation ("Co.", "Bros.").
+function isSentenceEnd(t, i) {
+  const c = t[i];
+  if (c === '\n') return true;
+  if (!'.!?'.includes(c) || (i + 1 < t.length && !/\s/.test(t[i + 1]))) return false;
+  if (c !== '.') return true;
+  const word = (/([A-Za-z]+)$/.exec(t.slice(Math.max(0, i - 12), i)) || [])[1] || '';
+  return !ABBREV.has(word.toLowerCase());
+}
+
+/** The sentence of `text` holding the name at [pos, pos + len), word for word, or null when too short or long. */
+function sentenceAt(text, pos, len = 0) {
+  const t = String(text || '');
+  if (!t || pos < 0 || pos >= t.length) return null;
+  let start = 0;
+  for (let i = pos - 1; i >= 0; i--) if (isSentenceEnd(t, i)) { start = i + 1; break; }
+  let end = t.length;
+  for (let i = pos + len; i < t.length; i++) if (isSentenceEnd(t, i)) { end = t[i] === '\n' ? i : i + 1; break; }
+  const out = t.slice(start, end).replace(/^\s*(?:\d+[.)]|[-*•#>])\s*/, '').replace(/\*\*/g, '').trim();
+  const words = out.split(/\s+/).length;
+  if (!out || words < QUOTE_MIN_WORDS || words > QUOTE_MAX_WORDS) return null;
+  return out;
+}
+
+/**
+ * buildCompetitorBreakdown(report) → { you: { named, first, answers, reviews }, competitors: [...] }
+ *   The top BREAKDOWN_COMPETITORS businesses from the gap sheet, each with:
+ *   { name, named, first, quote: { text, engine, question } | null, reviews, sources, winsQuestions, edges }
+ *   quote          one sentence an assistant wrote about them, word for word
+ *   winsQuestions  customer questions where an answer named them and no answer named you
+ *   edges          up to 3 plain lines: what they have that you don't (reviews, rating, named first,
+ *                  cited sites that list them and not you, questions they win)
+ */
+export function buildCompetitorBreakdown(report) {
+  const gap = buildGapSheet(report);
+  const answers = (report && report.answers) || [];
+  const byId = new Map(answers.map((a) => [a && a.id, a]));
+  const qById = new Map(((report && report.questions) || []).map((q) => [q && q.id, q]));
+  const t = computeTotals(report);
+  const youReviews = gap.youReviews || null;
+  const youNamedQ = new Set(answers.filter((a) => a && a.namedYou).map((a) => a.questionId));
+  const competitors = gap.competitors.slice(0, BREAKDOWN_COMPETITORS).map((c) => {
+    let quote = null;
+    for (const id of c.answerIds) {
+      const a = byId.get(id);
+      const b = ((a && a.businessesNamed) || []).find((x) => x && x.entityId === c.id && typeof x.pos === 'number');
+      const text = b && sentenceAt(a.text, b.pos, String(b.name || '').length);
+      if (text) { quote = { text, engine: a.engine || null, question: (qById.get(a.questionId) || {}).text || null }; break; }
+    }
+    const winsQuestions = [...new Set(c.answerIds.map((id) => (byId.get(id) || {}).questionId))]
+      .filter((q) => q && !youNamedQ.has(q)).map((q) => (qById.get(q) || {}).text).filter(Boolean);
+    const edges = [];
+    const r = c.reviews || null;
+    if (r && youReviews && Number.isInteger(r.count) && Number.isInteger(youReviews.count) && r.count > youReviews.count) {
+      edges.push(`${r.count} Google reviews to your ${youReviews.count}.`);
+    } else if (r && !youReviews && Number.isInteger(r.count) && r.count > 0) {
+      edges.push(`${r.count} Google reviews. We couldn't find yours on Google.`);
+    }
+    if (r && youReviews && typeof r.rating === 'number' && typeof youReviews.rating === 'number' && r.rating > youReviews.rating) {
+      edges.push(`A ${r.rating} Google rating to your ${youReviews.rating}.`);
+    }
+    if (c.first > t.firstYou) edges.push(`Named first in ${c.first} of ${t.answers} answers. You were named first in ${t.firstYou}.`);
+    if (c.sources.length) edges.push(`Listed on ${c.sources.length} ${c.sources.length === 1 ? 'site' : 'sites'} AI cited that ${c.sources.length === 1 ? "doesn't" : "don't"} list you: ${c.sources.slice(0, 3).map((x) => x.domain).join(', ')}.`);
+    if (winsQuestions.length) edges.push(`Named for “${winsQuestions[0]}”, where no answer named you.`);
+    return {
+      name: c.name, named: c.named, first: c.first, quote, reviews: r, sources: c.sources, winsQuestions, edges: edges.slice(0, 3),
+    };
+  });
+  return { you: { named: t.namedYou, first: t.firstYou, answers: t.answers, reviews: youReviews }, competitors };
+}
+
 /** Most "how AI describes you" phrases a report may carry. */
 export const MAX_OWNER_DESCRIPTORS = 6;
 

@@ -243,20 +243,33 @@ function recheckOffer(report) {
   const subject = encodeURIComponent('Be the Answer: ' + (report.business?.name || ''));
   return `
     <div class="r2-upsell">
-      <p><strong>Want us to keep watching?</strong> Be the Answer ($499): a re-scan every month for a year in up to 3 towns you serve, a one-page “what changed” with your next 3 fixes, an email when a competitor starts getting named instead of you, and your directory checklist with the exact text to paste. Everything you’ve paid us counts toward it.</p>
-      <a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${subject}">Tell me when it opens</a>
+      <p><strong>Want us to keep watching?</strong> Be the Answer ($499): a re-scan every month for a year in up to 3 towns you serve, an email each month with what changed and your next 3 fixes, an alert when a new competitor takes the top spot, the Competitor Breakdown, your directory checklist and 12 Google posts. Everything you’ve paid us counts toward it.</p>
+      ${tierOn('be_the_answer')
+        ? '<a class="btn-secondary" data-tier="be_the_answer" href="#">Get Be the Answer</a>'
+        : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${subject}">Tell me when it opens</a>`}
     </div>`;
 }
 
 // The Fix Kit comes with every paid audit (src/lib/fix-kit.js FIX_KIT_TIERS): the owner confirms
 // their details on /fix-kit/<token> and downloads the files. Only on paid reports.
 function fixKitIncluded(report) {
-  const kitUrl = '/fix-kit/' + encodeURIComponent(String(report.id || ''));
+  // A Be the Answer town report shares its plan's Fix Kit.
+  const kitUrl = '/fix-kit/' + encodeURIComponent(String((report.plan && report.plan.token) || report.id || ''));
   return `
     <div class="cta-band r2-xray-offer">
       <h2>Your Fix Kit is included.</h2>
       <p>You check your business details, and we build the files for you: robots.txt, llms.txt, schema code, an FAQ page, your Google profile text and a review QR code, with a one-page guide for whoever runs your website.</p>
       <p><a class="btn big" href="${kitUrl}">Get my Fix Kit</a></p>
+    </div>`;
+}
+
+// Be the Answer: this report is on a plan. Link to the plan page (towns, directory checklist, Google posts).
+function planPanel(report) {
+  const url = '/plan/' + encodeURIComponent(String(report.plan.token || ''));
+  return `
+    <div class="r2-upsell">
+      <p><strong>${report.plan.town ? 'This town is part of your Be the Answer plan.' : 'You’re on Be the Answer.'}</strong> We re-scan every month and email you what changed, with your next 3 fixes. Your towns, directory checklist and Google posts are on your plan page.</p>
+      <a class="btn-secondary" href="${url}">Open my plan</a>
     </div>`;
 }
 
@@ -580,7 +593,8 @@ function renderV2(root, report) {
     heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
     scoreV2(report),
     baselineV2(report, t),
-    paid && report.baseline && !isDemoReport(report) ? recheckOffer(report) : '',
+    report.plan ? planPanel(report) : '',
+    paid && report.baseline && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
     report.sample ? '' : leadForm('top'),
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
     nobodyTwice ? '' : whoAiNamesV2({ b, t, N, cw, proven }),
@@ -591,6 +605,7 @@ function renderV2(root, report) {
     listingsV2({ listings, badListings }),
     issuesV2({ issues, locked, xrayOk }),
     xrayV2({ report, aById, cw, N }),
+    report.breakdown ? breakdownV2(report) : '',
     paid && !isDemoReport(report) ? fixKitIncluded(report) : '',
     offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }),
     answersV2({ questions, answers }),
@@ -1169,13 +1184,49 @@ function xrayV2({ report, aById, cw, N }) {
         : `No other business was named in 2 or more of the ${num(N)} ${cw.unit}, so there is no competitor gap to show.`}</p>
       ${checkedNote && comps.length ? `<p class="r2-note">${escapeHtml(checkedNote)}</p>` : ''}
       ${cards}
-      ${comps.length ? `<div class="r2-upsell"><p><strong>Want to know why AI picks them?</strong> The Competitor Breakdown ($25) takes the top 3 businesses AI names instead of you and puts each one side by side with you: what AI said about them, their reviews against yours, what their website has that yours doesn’t, and the directories they’re on and you’re not. It ends with the 3 things they have that you don’t.</p><a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a></div>` : ''}
+      ${comps.length && !report.breakdown && !report.plan && !isDemoReport(report) ? `<div class="r2-upsell"><p><strong>Want to know why AI picks them?</strong> The Competitor Breakdown ($25) puts the top 3 businesses AI names instead of you side by side with you: what AI said about them, how often they’re named and named first, their Google reviews against yours, the questions they win, and the sites AI cited that list them and not you. Each ends with up to 3 things they have that you don’t.</p>${tierOn('competitor_breakdown') ? '<a class="btn-secondary" data-tier="competitor_breakdown" href="#">Get my Competitor Breakdown — $25</a>' : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a>`}</div>` : ''}
       <h2 class="r2-xray-h2">Your fix checklist</h2>
       <p class="sub">${checklist.length} ${plural(checklist.length, 'fix', 'fixes')}, in order. Ticks are saved in this browser.</p>
       <ul class="r2-check">${checklist.map((i, n) => {
         const k = escapeHtml(`${n}:${i.title}`.slice(0, 120));
         return `<li><label><input type="checkbox" data-check="${k}"${ticked[`${n}:${i.title}`.slice(0, 120)] ? ' checked' : ''}> <span>${escapeHtml(i.title)}</span></label></li>`;
       }).join('')}</ul>
+    </section>`;
+}
+
+// 8c. Competitor Breakdown ($25 add-on; in Be the Answer). Built by the Worker from this report's own
+// data (shared/report-v2.js buildCompetitorBreakdown) and sent only when paid for (or on the sample).
+function breakdownV2(report) {
+  const bd = report.breakdown || {};
+  const comps = (bd.competitors || []).filter((c) => c && c.name);
+  const you = bd.you || {};
+  if (!comps.length) {
+    return `
+    <section class="report-section r2-xray">
+      <h2>Competitor Breakdown</h2>
+      <p class="sub">No other business was named in 2 or more answers, so there is nobody to break down this time.</p>
+    </section>`;
+  }
+  const rev = (r) => (r && Number.isInteger(r.count) ? `${typeof r.rating === 'number' && r.count > 0 ? `${r.rating.toFixed(1)}★ from ` : ''}${num(r.count)} Google ${plural(r.count, 'review', 'reviews')}` : 'not found on Google');
+  const cards = comps.map((c) => `
+      <div class="listing-card r2-gap">
+        <h3>${escapeHtml(c.name)}</h3>
+        <table class="r2-table"><thead><tr><th></th><th>${escapeHtml(c.name)}</th><th>You</th></tr></thead><tbody>
+          <tr><td>Named</td><td>${num(c.named)} of ${num(you.answers)}</td><td>${num(you.named)} of ${num(you.answers)}</td></tr>
+          <tr><td>Named first</td><td>${num(c.first)}</td><td>${num(you.first)}</td></tr>
+          <tr><td>Google reviews</td><td>${escapeHtml(rev(c.reviews))}</td><td>${escapeHtml(rev(you.reviews))}</td></tr>
+        </tbody></table>
+        ${c.quote ? `<p><strong>What ${escapeHtml(engineName(c.quote.engine))} said${c.quote.question ? ` when asked “${escapeHtml(c.quote.question)}”` : ''}:</strong></p><blockquote class="r2-quote">${escapeHtml(c.quote.text)}</blockquote>` : ''}
+        ${(c.winsQuestions || []).length ? `<p><strong>Questions where AI named them and not you:</strong></p><ul class="r2-gap-list">${c.winsQuestions.map((q) => `<li>${escapeHtml(q)}</li>`).join('')}</ul>` : ''}
+        ${(c.edges || []).length
+          ? `<p><strong>What they have that you don’t:</strong></p><ol class="r2-gap-list">${c.edges.map((e) => `<li>${escapeHtml(e)}</li>`).join('')}</ol>`
+          : '<p class="r2-muted">We found nothing they have that you don’t in this scan.</p>'}
+      </div>`).join('');
+  return `
+    <section class="report-section r2-xray">
+      <h2>Competitor Breakdown</h2>
+      <p class="sub">The ${comps.length === 1 ? 'business' : `${comps.length} businesses`} AI named most instead of you, side by side with you. Every line comes from this scan.</p>
+      ${cards}
     </section>`;
 }
 

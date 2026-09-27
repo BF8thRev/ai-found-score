@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Your Be the Answer plan — AI Found Score</title>
+  <meta name="description" content="Your Be the Answer plan: your towns, your directory checklist and your Google posts.">
+  <link rel="icon" type="image/svg+xml" href="/img/mark.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css?v=7">
+  <style>
+    /* Fix Kit page only (kept here so styles.css keeps its version). */
+    .fk { padding: 40px 0 72px; }
+    .fk h1 { font-size: clamp(30px, 4vw, 40px); margin: 0 0 12px; }
+    .fk .lede-page { font-size: 19px; line-height: 1.55; margin: 0 0 22px; }
+    .fk-note { background: #EEF4FE; border: 1px solid #C9DBFA; border-radius: var(--radius); padding: 14px 18px; font-weight: 600; color: var(--navy); margin: 0 0 24px; }
+    .fk-note.sample { background: var(--wash); border-color: var(--line); font-weight: 500; }
+    .fk-form { display: grid; gap: 18px; }
+    .fk-form fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; margin: 0; display: grid; gap: 14px; }
+    .fk-form legend { font-weight: 800; color: var(--navy); padding: 0 6px; }
+    .fk-field { display: grid; gap: 6px; }
+    .fk-field label { font-weight: 700; color: var(--navy); }
+    .fk-field .hint { font-size: 14px; color: var(--muted); margin: 0; }
+    .fk-field input, .fk-field textarea { font: inherit; width: 100%; padding: 11px 13px; border: 2px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+    .fk-field textarea { min-height: 96px; resize: vertical; }
+    .fk-field input:focus, .fk-field textarea:focus { outline: none; border-color: var(--blue); }
+    .fk-field.has-error input, .fk-field.has-error textarea { border-color: var(--red); }
+    .fk-err { color: var(--red); font-size: 14px; font-weight: 600; margin: 0; }
+    .fk-err:empty { display: none; }
+    .fk-row { display: grid; gap: 14px; grid-template-columns: 2fr 1fr 1fr; }
+    @media (max-width: 620px) { .fk-row { grid-template-columns: 1fr 1fr; } .fk-row .fk-field:first-child { grid-column: 1 / -1; } }
+    .fk-confirm { display: flex; gap: 12px; align-items: flex-start; font-weight: 600; color: var(--navy); }
+    .fk-confirm input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; }
+    .fk-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+    .fk-status { margin: 0; font-weight: 600; }
+    .fk-status.ok { color: var(--green); }
+    .fk-status.bad { color: var(--red); }
+    .fk-download { border: 2px solid var(--green); border-radius: var(--radius); padding: 20px 22px; margin: 0 0 26px; background: #F1FAF5; }
+    .fk-download h2 { margin: 0 0 6px; font-size: 22px; }
+    .fk-download p { margin: 0 0 14px; }
+    .fk-list { margin: 8px 0 0; padding-left: 22px; }
+    .fk-list li { margin-bottom: 6px; }
+    .pl-towns { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 10px; }
+    .pl-towns li { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .pl-section { margin: 36px 0 0; }
+    .pl-section h2 { margin: 0 0 8px; }
+    .pl-paste { background: var(--wash); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; white-space: pre-wrap; font-size: 15px; margin: 12px 0; overflow-wrap: anywhere; }
+    .pl-sites { padding-left: 0; list-style: none; display: grid; gap: 8px; margin: 12px 0 0; }
+    .pl-sites label { display: flex; gap: 10px; align-items: flex-start; }
+    .pl-sites input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; }
+    .pl-sites small { display: block; color: var(--muted); }
+    .pl-post { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; margin: 10px 0; }
+    .pl-post h3 { margin: 0 0 6px; font-size: 17px; }
+    .pl-post p { margin: 0 0 10px; }
+    .pl-copy { font: inherit; font-size: 14px; font-weight: 700; padding: 6px 12px; border: 2px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; }
+    [hidden] { display: none !important; }
+  </style>
+  <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-K58KFVJC');</script>
+  <!-- End Google Tag Manager -->
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-K58KFVJC" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/img/logo.svg" alt="AI Found Score" width="249" height="40"></a>
+    <nav class="nav" aria-label="Main">
+      <a href="/#how">How it works</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="/report/sample-001">Sample report</a>
+      <a href="/#faq">FAQ</a>
+    </nav>
+    <a class="header-cta" href="/#request">Get my free report</a>
+  </div>
+</header>
+
+<main class="fk">
+  <div class="wrap narrow">
+    <div data-state="loading"><p>Loading your plan…</p></div>
+
+    <div data-state="notfound" hidden>
+      <h1>We couldn't find that plan.</h1>
+      <p>Check the link in your email. Still stuck? Email <a href="mailto:hello@aifoundscore.com?subject=Be%20the%20Answer">hello@aifoundscore.com</a>.</p>
+    </div>
+
+    <div data-state="unpaid" hidden>
+      <h1>Be the Answer</h1>
+      <p class="lede-page">This page comes with Be the Answer. Just paid? It can take a minute to come through. Reload this page.</p>
+      <p><a class="btn-secondary" data-report-link href="/">Back to your report</a></p>
+    </div>
+
+    <div data-state="error" hidden>
+      <h1>Something went wrong.</h1>
+      <p>Reload the page in a minute. If it keeps happening, email <a href="mailto:hello@aifoundscore.com?subject=Be%20the%20Answer">hello@aifoundscore.com</a>.</p>
+    </div>
+
+    <div data-state="plan" hidden>
+      <h1>Your Be the Answer plan</h1>
+      <p class="lede-page" data-lede>We re-scan every month for a year and email you what changed, with your next 3 fixes.</p>
+      <p class="fk-note sample" data-sample-note hidden>This is the sample. Nothing you add here is saved.</p>
+
+      <section class="pl-section">
+        <h2>Your towns</h2>
+        <p>Each town gets its own report, re-scanned every month. Your plan covers up to <span data-max-towns>3</span>.</p>
+        <ul class="pl-towns" data-towns></ul>
+        <form class="fk-form" data-town-form hidden novalidate>
+          <fieldset>
+            <legend>Add a town you serve</legend>
+            <div class="fk-row">
+              <div class="fk-field" data-field="town"><label for="pl-town">Town</label><input id="pl-town" name="town" type="text" maxlength="60" required></div>
+              <div class="fk-field" data-field="state"><label for="pl-state">State</label><input id="pl-state" name="state" type="text" maxlength="2" autocapitalize="characters" placeholder="NY" required></div>
+              <div class="fk-field" data-field="zip"><label for="pl-zip">ZIP</label><input id="pl-zip" name="zip" type="text" inputmode="numeric" maxlength="5"></div>
+            </div>
+            <p class="hint">Towns can be added, not swapped: each one is scanned every month from the day you add it.</p>
+            <div class="fk-actions"><button class="btn" type="submit">Add this town</button><p class="fk-status" role="status" aria-live="polite"></p></div>
+          </fieldset>
+        </form>
+      </section>
+
+      <section class="pl-section" data-needs-details hidden>
+        <h2>Confirm your details first</h2>
+        <p>Your directory checklist and Google posts are written from the details you confirm on your Fix Kit page, so they match everywhere.</p>
+        <p><a class="btn" data-kit-link href="/">Confirm my details</a></p>
+      </section>
+
+      <section class="pl-section" data-has-details hidden>
+        <h2>Your Fix Kit</h2>
+        <p>Ready-to-install files for whoever runs your website, plus this checklist and your posts as text files.</p>
+        <p><a class="btn-secondary" data-kit-link href="/">Open my Fix Kit</a></p>
+      </section>
+
+      <section class="pl-section" data-has-details hidden>
+        <h2>Your directory checklist</h2>
+        <p>On each site, search for your business first. If it's there, claim it. If not, add it. Paste the details below exactly as written, the same on every site. We never sign in for you, and each site decides what it accepts.</p>
+        <div class="pl-paste" data-paste></div>
+        <button class="pl-copy" type="button" data-copy-paste>Copy these details</button>
+        <ol class="pl-sites" data-sites></ol>
+      </section>
+
+      <section class="pl-section" data-has-details hidden>
+        <h2>Your Google posts</h2>
+        <p>One a month. Sign in at business.google.com, choose "Add update" and paste the month's post. A photo of your own work helps.</p>
+        <div data-posts></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/"><img src="/img/logo.svg" alt="AI Found Score" width="187" height="30"></a>
+        <p>Free AI visibility reports for local businesses. Public data only. No promises about what AI will say.</p>
+      </div>
+      <div class="col">
+        <h4>Company</h4>
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/refunds">Refunds</a>
+      </div>
+      <div class="col">
+        <h4>Report</h4>
+        <a href="/#how">How it works</a>
+        <a href="/#pricing">Pricing</a>
+        <a href="/report/sample-001">Sample report</a>
+      </div>
+      <div class="col">
+        <h4>Contact</h4>
+        <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a>
+        <address>AI Found Score<br>120 Terminal Drive<br>Plainview, NY 11803</address>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Fields Holding d/b/a GetAiFound Score</span>
+      <span><a href="/unsubscribe">Unsubscribe from emails</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/plan.js"></script>
+</body>
+</html>

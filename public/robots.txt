@@ -1,6 +1,7 @@
 User-agent: *
 Disallow: /report/
 Disallow: /fix-kit/
+Disallow: /plan/
 Disallow: /success
 Disallow: /unsubscribe
 Disallow: /stop

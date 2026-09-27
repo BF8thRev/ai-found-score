@@ -418,6 +418,12 @@ export function paidScanId(sessionId) {
   return stableUuid(`paid-scan:${sessionId}`);
 }
 
+/** The business a token's scans ask about: the newest scans row's `business`, else the stored report's. */
+export async function readPlanBusiness(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  const b = await readScanBusiness(env, token, fetchImpl).catch(() => null);
+  return b || (await readStoredReport(env, token, fetchImpl).catch(() => null))?.report?.business || null;
+}
+
 /** The newest `business` a scans row kept for this token (request scans store it), or null. */
 async function readScanBusiness(env, token, fetchImpl) {
   const rows = await readRows(env, `report_token=eq.${encodeURIComponent(token)}&business=not.is.null&select=business&order=created_at.desc&limit=1`, fetchImpl);
@@ -450,15 +456,19 @@ export async function startPaidScan(env, { token, sessionId, tier }, { fetchImpl
  * `trigger` 'paid' (after payment) or 'recheck' (30 days later); one of each per token. Throws on
  * a store failure; a workflow that won't start marks the row failed and returns { ok: false }.
  */
-async function startFullScan(env, { token, trigger, scanId, notes }, { fetchImpl }) {
+async function startFullScan(env, { token, trigger, scanId, notes, business: given = null }, { fetchImpl }) {
   if (!env.SCAN_WORKFLOW) return { ok: false, reason: 'no-workflow' };
   if (!canStore(env)) return { ok: false, reason: 'no-store' };
-  const rows = await readByToken(env, token, { fetchImpl });
-  if (rows.some((r) => r.trigger === trigger && r.status !== 'failed')) return { ok: false, reason: 'already' };
+  // 'paid' and 'recheck' run once per token; a 'monthly' scan once per scan id (one per month).
+  if (trigger === 'monthly') {
+    if ((await readRows(env, `id=eq.${scanId}&select=id`, fetchImpl)).length) return { ok: false, reason: 'already' };
+  } else {
+    const rows = await readByToken(env, token, { fetchImpl });
+    if (rows.some((r) => r.trigger === trigger && r.status !== 'failed')) return { ok: false, reason: 'already' };
+  }
   const engines = activeEngines(env);
   if (!engines.length) return { ok: false, reason: 'no-engine' };
-  let business = await readScanBusiness(env, token, fetchImpl).catch(() => null);
-  if (!business) business = (await readStoredReport(env, token, fetchImpl))?.report?.business || null;
+  let business = given || await readPlanBusiness(env, token, { fetchImpl });
   const parsed = parseScanRequest({ business: business || {}, engines, runs: 1, trigger, notes });
   if (!parsed.ok) return { ok: false, reason: `business: ${parsed.error}` };
   const questions = 5;
@@ -543,4 +553,119 @@ export async function paidScanRunning(env, token, { fetchImpl = (...a) => fetch(
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Be the Answer: a re-scan every month for a year, for the plan's report and each extra town.
+// Run daily by the Worker's cron next to the 30-day re-check (src/worker.js scheduled).
+// ---------------------------------------------------------------------------
+
+export const PLAN_TIER = 'be_the_answer';
+export const PLAN_MONTHS = 12;
+export const MONTH_DAYS = 30;
+/** Most monthly scans started per run. */
+export const MONTHLY_MAX_PER_RUN = 30;
+/** A report scanned this recently (paid scan, re-check, monthly) is not scanned again this month. */
+export const MONTHLY_MIN_GAP_DAYS = 20;
+
+/** Which plan month is due `nowMs` for a plan paid at `paidAtMs`: 1..PLAN_MONTHS, else 0 (none due, or too late to catch up). */
+export function planMonthDue(paidAtMs, nowMs) {
+  const days = Math.floor((nowMs - paidAtMs) / 86400_000);
+  const m = Math.floor(days / MONTH_DAYS);
+  if (m < 1 || m > PLAN_MONTHS) return 0;
+  return days - m * MONTH_DAYS < RECHECK_WINDOW_DAYS ? m : 0;
+}
+
+/** Live Be the Answer payments young enough to have a month due, oldest first. */
+export function readPlanPayments(env, nowMs, { fetchImpl = fetch } = {}) {
+  const since = new Date(nowMs - ((PLAN_MONTHS * MONTH_DAYS) + RECHECK_WINDOW_DAYS) * 86400_000).toISOString();
+  const { base, headers } = supa(env);
+  const q = `or=(tier.eq.${PLAN_TIER},amount_cents.eq.49900)&livemode=eq.true&report_token=not.is.null&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=500`;
+  return fetchImpl(`${base}/payments?${q}`, { headers, signal: AbortSignal.timeout(8000) }).then(async (res) => {
+    if (!res.ok) throw new Error(`payments read failed: ${res.status}`);
+    return res.json();
+  });
+}
+
+/** The extra towns on a plan: [{ town_token, town, state, zip }]. */
+export async function readPlanTowns(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  const { base, headers } = supa(env);
+  const res = await fetchImpl(`${base}/plan_towns?report_token=eq.${encodeURIComponent(token)}&select=town_token,town,state,zip,created_at&order=created_at.asc&limit=10`, { headers, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`plan_towns read failed: ${res.status}`);
+  return res.json();
+}
+
+/** The plan a town token belongs to (its parent report token), or null. */
+export async function readPlanParent(env, townToken, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  if (!canStore(env) || !LOOKUP_TOKEN_RE.test(String(townToken || ''))) return null;
+  const { base, headers } = supa(env);
+  const res = await fetchImpl(`${base}/plan_towns?town_token=eq.${encodeURIComponent(townToken)}&select=report_token&limit=1`, { headers, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return null;
+  const [row] = await res.json();
+  return row?.report_token || null;
+}
+
+/** The business for one of a plan's towns: the plan's business, asked about that town instead. */
+export function townBusiness(business, { town, state, zip }) {
+  const { nearbyTown, id, ...rest } = business || {};
+  return { ...rest, town, state, ...(zip ? { zip } : { zip: undefined }) };
+}
+
+/** A plan town's first scan (month 0), started when the owner adds the town. */
+export async function startTownScan(env, { townToken, business }, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  try {
+    return await startFullScan(env, {
+      token: townToken, trigger: 'monthly', scanId: await stableUuid(`monthly:${townToken}:0`), notes: 'Be the Answer: new town', business,
+    }, { fetchImpl });
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 200) };
+  }
+}
+
+/**
+ * Start every monthly Be the Answer scan that's due: for each plan, month m (1..12, counted from the
+ * payment), its own report and each extra town. Once per (token, month); skipped when that report
+ * was scanned in the last MONTHLY_MIN_GAP_DAYS (the 30-day re-check covers month 1 of a plan bought
+ * with the audit). At most MONTHLY_MAX_PER_RUN per run; never throws. RECHECK_SCAN=off turns it off too.
+ * → { started: [token], skipped: { reason: n }, error? }
+ */
+export async function startDueMonthly(env, { now = Date.now(), fetchImpl = (...a) => fetch(...a) } = {}) {
+  const out = { started: [], skipped: {} };
+  const skip = (why) => { out.skipped[why] = (out.skipped[why] || 0) + 1; };
+  if (String(env?.RECHECK_SCAN ?? '').trim().toLowerCase() === 'off') return { ...out, error: 'off' };
+  if (!canStore(env) || !env.SCAN_WORKFLOW) return { ...out, error: 'not configured' };
+  let payments;
+  try {
+    payments = await readPlanPayments(env, now, { fetchImpl });
+  } catch (e) {
+    return { ...out, error: String(e?.message || e).slice(0, 200) };
+  }
+  // The first plan payment per token sets its calendar.
+  const plans = new Map();
+  for (const p of payments) if (LOOKUP_TOKEN_RE.test(String(p.report_token)) && !plans.has(p.report_token)) plans.set(p.report_token, Date.parse(p.paid_at));
+  for (const [token, paidAt] of plans) {
+    const m = planMonthDue(paidAt, now);
+    if (!m) { skip('not-due'); continue; }
+    let towns = [];
+    try { towns = await readPlanTowns(env, token, { fetchImpl }); } catch { skip('towns'); }
+    const parentBusiness = towns.length ? await readPlanBusiness(env, token, { fetchImpl }) : null;
+    const targets = [{ token }, ...towns.map((t) => ({ token: t.town_token, business: parentBusiness ? townBusiness(parentBusiness, t) : null }))];
+    for (const t of targets) {
+      if (out.started.length >= MONTHLY_MAX_PER_RUN) { skip('max-per-run'); continue; }
+      try {
+        const recent = (await readByToken(env, t.token, { fetchImpl })).some((r) => ['paid', 'recheck', 'monthly'].includes(r.trigger)
+          && r.status !== 'failed' && now - Date.parse(r.created_at) < MONTHLY_MIN_GAP_DAYS * 86400_000);
+        if (recent) { skip('recent'); continue; }
+        const r = await startFullScan(env, {
+          token: t.token, trigger: 'monthly', scanId: await stableUuid(`monthly:${t.token}:${m}`), notes: `Be the Answer month ${m}`, business: t.business || null,
+        }, { fetchImpl });
+        if (r.ok) out.started.push(t.token);
+        else skip(r.reason.split(':')[0]);
+      } catch (e) {
+        skip('error');
+        console.error('[monthly] start failed', String(e?.message || e).slice(0, 200));
+      }
+    }
+  }
+  return out;
 }

@@ -6,6 +6,9 @@
 const STRIPE_LINKS = {
   // Keys are stable ids (analytics, webhook TIER_BY_CENTS); only the labels changed.
   xray: '#',            // AI Visibility Audit (was the X-Ray) — $49 one-time, includes the Fix Kit and a free 30-day re-scan (paste the live Stripe Payment Link here; set metadata tier=xray)
+  competitor_breakdown: '#', // Competitor Breakdown — $25 add-on on paid reports (TIER_BY_CENTS 2500; set metadata tier=competitor_breakdown)
+  be_the_answer: '#',   // Be the Answer — $499 for a year (TIER_BY_CENTS 49900; set metadata tier=be_the_answer). The
+                        // "everything you've paid counts" credit needs a Checkout Session, not a fixed link.
   // Off sale: the Fix Kit is included in the $49 audit now. Key kept so old $149 payments still resolve.
   fix_kit: '#',         // Fix Kit — $149 one-time (retired)
   // Off sale since the Sep 2026 offer ladder; keys kept so old analytics/webhook keys still resolve.
@@ -16,7 +19,8 @@ const STRIPE_LINKS = {
 };
 
 // Tiers on sale right now. The report page never renders a button or link for a tier that
-// isn't listed here. Known: 'xray', 'fix_kit', 'snapshot', 'before_after', 'full_year', 'listing_fix'.
+// isn't listed here. Known: 'xray', 'competitor_breakdown', 'be_the_answer', 'fix_kit', 'snapshot',
+// 'before_after', 'full_year', 'listing_fix'. Add 'competitor_breakdown' and 'be_the_answer' once their links are set.
 // Sep 2026 ladder: only the AI Visibility Audit ($49, Fix Kit included) is on sale. The $25
 // Competitor Breakdown is ordered by email until its Stripe link exists; Be the Answer ($499) is
 // shown as "opening soon" on the homepage with no checkout.
