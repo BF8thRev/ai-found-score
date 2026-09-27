@@ -138,11 +138,10 @@ export function statusFromRows(rows) {
   // A failed paid attempt is retried once by the cron (still 'paid'); after MAX_ATTEMPTS it's 'failed'.
   const paid = list.filter((r) => r.trigger === 'paid');
   if (paid.length) {
-    if (paid.some((r) => r.status === 'queued' || (r.status === 'done' && r.report_valid === true))) return 'paid';
+    if (paid.some((r) => r.status === 'queued' || (r.status === 'done' && r.report_valid === true && !storeFailed(r)))) return 'paid';
     return paid.length >= MAX_ATTEMPTS ? 'failed' : 'paid';
   }
   if (list.some((r) => r.status === 'queued')) return 'queued';
-  const storeFailed = (r) => (Array.isArray(r.errors) ? r.errors : []).some((e) => e && e.kind === 'store');
   // Done and valid: the report row is being written (or the read raced it).
   if (list.some((r) => r.status === 'done' && r.report_valid === true && !storeFailed(r))) return 'running';
   return list.length >= MAX_ATTEMPTS ? 'failed' : 'queued';
@@ -436,7 +435,9 @@ export const ABANDONED_CHECKOUT_MINUTES = 60;
 /** Most scans started per cron run. */
 export const RETRY_MAX_PER_RUN = 10;
 
-const attemptFailed = (r) => r.status === 'failed' || (r.status === 'done' && r.report_valid === false);
+const storeFailed = (r) => (Array.isArray(r.errors) ? r.errors : []).some((e) => e && e.kind === 'store');
+/** An attempt that produced no usable report: failed, report failed the guardrails, or not stored. */
+const attemptFailed = (r) => r.status === 'failed' || (r.status === 'done' && (r.report_valid === false || storeFailed(r)));
 
 /**
  * What the cron should start, from recent scans rows (pure). A token is picked when:
@@ -457,7 +458,7 @@ export function pickRecoveries(rows, { now = Date.now(), autoScan = false } = {}
   }
   const out = [];
   for (const [token, list] of byToken) {
-    const busy = list.some((r) => r.status === 'running' || (r.status === 'done' && r.report_valid === true));
+    const busy = list.some((r) => r.status === 'running' || (r.status === 'done' && r.report_valid === true && !storeFailed(r)));
     if (busy) continue;
     const paid = list.filter((r) => r.trigger === 'paid');
     if (paid.length) {
@@ -486,7 +487,7 @@ export async function retryFailedScans(env, { now = Date.now(), fetchImpl = (...
   try {
     if (!env.SCAN_WORKFLOW || !canStore(env)) return { ok: false, reason: 'not configured' };
     const since = new Date(now - RETRY_WINDOW_HOURS * 3600_000).toISOString();
-    const rows = await readRows(env, `trigger=in.(request,paid)&report_token=not.is.null&created_at=gte.${encodeURIComponent(since)}&select=id,report_token,trigger,status,report_valid,notes,created_at&order=created_at.desc&limit=1000`, fetchImpl);
+    const rows = await readRows(env, `trigger=in.(request,paid)&report_token=not.is.null&created_at=gte.${encodeURIComponent(since)}&select=id,report_token,trigger,status,report_valid,errors,notes,created_at&order=created_at.desc&limit=1000`, fetchImpl);
     const picks = pickRecoveries(rows, { now, autoScan: autoScanOn(env) });
     const results = [];
     for (const p of picks) {
@@ -512,7 +513,7 @@ export async function retryFailedScans(env, { now = Date.now(), fetchImpl = (...
 export async function startAbandonedCheckout(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
   try {
     if (!autoScanOn(env) || !REQUEST_TOKEN_RE.test(String(token || ''))) return { ok: false, reason: 'off' };
-    const rows = await readRows(env, `report_token=eq.${encodeURIComponent(token)}&select=id,report_token,trigger,status,report_valid,notes,created_at&order=created_at.desc&limit=10`, fetchImpl);
+    const rows = await readRows(env, `report_token=eq.${encodeURIComponent(token)}&select=id,report_token,trigger,status,report_valid,errors,notes,created_at&order=created_at.desc&limit=10`, fetchImpl);
     const pick = pickRecoveries(rows, { now: Infinity, autoScan: true }).find((p) => p.kind === 'abandoned');
     if (!pick) return { ok: false, reason: 'nothing to start' };
     return await runQueuedScan(env, pick.id, { fetchImpl });
@@ -579,7 +580,8 @@ async function startFullScan(env, { token, trigger, scanId, notes, business: giv
     if ((await readRows(env, `id=eq.${scanId}&select=id`, fetchImpl)).length) return { ok: false, reason: 'already' };
   } else {
     const rows = await readByToken(env, token, { fetchImpl });
-    if (rows.some((r) => r.trigger === trigger && r.status !== 'failed')) return { ok: false, reason: 'already' };
+    // A failed attempt (failed, report failed the guardrails, or not stored) may be tried again.
+    if (rows.some((r) => r.trigger === trigger && !attemptFailed(r))) return { ok: false, reason: 'already' };
   }
   const engines = activeEngines(env);
   if (!engines.length) return { ok: false, reason: 'no-engine' };

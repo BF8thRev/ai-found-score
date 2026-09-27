@@ -474,7 +474,8 @@ function handleLivePreviewRoute(request, url, env, ctx) {
 }
 
 // One-click unsubscribe. Every way in writes the same suppression row:
-//   GET  /unsubscribe?t=<report token>          link in the email footer
+//   GET  /unsubscribe?t=<report token>          link in the email footer: shows a confirm button, writes nothing
+//   POST /unsubscribe?t=<token>  confirm=1       that button
 //   POST /unsubscribe?t=<token>  List-Unsubscribe=One-Click   RFC 8058, from the mail client
 //   POST /unsubscribe  email=<address>            the form on the page, for people without a link
 //   GET  /stop?c=<code>, POST /stop  code=<code>  postcard opt-out (code printed on the card)
@@ -505,6 +506,10 @@ async function handleUnsubscribe(request, url, env) {
   };
 
   if (!token && !email && !code) return servePage(null);
+  // A GET (the link in an email or a typed /stop?c=) only shows a confirm button: mail scanners open
+  // every link in a message, and a paying customer's plan emails must not stop because one did.
+  // The button POSTs back to this URL; the RFC 8058 one-click POST from the mail client needs none.
+  if (request.method !== 'POST') return servePage(null);
 
   try {
     if (code && !token) {

@@ -336,9 +336,10 @@ function trustRow({ promise, once = 'One-time payment. No subscription.', next =
 }
 
 // The offer band. `lead` is an optional first sentence (edge states: named everywhere, nothing missing).
-function xrayOffer(lead = '') {
-  // The $25 Competitor Breakdown rides along as a checkbox (config.js wireCheckout sends ticked add-ons).
-  const addon = tierOn('competitor_breakdown')
+function xrayOffer(lead = '', { breakdown = true } = {}) {
+  // The $25 Competitor Breakdown rides along as a checkbox (config.js wireCheckout sends ticked add-ons),
+  // only when someone was named often enough to compare (checkout refuses it otherwise).
+  const addon = breakdown && tierOn('competitor_breakdown')
     ? '<p class="r2-addon"><label><input type="checkbox" data-addon="competitor_breakdown"> Add the Competitor Breakdown, +$25: the top 3 businesses AI names instead of you, side by side with you.</label></p>'
     : '';
   return `
@@ -737,7 +738,7 @@ function renderV2(root, report) {
     xrayV2({ report, aById, cw, N }),
     report.breakdown ? breakdownV2(report) : '',
     paid && !isDemoReport(report) ? fixKitIncluded(report) : '',
-    offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }),
+    offerV2({ allNamed, noFixes, cw, fixCount, xrayOk, hasCompetitors: !nobodyTwice }),
     answersV2({ questions, answers }),
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
     bottomLead(report),
@@ -1391,13 +1392,13 @@ function breakdownV2(report) {
 // Only on a locked report with at least MIN_FIX_ITEMS fixes specific to the business (xrayOk; the refund promise). Edge states
 // (named in every answer, or nothing missing) offer it too: the baseline fixes still apply.
 // Sample and showcase reports never link to Stripe (isDemoReport, at the top of this file).
-function offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }) {
+function offerV2({ allNamed, noFixes, cw, fixCount, xrayOk, hasCompetitors }) {
   if (!xrayOk) return '';
   if (allNamed || noFixes) {
     const lead = allNamed ? `Every ${cw.one} named you.` : 'We found no listing to fix and no cited site missing you.';
-    return xrayOffer(`${lead} There are still ${num(fixCount)} things you can do to keep your details clear and consistent.`);
+    return xrayOffer(`${lead} There are still ${num(fixCount)} things you can do to keep your details clear and consistent.`, { breakdown: hasCompetitors });
   }
-  return xrayOffer();
+  return xrayOffer('', { breakdown: hasCompetitors });
 }
 
 // Answer text with business names bolded at their stored positions.

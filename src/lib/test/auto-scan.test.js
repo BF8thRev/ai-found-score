@@ -6,7 +6,7 @@ import {
   startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey,
   newRequestToken, requestScanId, autoScanOn, autoScanLimits, estimateRequestScanUsd, REQUEST_TOKEN_RE,
   DRY_RUN_REQUESTS, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, monthlyScanId,
-  pickRecoveries, PAID_INTENT, ABANDONED_CHECKOUT_MINUTES,
+  pickRecoveries, PAID_INTENT, ABANDONED_CHECKOUT_MINUTES, retryFailedScans,
 } from '../auto-scan.js';
 import { freeEngines, activeEngines } from '../../../scanner/config.js';
 import { handleReportRequest } from '../report-request.js';
@@ -432,6 +432,28 @@ test('free scans ask only the free three; paid scans ask every engine with a key
   const r = await startRequestScan(env, req(), { now: NOW, fetchImpl: db.fetch });
   assert.equal(r.status, 'running');
   assert.ok(!env.SCAN_WORKFLOW.created[0].params.engines.includes('perplexity'));
+});
+
+test('paid scan: an attempt with no usable report (guardrails, not stored) is retried, then reads failed', async () => {
+  const now = Date.parse('2026-09-27T12:00:00Z');
+  const at = new Date(now - 30 * 60_000).toISOString();
+  const invalid = [{ id: 'p1', report_token: 'P', trigger: 'paid', status: 'done', report_valid: false, created_at: at }];
+  const unstored = [{ id: 's1', report_token: 'S', trigger: 'paid', status: 'done', report_valid: true, errors: [{ kind: 'store' }], created_at: at }];
+  assert.deepEqual(pickRecoveries([...invalid, ...unstored], { now }).map((p) => `${p.kind}:${p.token}`).sort(), ['paid-retry:P', 'paid-retry:S']);
+  assert.equal(statusFromRows(unstored), 'paid', 'the retry is coming');
+  assert.equal(statusFromRows([...unstored, { ...unstored[0], id: 's2' }]), 'failed');
+
+  // The retry is not refused as "already": the earlier attempt produced nothing.
+  const env = baseEnv({ AUTO_SCAN: 'off' });
+  const db = fakeDb();
+  const q = await startRequestScan(env, req(), { now: NOW, fetchImpl: db.fetch });
+  const first = await startPaidScan(env, { token: q.token, sessionId: 'cs_r', tier: 'xray' }, { fetchImpl: db.fetch });
+  Object.assign(db.rows.find((x) => x.id === first.scanId), { status: 'done', report_valid: false });
+  const retry = await retryFailedScans(env, { now: Date.parse('2026-09-24T13:00:00Z'), fetchImpl: db.fetch });
+  assert.deepEqual(retry.results.map((r) => `${r.kind}:${r.ok}`), ['paid-retry:true'], JSON.stringify(retry));
+  // A paid scan that worked still blocks a second one.
+  Object.assign(db.rows.find((x) => x.id === first.scanId), { status: 'done', report_valid: true });
+  assert.equal((await startPaidScan(env, { token: q.token, sessionId: 'cs_r2', tier: 'xray' }, { fetchImpl: db.fetch })).reason, 'already');
 });
 
 test('paid scan: every question, every engine, same token; once per token; never throws', async () => {

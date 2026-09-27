@@ -23,7 +23,7 @@
 
 import { getReport, getPayments } from './db.js';
 import { rateLimit } from './rate-limit.js';
-import { xrayOffered } from '../../shared/report-v2.js';
+import { xrayOffered, buildCompetitorBreakdown } from '../../shared/report-v2.js';
 import { TIER_BY_CENTS } from './stripe.js';
 import { pendingReportStatus } from './auto-scan.js';
 
@@ -95,6 +95,10 @@ export function priceCheckout({ report, payments = [], tier, addons = [], livemo
     if (have.has('competitor_breakdown') || have.has('be_the_answer')) return { ok: false, status: 409, error: 'You already have the Competitor Breakdown. It’s in your report.' };
   }
   if (tier === 'be_the_answer' && have.has('be_the_answer')) return { ok: false, status: 409, error: 'You’re already on Be the Answer.' };
+  // Nobody named often enough to compare: there is no Breakdown to sell (alone or as the add-on).
+  if ((tier === 'competitor_breakdown' || extras.length) && !buildCompetitorBreakdown(report).competitors.length) {
+    return { ok: false, status: 409, error: 'No other business was named often enough to compare, so there is no Competitor Breakdown to sell you.' };
+  }
   const items = [tier, ...extras].map((t) => ({ tier: t, cents: PRICES[t], ...PRODUCTS[t] }));
   let credit = 0;
   if (tier === 'be_the_answer') {
@@ -112,7 +116,8 @@ export function sessionForm({ items, credit, token, tier, addons, origin, prepay
   f.set('client_reference_id', token);
   // t: the report link, so /success works on any device (not only where localStorage has it);
   // v: dollars charged, for the purchase event (public/js/analytics.js).
-  const charged = Math.max(0, (items || []).reduce((sum, i) => sum + (Number(i.cents) || 0), 0) - (Number(credit) || 0)) / 100;
+  // (items are already net of any credit: priceCheckout takes it off the plan's line.)
+  const charged = (items || []).reduce((sum, i) => sum + (Number(i.cents) || 0), 0) / 100;
   f.set('success_url', `${origin}/success?tier=${encodeURIComponent(tier)}&t=${encodeURIComponent(token)}&v=${charged}${prepay ? '&prepay=1' : ''}&session_id={CHECKOUT_SESSION_ID}`);
   // Left checkout before a report existed: /api/checkout/cancel starts the free report, then shows it.
   f.set('cancel_url', prepay ? `${origin}/api/checkout/cancel?t=${encodeURIComponent(token)}` : `${origin}/report/${encodeURIComponent(token)}`);

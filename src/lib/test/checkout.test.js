@@ -108,3 +108,15 @@ test('handleCheckout: prepay only for a token with a waiting request scan', asyn
   const none = await handleCheckout(req({ token: 'tokABCDEFGHIJKLMNOPQRS', tier: 'xray', prepay: true }), u, env, { ...base, pendingStatus: async () => null });
   assert.equal(none.status, 404);
 });
+
+test('priceCheckout: no competitor named often enough → no Competitor Breakdown, alone or as the add-on', () => {
+  const alone = { ...real, entities: (real.entities || []).filter((e) => e.isYou) };
+  const r = priceCheckout({ report: alone, payments: [pay('xray', 4900)], tier: 'competitor_breakdown' });
+  assert.equal(r.ok, false, JSON.stringify(r));
+  assert.equal(r.status, 409);
+  assert.match(r.error, /no Competitor Breakdown/);
+  if (xrayOffered(alone)) {
+    assert.match(priceCheckout({ report: alone, tier: 'xray', addons: ['competitor_breakdown'] }).error, /no Competitor Breakdown/);
+    assert.equal(priceCheckout({ report: alone, tier: 'xray' }).ok, true, 'the audit alone is still sold');
+  }
+});
