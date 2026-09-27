@@ -29,6 +29,13 @@ export const PRODUCTS = Object.freeze({
   competitor_breakdown: { name: 'Competitor Breakdown', description: 'The top 3 businesses AI names instead of you, side by side with you.' },
   be_the_answer: { name: 'Be the Answer (one year)', description: 'A re-scan every month in up to 3 towns, a monthly email with your next 3 fixes, competitor alerts, your directory checklist and 12 Google posts.' },
 });
+/** The line under Stripe's Pay button (custom_text.submit.message, max 1,200 characters): the plan's promise. */
+export const SUBMIT_MESSAGES = Object.freeze({
+  xray: 'Fewer than 3 problems specific to your business? Your $49 back: just reply to your receipt. One-time payment, no subscription. We never ask for your logins.',
+  competitor_breakdown: 'Your Competitor Breakdown appears in your report the moment you pay. One-time payment, no subscription.',
+  be_the_answer: 'The 60-Day Guarantee: not useful in the first 60 days? Full refund, just reply to your receipt. One payment for the year, no auto-renew. We never ask for your logins.',
+});
+
 /** Never charge less than this for Be the Answer after credits (Stripe's floor is $0.50). */
 export const MIN_CENTS = 100;
 const AUDIT_TIERS = ['xray', 'fix_kit', 'be_the_answer'];
@@ -92,7 +99,9 @@ export function sessionForm({ items, credit, token, tier, addons, origin }) {
   f.set('metadata[report_id]', token);
   if (addons.length) f.set('metadata[addons]', addons.join(','));
   if (credit) f.set('metadata[credit_cents]', String(credit));
+  f.set('custom_text[submit][message]', SUBMIT_MESSAGES[tier]);
   f.set('payment_intent_data[metadata][tier]', tier);
+  f.set('payment_intent_data[description]', items.map((i) => i.name).join(' + '));
   f.set('payment_intent_data[metadata][report_id]', token);
   items.forEach((it, i) => {
     f.set(`line_items[${i}][quantity]`, '1');
@@ -103,6 +112,8 @@ export function sessionForm({ items, credit, token, tier, addons, origin }) {
       ? `${it.description} Includes $${(credit / 100).toFixed(2)} credit for what you've already paid.`
       : it.description;
     f.set(`line_items[${i}][price_data][product_data][description]`, desc);
+    // Our logo next to each item on Stripe's page (a public https image; skipped for local dev).
+    if (origin.startsWith('https://')) f.set(`line_items[${i}][price_data][product_data][images][0]`, `${origin}/img/og.png`);
   });
   return f;
 }

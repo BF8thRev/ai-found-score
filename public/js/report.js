@@ -226,6 +226,28 @@ function unlockPanel() {
     </div>`;
 }
 
+// Trust row next to every buy button. Only claims that are true of every checkout: Stripe's hosted
+// page takes the card (we never see it), the plan's own money-back promise, a one-time payment with no
+// renewal (src/lib/checkout.js mode=payment), and public data only. Card brands are Stripe's defaults.
+const ICON = {
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+  once: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+};
+function trustRow({ promise, once = 'One-time payment. No subscription.', next = [] } = {}) {
+  return `
+      <ul class="trust-row">
+        <li>${ICON.lock}Secure checkout by Stripe</li>
+        <li>${ICON.shield}${escapeHtml(promise)}</li>
+        <li>${ICON.once}${escapeHtml(once)}</li>
+        <li>${ICON.key}No logins, ever</li>
+      </ul>
+      <p class="trust-cards" aria-label="Cards accepted"><span>VISA</span><span>MASTERCARD</span><span>AMEX</span><span>DISCOVER</span></p>
+      ${next.length ? `<ol class="trust-next" aria-label="What happens after you pay">${next.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ol>` : ''}
+      <p class="trust-foot">We never see your card. Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a> · <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>`;
+}
+
 // The offer band. `lead` is an optional first sentence (edge states: named everywhere, nothing missing).
 function xrayOffer(lead = '') {
   // The $25 Competitor Breakdown rides along as a checkbox (config.js wireCheckout sends ticked add-ons).
@@ -238,7 +260,15 @@ function xrayOffer(lead = '') {
       <p>${lead ? `${lead} ` : ''}${XRAY.what} ${XRAY.promise}</p>
       ${addon}
       <p><a class="btn big" data-tier="xray" href="#">${XRAY.button}</a></p>
-      <p class="fine">Secure checkout by Stripe. One-time payment, no subscription. <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
+      ${trustRow({
+        promise: 'Money back if we find fewer than 3 problems',
+        next: [
+          'Pay on Stripe’s secure page.',
+          'Your report unlocks right away: every answer, every fix, your Fix Kit.',
+          'We ask every AI assistant again and email you, usually within the hour.',
+          'In 30 days we re-scan for free and show you what changed.',
+        ],
+      })}
     </div>`;
 }
 
@@ -250,7 +280,7 @@ function recheckOffer(report) {
     <div class="r2-upsell">
       <p><strong>Want us to keep watching?</strong> Be the Answer ($499): a re-scan every month for a year in up to 3 towns you serve, an email each month with what changed and your next 3 fixes, an alert when a new competitor takes the top spot, the Competitor Breakdown, your directory checklist and 12 Google posts. Everything you’ve paid us counts toward it.</p>
       ${tierOn('be_the_answer')
-        ? '<a class="btn-secondary" data-tier="be_the_answer" href="#">Get Be the Answer</a> <span class="r2-muted">Checkout shows your price after credit.</span>'
+        ? `<a class="btn-secondary" data-tier="be_the_answer" href="#">Get Be the Answer</a> <span class="r2-muted">Checkout shows your price after credit.</span>${trustRow({ promise: 'Full refund in the first 60 days', once: 'One payment for the year. No auto-renew.' })}`
         : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${subject}">Tell me when it opens</a>`}
     </div>`;
 }
@@ -1189,7 +1219,7 @@ function xrayV2({ report, aById, cw, N }) {
         : `No other business was named in 2 or more of the ${num(N)} ${cw.unit}, so there is no competitor gap to show.`}</p>
       ${checkedNote && comps.length ? `<p class="r2-note">${escapeHtml(checkedNote)}</p>` : ''}
       ${cards}
-      ${comps.length && !report.breakdown && !report.plan && !isDemoReport(report) ? `<div class="r2-upsell"><p><strong>Want to know why AI picks them?</strong> The Competitor Breakdown ($25) puts the top 3 businesses AI names instead of you side by side with you: what AI said about them, how often they’re named and named first, their Google reviews against yours, the questions they win, and the sites AI cited that list them and not you. Each ends with up to 3 things they have that you don’t.</p>${tierOn('competitor_breakdown') ? '<a class="btn-secondary" data-tier="competitor_breakdown" href="#">Get my Competitor Breakdown — $25</a>' : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a>`}</div>` : ''}
+      ${comps.length && !report.breakdown && !report.plan && !isDemoReport(report) ? `<div class="r2-upsell"><p><strong>Want to know why AI picks them?</strong> The Competitor Breakdown ($25) puts the top 3 businesses AI names instead of you side by side with you: what AI said about them, how often they’re named and named first, their Google reviews against yours, the questions they win, and the sites AI cited that list them and not you. Each ends with up to 3 things they have that you don’t.</p>${tierOn('competitor_breakdown') ? `<a class="btn-secondary" data-tier="competitor_breakdown" href="#">Get my Competitor Breakdown — $25</a>${trustRow({ promise: 'Ready the moment you pay' })}` : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a>`}</div>` : ''}
       <h2 class="r2-xray-h2">Your fix checklist</h2>
       <p class="sub">${checklist.length} ${plural(checklist.length, 'fix', 'fixes')}, in order. Ticks are saved in this browser.</p>
       <ul class="r2-check">${checklist.map((i, n) => {

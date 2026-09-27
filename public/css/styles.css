@@ -731,3 +731,16 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .tiers.ladder .tier-when a { font-weight: 600; white-space: nowrap; }
 .r2-upsell { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: space-between; margin: 18px 0 8px; padding: 16px 18px; border: 1px dashed #C9D4E3; border-radius: 12px; background: #fff; }
 .r2-upsell p { margin: 0; flex: 1 1 320px; font-size: 15.5px; }
+
+/* Trust row: next to every buy button (report.js trustRow) and under the pricing cards. Only true claims. */
+.trust-row { list-style: none; padding: 0; margin: 14px auto 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; font-size: 13.5px; font-weight: 600; color: var(--navy); }
+.trust-row li { display: inline-flex; align-items: center; gap: 6px; }
+.trust-row svg { width: 16px; height: 16px; flex: none; color: var(--green); }
+.trust-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 10px 0 0; }
+.trust-cards span { font-size: 11.5px; font-weight: 800; letter-spacing: .03em; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; background: #fff; }
+.trust-next { margin: 16px auto 0; padding: 0; list-style: none; display: grid; gap: 6px; max-width: 460px; text-align: left; font-size: 14px; color: var(--ink); counter-reset: next; }
+.trust-next li { counter-increment: next; display: flex; gap: 10px; }
+.trust-next li::before { content: counter(next); flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.trust-foot { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+.pricing-trust { max-width: 980px; margin: 28px auto 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--wash); }
+.pricing-trust .trust-row { margin: 0; }

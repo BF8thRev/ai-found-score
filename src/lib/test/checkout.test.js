@@ -55,6 +55,10 @@ test('session form: tier and add-ons in metadata, the report token as client_ref
   assert.equal(f.get('line_items[0][price_data][unit_amount]'), '4900');
   assert.equal(f.get('line_items[1][price_data][unit_amount]'), '2500');
   assert.equal(f.get('success_url'), 'https://aifoundscore.com/success?tier=xray&session_id={CHECKOUT_SESSION_ID}');
+  // Trust on Stripe's own page: the promise under the Pay button, our image on each item.
+  assert.match(f.get('custom_text[submit][message]'), /Your \$49 back/);
+  assert.ok(f.get('custom_text[submit][message]').length <= 1200);
+  assert.equal(f.get('line_items[0][price_data][product_data][images][0]'), 'https://aifoundscore.com/img/og.png');
   const bta = priceCheckout({ report: real, tier: 'be_the_answer', payments: [pay('xray', 4900)] });
   assert.match(sessionForm({ ...bta, token: 't', tier: 'be_the_answer', addons: [], origin: 'https://x' }).get('line_items[0][price_data][product_data][description]'), /\$49\.00 credit/);
 });
