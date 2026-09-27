@@ -207,13 +207,14 @@ function blurred(text) {
   return `<p class="locked-text" aria-hidden="true">${escapeHtml(text)}</p><p class="locked-note">🔒 In the full report</p>`;
 }
 
-// The one paid tier on sale: the $49 AI Visibility Audit (tier key `xray`, kept from its old X-Ray name). Only rendered when
-// tierOn('xray') and the report has at least MIN_FIX_ITEMS fixes (the refund promise).
+// The one paid tier on sale: the $49 AI Visibility Audit (tier key `xray`, kept from its old X-Ray name). The Fix Kit
+// comes with it (src/lib/fix-kit.js FIX_KIT_TIERS). Only rendered when tierOn('xray') and the report has at least
+// MIN_FIX_ITEMS fixes specific to this business, general advice not counted (the refund promise).
 const XRAY = {
   name: 'AI Visibility Audit',
   price: '$49 one-time',
-  what: 'We ask all 5 customer questions again on every AI assistant we check, and you get every answer word for word, every website AI cited, exactly what’s wrong on your website and Google listing, every fix step by step with copy-paste text, the competitor gap sheet, your fix checklist, and a free re-scan 30 days later to see what changed.',
-  promise: 'If we can’t show you 3 things to fix, it’s free.',
+  what: 'We ask all 5 customer questions again on every AI assistant we check, and you get every answer word for word, every website AI cited, exactly what’s wrong on your website and Google listing, every fix step by step with copy-paste text, your Fix Kit (ready-to-install files for whoever runs your website), the competitor gap sheet, your fix checklist, and a free re-scan 30 days later to see what changed.',
+  promise: 'Fewer than 3 problems specific to your business? Your $49 back.',
   button: 'Get my audit — $49',
 };
 
@@ -242,21 +243,20 @@ function recheckOffer(report) {
   const subject = encodeURIComponent('Be the Answer: ' + (report.business?.name || ''));
   return `
     <div class="r2-upsell">
-      <p><strong>Want us to do the rest?</strong> Be the Answer ($499): we check every town you serve, submit your details to 30+ directories and data providers, and re-scan every month for a year. Your $49 counts toward it.</p>
+      <p><strong>Want us to keep watching?</strong> Be the Answer ($499): a re-scan every month for a year in up to 3 towns you serve, a one-page “what changed” with your next 3 fixes, an email when a competitor starts getting named instead of you, and your directory checklist with the exact text to paste. Everything you’ve paid us counts toward it.</p>
       <a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${subject}">Tell me when it opens</a>
     </div>`;
 }
 
-// After the audit: the $149 Fix Kit (src/lib/fix-kit.js). Only on paid reports; the owner
-// confirms their details on /fix-kit/<token> and downloads the files.
-function fixKitOffer(report) {
+// The Fix Kit comes with every paid audit (src/lib/fix-kit.js FIX_KIT_TIERS): the owner confirms
+// their details on /fix-kit/<token> and downloads the files. Only on paid reports.
+function fixKitIncluded(report) {
   const kitUrl = '/fix-kit/' + encodeURIComponent(String(report.id || ''));
   return `
     <div class="cta-band r2-xray-offer">
-      <h2>Want the fixes ready to install? Fix Kit — $149 one-time.</h2>
+      <h2>Your Fix Kit is included.</h2>
       <p>You check your business details, and we build the files for you: robots.txt, llms.txt, schema code, an FAQ page, your Google profile text and a review QR code, with a one-page guide for whoever runs your website.</p>
-      <p><a class="btn big" data-tier="fix_kit" href="#">Get my Fix Kit — $149</a></p>
-      <p class="fine">Already bought it? <a href="${kitUrl}">Open your Fix Kit</a></p>
+      <p><a class="btn big" href="${kitUrl}">Get my Fix Kit</a></p>
     </div>`;
 }
 
@@ -419,7 +419,8 @@ function escapeHtml(str) {
 // serve a report whose stored totals disagree).
 
 const ENGINE_NAMES = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_ai_mode: 'Google AI Mode', perplexity: 'Perplexity', claude: 'Claude' };
-// Mirror of MIN_FIX_ITEMS in shared/report-v2.js: the $49 X-Ray is offered only with this many fixes.
+// Mirror of MIN_FIX_ITEMS in shared/report-v2.js: the $49 audit is offered only with this many fixes
+// specific to the business (isGenericFix there: baseline_* kinds, or `generic` on a locked report).
 const MIN_FIX_ITEMS = 3;
 // Preferred column order only. Columns come from the engines that actually
 // answered (plus method.engines order for anything not listed here).
@@ -537,8 +538,10 @@ function renderV2(root, report) {
   const cw = countWords(report);
   // A locked report's fixes are untitled stand-ins (src/lib/lock.js): still counted.
   const fixCount = issues.filter((i) => i && (i.title || i.locked)).length;
-  // The $49 X-Ray is offered only on a locked report with at least MIN_FIX_ITEMS fixes (the refund promise).
-  const xrayOk = locked && !paid && fixCount >= MIN_FIX_ITEMS && tierOn('xray');
+  const specificFixCount = issues.filter((i) => i && (i.title || i.locked) && !(i.generic === true || /^baseline_/.test(String(i.kind || '')))).length;
+  // The $49 audit is offered only on a locked report with at least MIN_FIX_ITEMS fixes specific to
+  // this business (the refund promise; same rule as xrayOffered() in shared/report-v2.js).
+  const xrayOk = locked && !paid && specificFixCount >= MIN_FIX_ITEMS && tierOn('xray');
   const ownDomain = String(b.website || '').replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase();
 
   // Engines in column order: known engines that answered, then any others.
@@ -588,7 +591,7 @@ function renderV2(root, report) {
     listingsV2({ listings, badListings }),
     issuesV2({ issues, locked, xrayOk }),
     xrayV2({ report, aById, cw, N }),
-    paid && !isDemoReport(report) && tierOn('fix_kit') ? fixKitOffer(report) : '',
+    paid && !isDemoReport(report) ? fixKitIncluded(report) : '',
     offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }),
     answersV2({ questions, answers }),
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
@@ -1166,7 +1169,7 @@ function xrayV2({ report, aById, cw, N }) {
         : `No other business was named in 2 or more of the ${num(N)} ${cw.unit}, so there is no competitor gap to show.`}</p>
       ${checkedNote && comps.length ? `<p class="r2-note">${escapeHtml(checkedNote)}</p>` : ''}
       ${cards}
-      ${comps.length ? `<div class="r2-upsell"><p><strong>Want to know why AI picks them?</strong> Our Competitor Breakdown looks at the businesses AI names instead of you and tells you why they get picked.</p><a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Ask for a Competitor Breakdown</a></div>` : ''}
+      ${comps.length ? `<div class="r2-upsell"><p><strong>Want to know why AI picks them?</strong> The Competitor Breakdown ($25) takes the top 3 businesses AI names instead of you and puts each one side by side with you: what AI said about them, their reviews against yours, what their website has that yours doesn’t, and the directories they’re on and you’re not. It ends with the 3 things they have that you don’t.</p><a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a></div>` : ''}
       <h2 class="r2-xray-h2">Your fix checklist</h2>
       <p class="sub">${checklist.length} ${plural(checklist.length, 'fix', 'fixes')}, in order. Ticks are saved in this browser.</p>
       <ul class="r2-check">${checklist.map((i, n) => {
@@ -1177,7 +1180,7 @@ function xrayV2({ report, aById, cw, N }) {
 }
 
 // 9. Offer: the $49 AI Visibility X-Ray, the only tier on sale (OFFERED_TIERS in config.js has 'xray').
-// Only on a locked report with at least MIN_FIX_ITEMS fixes (xrayOk; the refund promise). Edge states
+// Only on a locked report with at least MIN_FIX_ITEMS fixes specific to the business (xrayOk; the refund promise). Edge states
 // (named in every answer, or nothing missing) offer it too: the baseline fixes still apply.
 // Sample and showcase reports never link to Stripe (isDemoReport, at the top of this file).
 function offerV2({ allNamed, noFixes, cw, fixCount, xrayOk }) {

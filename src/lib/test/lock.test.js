@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { lockReport, reportBody, LOCKED_ISSUE_FIELDS } from '../lock.js';
 import { MOCK_REPORTS } from '../../mock/sample-reports.js';
-import { validateReport, snapshotOffered } from '../../../shared/report-v2.js';
+import { validateReport, snapshotOffered, xrayOffered } from '../../../shared/report-v2.js';
 
 const v2 = MOCK_REPORTS['sample-001'];
 
@@ -13,7 +13,8 @@ test('v2: fixes keep only their severity; descriptions, steps, copyText and titl
   assert.equal(locked.locked, true);
   assert.equal(locked.issues.length, v2.issues.length, 'every fix is still counted');
   locked.issues.forEach((i, n) => {
-    assert.deepEqual(Object.keys(i).sort(), ['locked', ...(v2.issues[n].severity != null ? ['severity'] : [])].sort());
+    const generic = /^baseline_/.test(v2.issues[n].kind || '') ? ['generic'] : [];
+    assert.deepEqual(Object.keys(i).sort(), ['locked', ...generic, ...(v2.issues[n].severity != null ? ['severity'] : [])].sort());
     assert.equal(i.severity, v2.issues[n].severity);
   });
   // Nothing paid survives anywhere in the serialized body.
@@ -34,6 +35,7 @@ test('v2: fixes keep only their severity; descriptions, steps, copyText and titl
   assert.equal(validateReport(locked).ok, true);
   // The offer rule still works on a locked report (it counts the untitled stand-ins).
   assert.equal(snapshotOffered(locked), snapshotOffered(v2));
+  assert.equal(xrayOffered(locked), xrayOffered(v2), 'the audit offer counts the same specific fixes locked or not');
 });
 
 test('v2: one answer stays word for word (the headline); the rest keep only their verdict', () => {

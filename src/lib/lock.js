@@ -9,7 +9,7 @@
 // sites (only a count stays), which website checks failed, what's wrong on each listing, the fix
 // titles, descriptions, steps and copyText, and the X-Ray sections (gap sheet, checklist, reviews).
 // Any recorded payment for the token unlocks all of it.
-import { xraySections, computeVisibilityScore } from '../../shared/report-v2.js';
+import { xraySections, computeVisibilityScore, isGenericFix } from '../../shared/report-v2.js';
 
 /** The fields of an issue that survive locking. Everything else (description, steps, copyText, …) is dropped. */
 export const LOCKED_ISSUE_FIELDS = ['kind', 'severity', 'title'];
@@ -94,7 +94,9 @@ export function lockReport(r) {
       listings: (r.listings || []).map((l) =>
         l.status === 'match' ? l : { platform: l.platform, status: l.status, locked: true }),
       // Only the count (and how serious): titles like "Unblock GPTBot in robots.txt" are the fix.
-      issues: (r.issues || []).map((i) => pick(i, LOCKED_V2_ISSUE_FIELDS, { locked: true })),
+      // `generic` marks the general advice every report gets, so the page can count the fixes
+      // specific to this business (the audit's refund promise, xrayOffered).
+      issues: (r.issues || []).map((i) => pick(i, LOCKED_V2_ISSUE_FIELDS, isGenericFix(i) ? { locked: true, generic: true } : { locked: true })),
       // The cited sites are the "why": free gets the tally only.
       sources: [],
       sourcesSummary: {

@@ -58,9 +58,12 @@ test('only the plans on the ladder are offered', () => {
     const text = read(f);
     assert.ok(!/\$29\b|\$59\b|Monthly monitoring/i.test(text), `${f} mentions a retired plan`);
   }
-  // After-delivery offers (AI Defense, Competitor Breakdown) are never on the public page; the
-  // ladder stays three cards with nothing listed under them.
-  assert.ok(!/AI Defense|Competitor Breakdown|ladder-note/.test(index), 'after-delivery offers on the homepage');
+  // After-delivery offers (AI Defense) are never on the public page; the ladder stays three cards
+  // with nothing listed under them. The $25 Competitor Breakdown is the audit's add-on, on its card.
+  assert.ok(!/AI Defense|ladder-note/.test(index), 'after-delivery offers on the homepage');
+  assert.match(index, /Add-on, \$25:<\/strong> the Competitor Breakdown/);
+  // The Fix Kit is part of the $49 audit, never a separate price.
+  assert.ok(!/\$149\b/.test(index), 'the Fix Kit is included in the audit, not sold at $149');
   assert.ok(!/0[–-]100/.test(index), 'the offer no longer promises a score');
 });
 

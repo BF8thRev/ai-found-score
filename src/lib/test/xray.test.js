@@ -113,9 +113,14 @@ test('gap sheet on the sample: Tidewater and Kessler each have one cited site mi
 test('fix checklist: every issue title in order, baseline fixes included', () => {
   const r = miniReport();
   assert.deepEqual(buildFixChecklist(r).map((i) => i.title), ['Fix A', 'Fix B', 'Fill in your Google Business Profile']);
+  // The audit is offered only with 3 fixes specific to this business: general advice doesn't count.
+  assert.equal(xrayOffered(r), false, '2 specific fixes + 1 general is not enough');
+  r.issues = [...r.issues, { kind: 'site_no_llms_txt', severity: 'low', title: 'Fix C' }];
   assert.equal(xrayOffered(r), true);
-  r.issues = r.issues.slice(0, 2);
-  assert.equal(xrayOffered(r), false);
+  // Same answer on the locked copy (kind is stripped there; `generic` stays).
+  assert.equal(xrayOffered(lockReport(r)), true);
+  r.issues = r.issues.filter((i) => i.title !== 'Fix C');
+  assert.equal(xrayOffered(lockReport(r)), false);
 });
 
 test('lock: the X-Ray sections are withheld until paid; unlocked reports carry them', () => {

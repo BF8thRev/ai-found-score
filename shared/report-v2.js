@@ -234,7 +234,7 @@ export function edgeState(report) {
   return { state, flags, failedEngines };
 }
 
-/** The refund promise: "if we can't show you 3 things you can fix, money back". */
+/** The refund promise: "fewer than 3 problems specific to your business, your $49 back". */
 export const MIN_FIX_ITEMS = 3;
 
 /** Fix items in a report: its issues (a locked report keeps them as untitled stand-ins, still counted). */
@@ -242,14 +242,31 @@ export function fixItems(report) {
   return ((report && report.issues) || []).filter((i) => i && (i.title || i.locked));
 }
 
-/** True when the $29 Fix steps tier may be offered for this report (≥ MIN_FIX_ITEMS fixes). */
+/**
+ * True for the general-advice fixes every business with a website gets (scanner/extract/fixes.js
+ * baselineFixes: Google profile, schema, FAQ). A locked report drops `kind` and keeps `generic: true`
+ * instead (src/lib/lock.js), so the count still works there.
+ */
+export function isGenericFix(issue) {
+  return !!issue && (issue.generic === true || /^baseline_/.test(String(issue.kind || '')));
+}
+
+/** Fix items found for this business in particular: fixItems without the general advice. */
+export function specificFixItems(report) {
+  return fixItems(report).filter((i) => !isGenericFix(i));
+}
+
+/** True when the $29 Fix steps tier may be offered for this report (≥ MIN_FIX_ITEMS fixes). Retired. */
 export function snapshotOffered(report) {
   return fixItems(report).length >= MIN_FIX_ITEMS;
 }
 
-/** True when the $49 AI Visibility X-Ray may be offered (same refund promise: ≥ MIN_FIX_ITEMS fixes). */
+/**
+ * True when the $49 AI Visibility Audit may be offered: at least MIN_FIX_ITEMS fixes specific to
+ * this business, not counting the general advice every report gets (the refund promise).
+ */
 export function xrayOffered(report) {
-  return fixItems(report).length >= MIN_FIX_ITEMS;
+  return specificFixItems(report).length >= MIN_FIX_ITEMS;
 }
 
 // ---------------------------------------------------------------------------

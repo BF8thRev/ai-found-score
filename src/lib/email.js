@@ -140,12 +140,14 @@ const TIER_NAMES = { xray: 'AI Visibility Audit', fix_kit: 'Fix Kit', be_the_ans
 /** Right after payment (a receipt: sent even to an address that unsubscribed from updates). */
 export function receiptEmail(env, { token, name, tier }) {
   const plan = TIER_NAMES[tier] || 'your plan';
+  // The Fix Kit comes with every plan now; standalone Fix Kit (retired) and Be the Answer buyers go straight to it.
   const kit = tier === 'fix_kit' || tier === 'be_the_answer';
   const paragraphs = [`Thanks. Your ${plan}${name ? ` for ${name}` : ''} is paid for.`];
   if (tier === 'xray' || tier === 'be_the_answer') {
     paragraphs.push('Your report is unlocked now. We’re also asking all 5 customer questions again on every AI assistant we check; we’ll email you when those answers are in, usually within the hour.');
     paragraphs.push('In 30 days we re-scan for free and email you what changed.');
   }
+  if (tier === 'xray') paragraphs.push(`Your Fix Kit is included: check your business details, then download the files and hand them to whoever runs your website. ${siteUrl(env)}/fix-kit/${encodeURIComponent(token)}`);
   if (kit) paragraphs.push('Next: check your business details, then download your Fix Kit and hand it to whoever runs your website.');
   return layout({
     subject: `Receipt: ${plan}${name ? ` for ${name}` : ''}`,
@@ -153,7 +155,7 @@ export function receiptEmail(env, { token, name, tier }) {
     button: kit ? 'Get my Fix Kit' : 'Open my report',
     url: kit ? `${siteUrl(env)}/fix-kit/${encodeURIComponent(token)}` : reportUrl(env, token),
     unsubUrl: unsubFor(env, token),
-    note: kit ? `Your report: ${reportUrl(env, token)}` : 'If we can’t show you 3 things to fix, it’s free. Just reply.',
+    note: kit ? `Your report: ${reportUrl(env, token)}` : 'Fewer than 3 problems specific to your business? Your $49 back. Just reply.',
   });
 }
 
@@ -189,7 +191,7 @@ export function recheckEmail(env, { token, name, totals, before }) {
     paragraphs: [
       'We ran your audit again, free, 30 days after you bought it.',
       line,
-      'Want us to do the rest? Be the Answer covers every town you serve, submits your details to 30+ directories and data providers, and re-scans every month for a year. Your $49 counts toward it. Just reply to this email.',
+      'Want us to keep watching? Be the Answer re-scans every month for a year in up to 3 towns you serve, sends a one-page “what changed” with your next 3 fixes, emails you when a competitor starts getting named instead of you, and gives you your directory checklist with the exact text to paste. Everything you’ve paid us counts toward it. Just reply to this email.',
     ],
     button: 'See what changed',
     url: reportUrl(env, token),

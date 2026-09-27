@@ -22,7 +22,7 @@
 //                                needs the signed token /api/request returned after Turnstile
 //   GET  /api/zip           -> town for ?zip= (src/lib/zip.js, zippopotam.us, cached 30 days; per-IP rate limit)
 //   GET|POST /api/fix-kit/[token], GET /api/fix-kit/[token].zip -> Fix Kit details form + zip download
-//                                ($149 fix_kit / $499 be_the_answer); src/lib/fix-kit-route.js
+//                                ($49 xray, which includes it / $499 be_the_answer / retired $149 fix_kit); src/lib/fix-kit-route.js
 //   GET  /fix-kit/[token]     -> the Fix Kit page (public/fix-kit.html)
 //   cron (daily)              -> the free 30-day re-check of every paid report (src/lib/auto-scan.js startDueRechecks)
 //   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h

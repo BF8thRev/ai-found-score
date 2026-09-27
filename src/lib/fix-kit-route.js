@@ -5,7 +5,7 @@
 //                                    404 when there is no report for the token.
 //   POST /api/fix-kit/<token>      JSON { confirm: true, details: {...} } → validate, save → { ok, details }
 //                                    422 { ok:false, errors:[{ field, message }] } when something needs fixing.
-//                                    Only for a token paid for 'fix_kit' or 'be_the_answer' (402 otherwise).
+//                                    Only for a token paid for 'xray', 'fix_kit' or 'be_the_answer' (402 otherwise).
 //   GET  /api/fix-kit/<token>.zip  → the zip (src/lib/fix-kit.js), paid AND confirmed only (402 / 409).
 //
 // Paid = a payments row for the token whose tier (or amount, TIER_BY_CENTS) is one of FIX_KIT_TIERS,
