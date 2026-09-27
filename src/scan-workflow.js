@@ -38,6 +38,7 @@ import {
 } from './admin/scan-core.js';
 import { dryRunEnabled, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 import { redact } from './admin/redact.js';
+import { isBillingError, noteBillingError } from './lib/alerts.js';
 
 // Batch sizes and retry counts live in scan-core.js (shared with scanner/run.js, the local runner).
 // Attempts are counted by ctx.attempt (1-indexed). A step retries only by throwing, and it throws
@@ -126,6 +127,14 @@ export class ScanWorkflow extends WorkflowEntrypoint {
           });
         }));
         calls.push(...done);
+      }
+
+      // ---- out of credits? email the owner now (src/lib/alerts.js; one per engine per day) ----
+      if (!dry) {
+        for (const c of calls.filter((x) => !x.ok && isBillingError(x.error)).filter((x, i, a) => a.findIndex((y) => y.engine === x.engine) === i)) {
+          await step.do(`credit alert ${c.engine}`, STEP_DB, async () => { await noteBillingError(env, c.engine, c.error, { fetchImpl }); })
+            .catch((e) => console.error('[alerts] credit alert step failed', safe(e)));
+        }
       }
 
       // ---- extraction (one Claude call per answer) ---------------------------------------

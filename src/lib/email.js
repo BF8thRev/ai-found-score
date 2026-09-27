@@ -131,6 +131,21 @@ export function reportReadyEmail(env, { token, name, totals }) {
   });
 }
 
+/** The owner left their email before the report finished: confirm it now, so they aren't left wondering. */
+export function requestReceivedEmail(env, { token, name }) {
+  return layout({
+    subject: `We got your request${name ? ` for ${name}` : ''}`,
+    paragraphs: [
+      `We’re asking AI assistants the questions your customers ask about ${name || 'your business'}.`,
+      'Your report will be at the link below. We’ll email you again the moment it’s ready.',
+    ],
+    button: 'Open my report page',
+    url: reportUrl(env, token),
+    unsubUrl: unsubFor(env, token),
+    note: 'The link is private to you. Bookmark it; it keeps working.',
+  });
+}
+
 /** "Email me this report" on the report page. */
 export function leadEmail(env, { token, name }) {
   return layout({
@@ -146,7 +161,7 @@ export function leadEmail(env, { token, name }) {
 const TIER_NAMES = { xray: 'AI Visibility Audit', fix_kit: 'Fix Kit', be_the_answer: 'Be the Answer', competitor_breakdown: 'Competitor Breakdown' };
 
 /** Right after payment (a receipt: sent even to an address that unsubscribed from updates). */
-export function receiptEmail(env, { token, name, tier, addons = [] }) {
+export function receiptEmail(env, { token, name, tier, addons = [], ready = true }) {
   const plan = TIER_NAMES[tier] || 'your plan';
   const kitUrl = `${siteUrl(env)}/fix-kit/${encodeURIComponent(token)}`;
   const planUrl = `${siteUrl(env)}/plan/${encodeURIComponent(token)}`;
@@ -154,7 +169,13 @@ export function receiptEmail(env, { token, name, tier, addons = [] }) {
   let button = 'Open my report';
   let url = reportUrl(env, token);
   let note = '';
-  if (tier === 'xray') {
+  if (!ready && (tier === 'xray' || tier === 'be_the_answer')) {
+    // Paid before any report existed (straight from the pricing buttons): the audit is being made now.
+    paragraphs.push('We’re asking all 5 customer questions on every AI assistant we check right now. Your full audit is usually ready within the hour, and we’ll email you the moment it is.');
+    if (tier === 'be_the_answer') paragraphs.push('Once it’s ready, your plan page opens from your report: add up to 2 more towns you serve and confirm your details. We re-scan every month for a year.');
+    else paragraphs.push('Your Fix Kit comes with it. In 30 days we re-scan for free and email you what changed.');
+    note = tier === 'xray' ? 'Fewer than 3 problems specific to your business? Your $49 back. Just reply.' : 'Not useful in the first 60 days? Full refund. Just reply.';
+  } else if (tier === 'xray') {
     paragraphs.push('Your report is unlocked now. We’re also asking all 5 customer questions again on every AI assistant we check; we’ll email you when those answers are in, usually within the hour.');
     paragraphs.push(`Your Fix Kit is included: check your business details, then download the files and hand them to whoever runs your website. ${kitUrl}`);
     if (addons.includes('competitor_breakdown')) paragraphs.push('Your Competitor Breakdown is in your report too: the top 3 businesses AI names instead of you, side by side with you.');

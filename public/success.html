@@ -67,7 +67,12 @@
     var tier = new URLSearchParams(location.search).get('tier') || (saved && saved.tier) || '';
     if (TIER_LABEL[tier]) {
       var plan = document.getElementById('success-plan');
-      plan.textContent = 'You bought: ' + TIER_LABEL[tier] + '. ' + (TIER_NEXT[tier] || '');
+      var PREPAY_NEXT = {
+        xray: 'Your Fix Kit comes with it, and we re-scan free 30 days from now. Fewer than 3 problems specific to your business? Your $49 back.',
+        be_the_answer: 'Once your audit is ready, open your plan page from your report to add your towns and confirm your details.'
+      };
+      var next = saved && saved.prepay && PREPAY_NEXT[tier] ? PREPAY_NEXT[tier] : TIER_NEXT[tier];
+      plan.textContent = 'You bought: ' + TIER_LABEL[tier] + '. ' + (next || '');
       plan.hidden = false;
     }
     if (!saved || !saved.token) return;
@@ -76,7 +81,10 @@
     // Fix Kit buyers go on to confirm their details and download the kit (public/fix-kit.html).
     // Be the Answer buyers go to their plan page (public/plan.html).
     var kit = tier === 'fix_kit';
-    var plan = tier === 'be_the_answer';
+    // Paid before a report existed (the pricing buttons): the report page comes first; the plan page
+    // opens from it once the audit is ready.
+    var prepay = !!saved.prepay;
+    var plan = tier === 'be_the_answer' && !prepay;
     var url = (plan ? '/plan/' : kit ? '/fix-kit/' : '/report/') + encodeURIComponent(saved.token);
     msg.textContent = 'Unlocking your full report…';
     link.href = url;
@@ -85,9 +93,14 @@
     var tries = 0;
     (function poll() {
       fetch('/api/report/' + encodeURIComponent(saved.token), { cache: 'no-store' })
-        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (r) { return r.status === 202 ? { pending: true } : r.ok ? r.json() : null; })
         .then(function (rep) {
-          if (rep && !rep.locked) {
+          if (rep && rep.pending) {
+            // No report yet: the paid scan started when the payment landed.
+            msg.textContent = 'Payment received. We’re asking every question on every AI assistant we check now. Your full audit is usually ready within the hour, and we’ll email you the moment it is. Your report page fills in on its own.';
+            link.textContent = 'Open my report page';
+            try { localStorage.removeItem('afs_checkout'); } catch (e) {}
+          } else if (rep && !rep.locked) {
             msg.textContent = 'Your full report is unlocked. Bookmark it; the link keeps working.';
             try { localStorage.removeItem('afs_checkout'); } catch (e) {}
           } else if (++tries < 15) {

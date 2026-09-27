@@ -56,6 +56,10 @@ const CSS = `
 .feed{list-style:none;margin:0;padding:0}
 .feed li{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
 .feed time{color:var(--muted);white-space:nowrap;min-width:100px;font-size:13px}
+.credit-alert{border-radius:var(--radius);padding:12px 14px;margin:14px 0 0;font-size:14px;line-height:1.45}
+.credit-alert.out{background:#FDECEA;color:var(--red);border:1px solid var(--red)}
+.credit-alert.low{background:#FFF4E5;color:var(--amber);border:1px solid var(--amber)}
+.credit-alert b{display:block;font-size:15px}
 .login{max-width:380px;margin:12vh auto 0;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow)}
 .login h1{font-size:22px;margin-bottom:12px}
 .login button{margin-top:12px;width:100%}
@@ -379,6 +383,15 @@ function expensesSection(d, errors, { flash, now }) {
 }
 
 /**
+ * The red (out of credits) / amber (low) banner from creditStatus() (src/lib/alerts.js), one line
+ * per engine. '' when every engine is 'ok' or 'unknown'.
+ */
+export function creditBanner(credits) {
+  const lines = (Array.isArray(credits) ? credits : []).filter((c) => c && (c.state === 'out' || c.state === 'low'));
+  return lines.map((c) => `<div class="credit-alert ${c.state === 'out' ? 'out' : 'low'}" role="alert"><b>${esc(c.name || engineName(c.engine))} ${c.state === 'out' ? 'is OUT of credits: live answers and scans are skipping it' : 'credits are LOW'}</b>${esc(c.detail || '')}</div>`).join('\n');
+}
+
+/**
  * The dashboard. `dash` = loadDashboard() result; `flash` = { run, expense } messages
  * ({ ok: boolean, text }); `watch` = scan ids to show live status for.
  */
@@ -400,6 +413,7 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
     <a href="#money">Money</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
     <a href="#funnel">Funnel</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
   </nav>
+  ${creditBanner(d.credits)}
   ${notConfigured}
   ${moneySection(d, errors, now)}
   ${requestsSection(d, errors, { flash: flashHtml(flash.requests) })}

@@ -1,7 +1,7 @@
 // src/lib/notify.js — who gets which email, and when (templates and sending: src/lib/email.js).
 //
 //   request scan done   → every address on that request (report_requests.report_token, email)
-//   email added later   → the same "report ready" email, if the report already exists
+//   email added later   → the same "report ready" email, if the report already exists; else "we got it" + link
 //   "Email me this"     → the report link to the address typed on the report page (leads)
 //   payment             → a receipt to the Stripe checkout email (payments.customer_email)
 //   paid scan done      → "your full audit is ready" to the buyer
@@ -15,7 +15,7 @@
 
 import { resolveKeys } from '../../scanner/config.js';
 import {
-  sendEmail, emailConfigured, reportReadyEmail, leadEmail, receiptEmail, fullAuditEmail, recheckEmail, monthlyEmail,
+  sendEmail, emailConfigured, reportReadyEmail, requestReceivedEmail, leadEmail, receiptEmail, fullAuditEmail, recheckEmail, monthlyEmail,
 } from './email.js';
 import { normalizeBizName } from '../../shared/report-v2.js';
 import { validateDetails } from './fix-kit.js';
@@ -198,7 +198,12 @@ export async function notifyRequestEmail(env, { requestId, email }, { fetchImpl 
     const token = row?.report_token;
     if (!token) return { sent: 0, skipped: 'no link yet' };
     const sum = await reportSummary(env, token, { fetchImpl });
-    if (!sum) return { sent: 0, skipped: 'not ready' }; // the scan's own "done" email covers it
+    if (!sum) {
+      // Not ready yet: a short "we got it" with the link now; the scan's own "done" email follows.
+      const [scan] = await read(env, s, `scans?report_token=eq.${encodeURIComponent(token)}&select=business_name&order=created_at.desc&limit=1`, fetchImpl).catch(() => []);
+      const r = await sendEmail(env, { to: email, ...requestReceivedEmail(env, { token, name: scan?.business_name }), token, idempotencyKey: `received:${token}:${String(email).toLowerCase()}` }, { fetchImpl });
+      return { sent: r.ok ? 1 : 0, received: true, ...(r.ok ? {} : { skipped: r.reason }) };
+    }
     const r = await sendEmail(env, { to: email, ...reportReadyEmail(env, { token, name: sum.name, totals: sum.totals }), token, idempotencyKey: `request:${token}:${String(email).toLowerCase()}` }, { fetchImpl });
     return { sent: r.ok ? 1 : 0, ...(r.ok ? {} : { skipped: r.reason }) };
   } catch (e) {
@@ -218,12 +223,20 @@ export async function notifyLead(env, { token, email }, { fetchImpl = (...a) => 
   }
 }
 
+/** The business name on a token's newest scans row (a paid-up-front order has no report yet). */
+async function scanName(env, token, fetchImpl) {
+  const s = supa(env);
+  if (!s) return undefined;
+  const [row] = await read(env, s, `scans?report_token=eq.${encodeURIComponent(token)}&select=business_name&order=created_at.desc&limit=1`, fetchImpl).catch(() => []);
+  return row?.business_name || undefined;
+}
+
 /** Receipt after payment (transactional: sent even if the address unsubscribed from updates). */
 export async function notifyPayment(env, { token, email, tier, addons = [], sessionId }, { fetchImpl = (...a) => fetch(...a) } = {}) {
   try {
     if (!emailConfigured(env) || !email || !token) return { sent: 0, skipped: 'not configured' };
     const sum = await reportSummary(env, token, { fetchImpl }).catch(() => null);
-    const r = await sendEmail(env, { to: email, ...receiptEmail(env, { token, name: sum?.name, tier, addons }), token, transactional: true, idempotencyKey: `receipt:${sessionId || token}` }, { fetchImpl });
+    const r = await sendEmail(env, { to: email, ...receiptEmail(env, { token, name: sum?.name || await scanName(env, token, fetchImpl), tier, addons, ready: !!sum }), token, transactional: true, idempotencyKey: `receipt:${sessionId || token}` }, { fetchImpl });
     return { sent: r.ok ? 1 : 0, ...(r.ok ? {} : { skipped: r.reason }) };
   } catch (e) {
     return { sent: 0, error: String(e?.message || e).slice(0, 200) };

@@ -51,6 +51,24 @@ The sender (email and Lob jobs) must check `unsubscribes` by email and by `repor
 - **Money rules:** spent = metered API cost (`scan_raw` + `scan_usage`) + expenses except `api_topup`; earned = `payments` where `livemode`; API credit top-ups are shown as cash out but not added to spent (the metered cost already counts what they paid for).
 - **Local dry run:** put `ADMIN_TOKEN=<anything>` and `SCANNER_DRY_RUN=1` in `.dev.vars`, run `npm run dev`, sign in at `http://localhost:8787/admin` and start a scan. Engine answers come from `scanner/test/fixtures/engines/`, the extractor is canned, nothing is stored and nothing costs money. The flag is ignored unless the request comes from localhost; never set it on Cloudflare.
 
+## Credit alerts
+
+So an engine never silently runs dry again (Gemini's prepaid credits ran out on Sep 27 2026 and nobody knew). Code: `src/lib/alerts.js`.
+
+- **Out:** a billing/credits error (HTTP 402, "prepayment credits are depleted", `insufficient_quota`, "credit balance is too low", …) in the last 6 h in `scan_usage`, `scan_raw` or `scans.errors`, with no successful call from that engine since. A live answer or scan that hits one emails at once; the cron re-checks.
+- **Low:** DataForSEO (Google AI Mode) from its real balance, under $5. OpenAI, Anthropic, Gemini and Perplexity have no balance API, so set a budget var when you load credits: `CREDIT_BUDGET_GEMINI="20@2026-09-27"` ($20 loaded that day; also `CREDIT_BUDGET_OPENAI`, `CREDIT_BUDGET_ANTHROPIC`, `CREDIT_BUDGET_PERPLEXITY`). Remaining = budget minus the metered cost we logged since that date; low under max($5, 25%). No var → "unknown", never emailed. Update the var each time you top up.
+- **Who:** `ALERT_EMAILS` in `wrangler.jsonc` vars (comma-separated). Sent through Resend (`RESEND_API_KEY`), at most one email per engine, state and day.
+- **/admin** shows the same check as a red (out) or amber (low) banner at the top.
+
+## Two paths: free and paid
+
+- **Free** (default, "Show me who's getting my calls"): business details → one live answer → the owner's report page (`/report/<token>`) as the main next step; email is optional ("Want the link by email too?") and gets a "we got it" email with the link at once (`requestReceivedEmail`), then "report ready".
+- **Paid** ("Get my audit" / "Be the answer" on the pricing cards, or `/?plan=audit#request`, `/?plan=be_the_answer#request`): the same three fields, then straight to Stripe. `POST /api/request` with `intent: 'xray' | 'be_the_answer'` queues the free scan (reason `paid-intent`) instead of starting it; `POST /api/checkout { token, tier, prepay: true }` sells the audit or plan at full price before any report exists. The webhook starts the paid scan from the queued row's business, as usual. Stripe's cancel link is `/api/checkout/cancel?t=<token>`, which starts the free report (AUTO_SCAN on) and shows it; a checkout left open without paying gets its free report from the recovery cron after 60 minutes.
+
+## Recovery cron (every 30 minutes)
+
+`wrangler.jsonc` has two crons: the daily one (re-checks, monthly scans) and `*/30 * * * *`, which runs `retryFailedScans` (`src/lib/auto-scan.js`) then `sendCreditAlerts` (`src/lib/alerts.js`). A failed request scan (or one whose report failed the guardrails) is retried once when AUTO_SCAN is on; a failed paid scan is retried once always. After two tries the report page says something went wrong instead of "in line" forever.
+
 ## Free-report requests: automatic scans (AUTO_SCAN)
 
 Code: `src/lib/auto-scan.js` (called from `src/lib/report-request.js`). Needs [`supabase/v4_ladder.sql`](supabase/v4_ladder.sql) applied first, and `SUPABASE_SERVICE_KEY`.

@@ -81,3 +81,30 @@ test('handleCheckout: 503 without a key; creates the session and returns its url
   assert.equal(sent[0].init.headers.Authorization, 'Bearer sk_test_x');
   assert.equal((await handleCheckout(...req({ token: 'sample-001', tier: 'xray' }), { STRIPE_SECRET_KEY: 'sk_test_x' }, deps([]))).status, 404);
 });
+
+test('pay up front (from the pricing buttons): audit or plan at full price, no report needed, cancel starts the free report', () => {
+  const a = priceCheckout({ report: null, tier: 'xray', prepay: true });
+  assert.equal(a.ok, true);
+  assert.equal(a.total, PRICES.xray);
+  const b = priceCheckout({ report: null, tier: 'be_the_answer', prepay: true });
+  assert.equal(b.total, PRICES.be_the_answer);
+  assert.equal(priceCheckout({ report: null, tier: 'competitor_breakdown', prepay: true }).ok, false);
+  assert.equal(priceCheckout({ report: null, tier: 'xray', addons: ['competitor_breakdown'], prepay: true }).ok, false);
+  assert.equal(priceCheckout({ report: null, tier: 'xray', prepay: true, payments: [pay('xray', 4900)] }).status, 409);
+  assert.equal(priceCheckout({ report: null, tier: 'xray' }).status, 404, 'no report and not prepay: nothing to sell');
+  const f = sessionForm({ ...a, token: 'tokABCDEFGHIJKLMNOPQRS', tier: 'xray', addons: [], origin: 'https://aifoundscore.com', prepay: true });
+  assert.equal(f.get('cancel_url'), 'https://aifoundscore.com/api/checkout/cancel?t=tokABCDEFGHIJKLMNOPQRS');
+  assert.equal(f.get('metadata[prepay]'), '1');
+});
+
+test('handleCheckout: prepay only for a token with a waiting request scan', async () => {
+  const req = (body) => new Request('https://aifoundscore.com/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const stripe = async () => Response.json({ url: 'https://checkout.stripe.com/x' });
+  const base = { getReport: async () => null, getPayments: async () => [], rateLimit: async () => null, fetchImpl: stripe };
+  const env = { STRIPE_SECRET_KEY: 'sk_test_x' };
+  const u = new URL('https://aifoundscore.com/api/checkout');
+  const ok = await handleCheckout(req({ token: 'tokABCDEFGHIJKLMNOPQRS', tier: 'xray', prepay: true }), u, env, { ...base, pendingStatus: async () => 'queued' });
+  assert.equal(ok.status, 200);
+  const none = await handleCheckout(req({ token: 'tokABCDEFGHIJKLMNOPQRS', tier: 'xray', prepay: true }), u, env, { ...base, pendingStatus: async () => null });
+  assert.equal(none.status, 404);
+});

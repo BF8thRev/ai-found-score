@@ -479,3 +479,93 @@ export async function saveFixKitDetails(env, token, details) {
   });
   if (!res.ok) throw new Error(`Supabase fix_kit_details upsert failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
 }
+
+// ---------------------------------------------------------------------------
+// Free-report requests by report token (the report page while a report is being made).
+// Service key: `scans` and reading `report_requests` have no anon access. The email itself is
+// never returned, only whether one is on file.
+// ---------------------------------------------------------------------------
+
+/**
+ * Who a report token is for, while its report is being made → { business: {name, town, state} | null,
+ * hasEmail }. Business comes from the newest `scans` row for the token; hasEmail is true when any
+ * request tied to the token (report_requests.report_token) has an email.
+ */
+export async function getRequestInfo(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  const s = supaService(env);
+  const t = encodeURIComponent(token);
+  const [scanRes, reqRes] = await Promise.all([
+    fetchImpl(`${s.base}/scans?report_token=eq.${t}&select=business,business_name&order=created_at.desc&limit=1`, { headers: s.headers, signal: AbortSignal.timeout(8000) }),
+    fetchImpl(`${s.base}/${TABLES.REPORT_REQUESTS}?report_token=eq.${t}&email=not.is.null&select=id&limit=1`, { headers: s.headers, signal: AbortSignal.timeout(8000) }),
+  ]);
+  const [scan] = scanRes.ok ? await scanRes.json() : [];
+  const reqs = reqRes.ok ? await reqRes.json() : [];
+  const b = scan && scan.business && typeof scan.business === 'object' ? scan.business : {};
+  const name = String(b.name || scan?.business_name || '').slice(0, 120);
+  return {
+    business: name ? { name, town: String(b.town || '').slice(0, 80) || null, state: String(b.state || '').slice(0, 20) || null } : null,
+    hasEmail: reqs.length > 0,
+  };
+}
+
+/** Whether any request tied to this report token has an email on file. */
+export async function requestHasEmail(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  const s = supaService(env);
+  const res = await fetchImpl(`${s.base}/${TABLES.REPORT_REQUESTS}?report_token=eq.${encodeURIComponent(token)}&email=not.is.null&select=id&limit=1`, { headers: s.headers, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`Supabase GET report_requests failed: ${res.status}`);
+  return (await res.json()).length > 0;
+}
+
+/**
+ * "Email me when it's ready" on a report that is still being made: put the email on the request tied
+ * to this token, so the scan's own "report ready" email (src/lib/notify.js notifyScanDone) goes to it.
+ * Fills an empty email first; if every request already has one (or none is tied to the token, e.g. an
+ * admin scan), saves a new request row for the same token with the business from its `scans` row.
+ * → { id } of the row that now carries the email.
+ */
+export async function attachRequestEmailByToken(env, { token, email, userAgent = null }, { fetchImpl = (...a) => fetch(...a), uuid = () => crypto.randomUUID() } = {}) {
+  const s = supaService(env);
+  const t = encodeURIComponent(token);
+  const now = new Date().toISOString();
+  const patch = await fetchImpl(`${s.base}/${TABLES.REPORT_REQUESTS}?report_token=eq.${t}&email=is.null&select=id`, {
+    method: 'PATCH',
+    headers: { ...s.headers, Prefer: 'return=representation' },
+    body: JSON.stringify({ email, email_added_at: now }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!patch.ok) throw new Error(`Supabase report_requests update failed: ${patch.status} ${(await patch.text()).slice(0, 200)}`);
+  const [updated] = await patch.json();
+  if (updated && updated.id) return { id: updated.id };
+  // Already on file for this token? Nothing to add.
+  const same = await fetchImpl(`${s.base}/${TABLES.REPORT_REQUESTS}?report_token=eq.${t}&email=eq.${encodeURIComponent(email)}&select=id&limit=1`, { headers: s.headers, signal: AbortSignal.timeout(8000) });
+  if (same.ok) {
+    const [row] = await same.json();
+    if (row && row.id) return { id: row.id };
+  }
+  const scanRes = await fetchImpl(`${s.base}/scans?report_token=eq.${t}&select=business,business_name&order=created_at.desc&limit=1`, { headers: s.headers, signal: AbortSignal.timeout(8000) });
+  const [scan] = scanRes.ok ? await scanRes.json() : [];
+  const b = scan && scan.business && typeof scan.business === 'object' ? scan.business : {};
+  const id = uuid();
+  const res = await fetchImpl(`${s.base}/${TABLES.REPORT_REQUESTS}`, {
+    method: 'POST',
+    headers: { ...s.headers, Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      id,
+      business_name: String(b.name || scan?.business_name || 'unknown').slice(0, 120),
+      town: String(b.town || 'unknown').slice(0, 80),
+      zip: b.zip ?? null,
+      trade: b.trade ?? null,
+      website: b.website ?? null,
+      phone: b.phone ?? null,
+      email,
+      email_added_at: now,
+      user_agent: userAgent,
+      requested_at: now,
+      status: 'email-added',
+      report_token: token,
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) throw new Error(`Supabase report_requests insert failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  return { id };
+}

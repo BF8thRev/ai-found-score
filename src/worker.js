@@ -3,9 +3,9 @@
 // Routes:
 //   GET  /r/[code]            -> printed short code (postcard) -> 302 to /report/[token]
 //   GET  /api/report/[id]     -> report JSON; fix details + X-Ray sections withheld until paid;
-//                                202 {status:'running'|'queued'} while a free-report request's scan is pending
+//                                202 {status:'running'|'queued'|..., business?, hasEmail?} while a free-report request's scan is pending
 //   POST /api/visit           -> report-page view beacon (arm looked up from token)
-//   POST /api/lead            -> "Email me this report"
+//   POST /api/lead            -> "Email me this report"; while the report is still being made, attaches the email to the request instead
 //   POST /api/request         -> landing-page free-report request (email optional; returns id + report_url;
 //                                AUTO_SCAN=on starts its scan at once, src/lib/auto-scan.js);
 //                                Turnstile-checked + per-IP rate limit (src/lib/report-request.js)
@@ -39,6 +39,7 @@
 import {
   recordPayment, recordUnsubscribe, recordVisit, recordLead,
   getReport, getReportLink, isReportUnlocked, getPaidTiers,
+  getRequestInfo, requestHasEmail, attachRequestEmailByToken,
 } from './lib/db.js';
 import { handleQuestions } from './lib/questions-route.js';
 import { handleReportRequest } from './lib/report-request.js';
@@ -48,8 +49,15 @@ import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
 import { reportBody, BREAKDOWN_TIERS } from './lib/lock.js';
-import { pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent } from './lib/auto-scan.js';
-import { notifyPayment, notifyLead } from './lib/notify.js';
+import {
+  pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent,
+  retryFailedScans, startAbandonedCheckout, REQUEST_TOKEN_RE,
+} from './lib/auto-scan.js';
+import { sendCreditAlerts } from './lib/alerts.js';
+
+/** wrangler.jsonc triggers: this one is the half-hourly recovery + credit check; the other is daily. */
+const RECOVERY_CRON = '*/30 * * * *';
+import { notifyPayment, notifyLead, notifyRequestEmail, reportSummary } from './lib/notify.js';
 import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
 import { geoForRequest, geoTag, addGeoHandlers } from './lib/geo.js';
@@ -123,6 +131,14 @@ export default {
     if (url.pathname === '/api/checkout' && request.method === 'POST') {
       return handleCheckout(request, url, env, { mockReports: MOCK_REPORTS });
     }
+    // Stripe's cancel link for a pay-up-front order: start the free report instead, then show it.
+    if (url.pathname === '/api/checkout/cancel' && request.method === 'GET') {
+      const t = String(url.searchParams.get('t') || '');
+      if (!REQUEST_TOKEN_RE.test(t)) return Response.redirect(new URL('/#pricing', url).toString(), 303);
+      const r = await startAbandonedCheckout(env, t);
+      console.log('[checkout] cancelled', JSON.stringify({ ok: !!r?.ok, why: r?.reason || r?.error || null }));
+      return Response.redirect(new URL(`/report/${encodeURIComponent(t)}?from=checkout`, url).toString(), 303);
+    }
 
     if (url.pathname === '/api/stripe-webhook' && request.method === 'POST') {
       return handleStripeWebhook(request, env);
@@ -172,7 +188,16 @@ export default {
   // Daily cron (wrangler.jsonc triggers): the free 30-day re-check for every paid report
   // (src/lib/auto-scan.js startDueRechecks). RECHECK_SCAN=off turns it off.
   async scheduled(event, env, ctx) {
-    // One after the other: a plan's month 1 is skipped when the re-check just scanned that report.
+    // Every 30 minutes: retry a failed scan once, run the free report for a checkout left unpaid,
+    // and email the owner when an engine's credits are low or out (src/lib/alerts.js).
+    if (event.cron === RECOVERY_CRON) {
+      ctx.waitUntil(retryFailedScans(env)
+        .then((r) => console.log('[recovery]', JSON.stringify(r)))
+        .then(() => sendCreditAlerts(env))
+        .then((r) => console.log('[credits]', JSON.stringify({ checked: r?.checked, alerts: r?.alerts }))));
+      return;
+    }
+    // Daily. One after the other: a plan's month 1 is skipped when the re-check just scanned that report.
     ctx.waitUntil(startDueRechecks(env)
       .then((r) => console.log('[recheck]', JSON.stringify(r)))
       .then(() => startDueMonthly(env))
@@ -247,9 +272,21 @@ async function handleShortCode(url, env) {
 
 // A free-report request's link works before its report exists: while its scan is queued or
 // running the answer is 202 {status: 'running'|'queued'} (src/lib/auto-scan.js pendingReportStatus),
-// and report.js shows the "in progress" page, re-checking every 30 s.
-function pendingResponse(status) {
-  return Response.json({ status }, { status: 202, headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' } });
+// and report.js shows the "in progress" page, re-checking every 30 s. The status is passed through as
+// pendingReportStatus gives it (report.js also knows 'failed' and 'paid'). `business` {name, town, state}
+// lets the owner see the page is theirs; `hasEmail` hides the email box (the address is never sent).
+function pendingResponse(status, info = {}) {
+  const body = { status };
+  if (info.business) body.business = info.business;
+  if (typeof info.hasEmail === 'boolean') body.hasEmail = info.hasEmail;
+  return Response.json(body, { status: 202, headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' } });
+}
+
+async function pendingInfo(env, token) {
+  return getRequestInfo(env, token).catch((e) => {
+    console.warn('[report] pending info read failed', String(e?.message || e).slice(0, 200));
+    return {};
+  });
 }
 
 async function handleGetReport(id, url, env, dryRun = false) {
@@ -281,7 +318,7 @@ async function handleGetReport(id, url, env, dryRun = false) {
   }
   if (!report) {
     const st = isSample ? null : await pendingReportStatus(env, id);
-    if (st) return pendingResponse(st);
+    if (st) return pendingResponse(st, await pendingInfo(env, id));
     return Response.json({ error: 'Report not found' }, { status: 404 });
   }
   // Serve gate: a v2 report that fails the guardrails is never shown.
@@ -310,6 +347,8 @@ async function handleGetReport(id, url, env, dryRun = false) {
   if (onPlan) body.plan = { token: planToken || id, town: !!planToken };
   // Paid, and the full scan (every question, every assistant) is still running: the page says so.
   if (unlocked && !isSample && !dryRun && (await paidScanRunning(env, id))) body.fullScanPending = true;
+  // A free report whose request already has an email: the page shows no email box (never the address).
+  if (!unlocked && !isSample && !dryRun) body.hasEmail = await requestHasEmail(env, id).catch(() => false);
   return Response.json(body, {
     // Real reports change the moment they're paid for, so never cache them.
     headers: { 'Cache-Control': isSample ? 'public, max-age=300' : 'private, no-store' },
@@ -367,6 +406,25 @@ async function handleLead(request, env) {
     return Response.json({ ok: false, error: 'Please enter a valid email.' }, { status: 422 });
   }
   if (token.startsWith('sample-')) return Response.json({ ok: true });
+  // No report yet for this token (a free-report request still being made): the email goes on the
+  // request, so the "report ready" email reaches it. No "here's your report" email for a report
+  // that doesn't exist yet.
+  const pending = await pendingLeadStatus(env, token);
+  if (pending) {
+    let attached;
+    try {
+      attached = await attachRequestEmailByToken(env, { token, email, userAgent: request.headers.get('User-Agent') || null });
+    } catch (e) {
+      console.error('[lead] attach failed', e);
+      return Response.json({ ok: false, error: 'Could not save that. Try again.' }, { status: 500 });
+    }
+    // The report may have finished between the page's check and now: then send "ready" at once.
+    if (!(await rateLimit(env, request, 'lead'))) {
+      const r = await notifyRequestEmail(env, { requestId: attached.id, email });
+      if (r && r.error) console.warn('[lead] ready email failed', r.error);
+    }
+    return Response.json({ ok: true, attached: true });
+  }
   try {
     const link = await getReportLink(env, { token });
     await recordLead(env, {
@@ -385,6 +443,13 @@ async function handleLead(request, env) {
     if (!r.sent) console.warn('[lead] not emailed', JSON.stringify(r));
   }
   return Response.json({ ok: true });
+}
+
+// The report for a /api/lead token isn't saved yet but its scan is known → the pending status, else null.
+async function pendingLeadStatus(env, token) {
+  const sum = await reportSummary(env, token).catch(() => undefined);
+  if (sum !== null) return null; // a report exists, or we couldn't tell: the ordinary lead email
+  return pendingReportStatus(env, token).catch(() => null);
 }
 
 // GET /api/questions lives in src/lib/questions-route.js.

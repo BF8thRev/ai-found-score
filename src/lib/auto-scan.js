@@ -41,6 +41,8 @@ import { linkRequestToken } from './notify.js';
 export const DEFAULT_DAILY_MAX = 25;
 export const DEFAULT_DAILY_USD = 20;
 export const DEDUPE_DAYS = 7;
+/** Queue reason for a request made on the way to checkout. */
+export const PAID_INTENT = 'paid-intent';
 /** Tokens this module hands out: 22 chars of base64url (128 random bits). */
 export const REQUEST_TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
 /** Any token worth looking up in `scans` (older admin tokens are 10 chars). */
@@ -118,20 +120,25 @@ export function dedupeHit(rows, ownId) {
   return earlier[0] || null;
 }
 
+/** How many times a report may be tried automatically before the page says something went wrong. */
+export const MAX_ATTEMPTS = 2;
+
 /**
  * The report page's state for a token that has no report yet, from its `scans` rows (newest first).
- * → 'running' | 'queued' | null (no request scan for this token).
- * A failed scan or a report that didn't pass the guardrails waits for a person ("Run now"): 'queued'.
+ * → 'running' | 'paid' (the paid audit is being made) | 'queued' | 'failed' | null (no request scan for this token).
+ * A scan that failed (or whose report didn't pass the guardrails) is retried once by the cron
+ * (retryFailedScans), so the first failure still reads 'queued'; after MAX_ATTEMPTS it's 'failed'.
  */
 export function statusFromRows(rows) {
   const list = (rows || []).filter(Boolean);
   if (!list.length) return null;
-  if (list.some((r) => r.status === 'running')) return 'running';
+  const running = list.filter((r) => r.status === 'running');
+  if (running.length) return running.some((r) => r.trigger === 'paid') ? 'paid' : 'running';
   if (list.some((r) => r.status === 'queued')) return 'queued';
   const storeFailed = (r) => (Array.isArray(r.errors) ? r.errors : []).some((e) => e && e.kind === 'store');
-  // Done and valid: the report row is being written (or the read raced it). Anything else needs a person.
+  // Done and valid: the report row is being written (or the read raced it).
   if (list.some((r) => r.status === 'done' && r.report_valid === true && !storeFailed(r))) return 'running';
-  return 'queued';
+  return list.length >= MAX_ATTEMPTS ? 'failed' : 'queued';
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +223,8 @@ async function reuseWithNewToken(env, prior, { token, scanId, base, notes, rowWr
 /**
  * @param {object} env
  * @param {object} req      the saved request: { id, businessName, trade, town, state, zip, website, phone }
- * @param {object} o        { request (for the per-IP limiter), dryRun, now, fetchImpl, limiter, uuid }
+ * @param {object} o        { request (for the per-IP limiter), dryRun, now, fetchImpl, limiter, uuid,
+ *                            paidIntent (queue it: the buyer is on the way to checkout) }
  * @returns {Promise<null | { token, status: 'running'|'queued'|'reused', scanId, reason? }>}  token is always
  *   this request's own new token ('reused' = the earlier report was copied to it).
  */
@@ -240,9 +248,9 @@ export async function startRequestScan(env, req, o = {}) {
 
   // ---- local dry run: fixtures, no database -------------------------------------------------
   if (o.dryRun) {
-    if (!on || !env.SCAN_WORKFLOW) {
+    if (o.paidIntent || !on || !env.SCAN_WORKFLOW) {
       DRY_RUN_REQUESTS.set(token, { scanId, status: 'queued' });
-      return { token, status: 'queued', scanId, reason: on ? 'no-workflow' : 'auto-scan-off' };
+      return { token, status: 'queued', scanId, reason: o.paidIntent ? PAID_INTENT : on ? 'no-workflow' : 'auto-scan-off' };
     }
     await env.SCAN_WORKFLOW.create({ id: scanId, params: { ...params, dryRun: true } });
     DRY_RUN_REQUESTS.set(token, { scanId, status: 'running' });
@@ -272,7 +280,10 @@ export async function startRequestScan(env, req, o = {}) {
 
   // 2. Per-IP brake.
   let reason = null;
-  if (!on) reason = 'auto-scan-off';
+  // Someone who came to pay goes to checkout: their paid scan starts when the payment lands. The
+  // free scan waits (retryFailedScans runs it if they leave checkout without paying).
+  if (o.paidIntent) reason = PAID_INTENT;
+  else if (!on) reason = 'auto-scan-off';
   else if (!engines.length) reason = 'no-engine';
   else if (!env.SCAN_WORKFLOW) reason = 'no-workflow';
   else if (await ipLimited(env, o)) reason = 'ip';
@@ -381,7 +392,8 @@ export async function runQueuedScan(env, id, { fetchImpl = (...a) => fetch(...a)
   if (!canStore(env)) return { ok: false, status: 503, error: 'SUPABASE_SERVICE_KEY not set' };
   const row = await getScan(env, id, { fetchImpl }).catch(() => null);
   if (!row || row.trigger !== 'request') return { ok: false, status: 404, error: 'No request scan with that id.' };
-  if (row.status !== 'queued' && row.status !== 'failed') return { ok: false, status: 409, error: `That scan is ${row.status}.` };
+  const invalid = row.status === 'done' && row.report_valid === false;
+  if (row.status !== 'queued' && row.status !== 'failed' && !invalid) return { ok: false, status: 409, error: `That scan is ${row.status}.` };
   const engines = freeEngines(env);
   if (!engines.length) return { ok: false, status: 503, error: 'No engine has a key.' };
   const parsed = parseScanRequest({ business: row.business || {}, engines, runs: 1, trigger: 'request', notes: row.notes || 'free-report request' });
@@ -404,6 +416,102 @@ export async function runQueuedScan(env, id, { fetchImpl = (...a) => fetch(...a)
     return { ok: false, status: 500, error: `could not start the workflow: ${error}` };
   }
   return { ok: true, scanId };
+}
+
+// ---------------------------------------------------------------------------
+// Hands-off recovery, run by the Worker's cron (src/worker.js scheduled)
+// ---------------------------------------------------------------------------
+
+/** Rows older than this aren't picked up any more (a long outage doesn't replay a backlog). */
+export const RETRY_WINDOW_HOURS = 48;
+/** A request queued on the way to checkout gets its free scan after this long without a payment. */
+export const ABANDONED_CHECKOUT_MINUTES = 60;
+/** Most scans started per cron run. */
+export const RETRY_MAX_PER_RUN = 10;
+
+const attemptFailed = (r) => r.status === 'failed' || (r.status === 'done' && r.report_valid === false);
+
+/**
+ * What the cron should start, from recent scans rows (pure). A token is picked when:
+ *   - its request scan failed once (or its report failed the guardrails) and nothing else is going
+ *     on for it: retried once (MAX_ATTEMPTS in all), only with AUTO_SCAN on (off = a person decides);
+ *   - its paid scan failed once: retried once, always (it's paid for);
+ *   - it was queued on the way to checkout (PAID_INTENT) ABANDONED_CHECKOUT_MINUTES ago and no paid
+ *     scan exists: the free scan runs (AUTO_SCAN on), so the owner still gets their free report.
+ * rows: [{ id, report_token, trigger, status, report_valid, notes, created_at }]
+ * → [{ kind: 'request-retry'|'paid-retry'|'abandoned', id, token }]
+ */
+export function pickRecoveries(rows, { now = Date.now(), autoScan = false } = {}) {
+  const byToken = new Map();
+  for (const r of rows || []) {
+    if (!r?.report_token) continue;
+    if (!byToken.has(r.report_token)) byToken.set(r.report_token, []);
+    byToken.get(r.report_token).push(r);
+  }
+  const out = [];
+  for (const [token, list] of byToken) {
+    const busy = list.some((r) => r.status === 'running' || (r.status === 'done' && r.report_valid === true));
+    if (busy) continue;
+    const paid = list.filter((r) => r.trigger === 'paid');
+    if (paid.length) {
+      if (paid.length < MAX_ATTEMPTS && paid.every(attemptFailed)) out.push({ kind: 'paid-retry', id: paid[0].id, token });
+      continue;
+    }
+    if (!autoScan) continue;
+    const req = list.filter((r) => r.trigger === 'request');
+    const queued = req.find((r) => r.status === 'queued');
+    if (queued) {
+      const age = now - Date.parse(queued.created_at);
+      if (String(queued.notes || '').includes(`queued: ${PAID_INTENT}`) && age >= ABANDONED_CHECKOUT_MINUTES * 60_000) out.push({ kind: 'abandoned', id: queued.id, token });
+      continue;
+    }
+    const failed = req.filter(attemptFailed);
+    if (failed.length && failed.length < MAX_ATTEMPTS && failed.length === req.length) {
+      const newest = failed.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+      out.push({ kind: 'request-retry', id: newest.id, token });
+    }
+  }
+  return out.slice(0, RETRY_MAX_PER_RUN);
+}
+
+/** Cron: retry failed scans once and run the free scan for abandoned checkouts. Never throws. */
+export async function retryFailedScans(env, { now = Date.now(), fetchImpl = (...a) => fetch(...a) } = {}) {
+  try {
+    if (!env.SCAN_WORKFLOW || !canStore(env)) return { ok: false, reason: 'not configured' };
+    const since = new Date(now - RETRY_WINDOW_HOURS * 3600_000).toISOString();
+    const rows = await readRows(env, `trigger=in.(request,paid)&report_token=not.is.null&created_at=gte.${encodeURIComponent(since)}&select=id,report_token,trigger,status,report_valid,notes,created_at&order=created_at.desc&limit=1000`, fetchImpl);
+    const picks = pickRecoveries(rows, { now, autoScan: autoScanOn(env) });
+    const results = [];
+    for (const p of picks) {
+      let r;
+      if (p.kind === 'paid-retry') {
+        r = await startFullScan(env, { token: p.token, trigger: 'paid', scanId: await stableUuid(`paid-retry:${p.token}`), notes: 'paid scan, automatic retry' }, { fetchImpl })
+          .catch((e) => ({ ok: false, reason: String(e?.message || e).slice(0, 200) }));
+      } else {
+        r = await runQueuedScan(env, p.id, { fetchImpl }).catch((e) => ({ ok: false, error: String(e?.message || e).slice(0, 200) }));
+      }
+      results.push({ ...p, ok: !!r?.ok, ...(r?.ok ? {} : { why: r?.reason || r?.error }) });
+    }
+    return { ok: true, started: results.filter((r) => r.ok).length, results };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 200) };
+  }
+}
+
+/**
+ * Left checkout without paying (Stripe's cancel link): start this request's free scan now, so the
+ * owner lands on their free report instead. Only a PAID_INTENT row, only with AUTO_SCAN on. Never throws.
+ */
+export async function startAbandonedCheckout(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  try {
+    if (!autoScanOn(env) || !REQUEST_TOKEN_RE.test(String(token || ''))) return { ok: false, reason: 'off' };
+    const rows = await readRows(env, `report_token=eq.${encodeURIComponent(token)}&select=id,report_token,trigger,status,report_valid,notes,created_at&order=created_at.desc&limit=10`, fetchImpl);
+    const pick = pickRecoveries(rows, { now: Infinity, autoScan: true }).find((p) => p.kind === 'abandoned');
+    if (!pick) return { ok: false, reason: 'nothing to start' };
+    return await runQueuedScan(env, pick.id, { fetchImpl });
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 200) };
+  }
 }
 
 // ---------------------------------------------------------------------------

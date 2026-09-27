@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=10">
+  <link rel="stylesheet" href="/css/styles.css?v=11">
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Organization", "@id": "https://aifoundscore.com/#organization", "name": "AI Found Score", "url": "https://aifoundscore.com/", "logo": {"@type": "ImageObject", "url": "https://aifoundscore.com/img/logo.svg"}, "image": "https://aifoundscore.com/img/og.png", "email": "hello@aifoundscore.com", "address": {"@type": "PostalAddress", "streetAddress": "120 Terminal Drive", "addressLocality": "Plainview", "addressRegion": "NY", "postalCode": "11803", "addressCountry": "US"}, "contactPoint": {"@type": "ContactPoint", "contactType": "customer support", "email": "hello@aifoundscore.com", "availableLanguage": "en"}, "areaServed": {"@type": "Country", "name": "United States"}, "description": "AI Found Score checks whether AI assistants recommend a local business when customers ask, shows who they name instead, and gives the business ready-to-install fixes.", "knowsAbout": ["AI search visibility", "Generative engine optimization", "Local SEO", "Business listings", "Structured data"]}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "@id": "https://aifoundscore.com/#website", "name": "AI Found Score", "url": "https://aifoundscore.com/", "publisher": {"@id": "https://aifoundscore.com/#organization"}}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Service", "name": "AI Found Score report", "serviceType": "AI visibility audit", "provider": {"@type": "Organization", "name": "AI Found Score"}, "areaServed": {"@type": "Country", "name": "US"}, "description": "Asks the AI assistants local customers use the questions they ask, and shows who got named and who got named first. The audit adds every answer word for word and which websites the AI cited. Each report lists exactly which assistants were asked and when.", "offers": [{"@type": "Offer", "name": "Snapshot", "price": "0", "priceCurrency": "USD"}, {"@type": "Offer", "name": "AI Visibility Audit", "price": "49", "priceCurrency": "USD", "description": "All 5 customer questions asked fresh on every assistant we check, every answer word for word and every website AI cited, exactly what's wrong on your website and Google listing, every fix with copy-paste text, your Fix Kit of ready-to-install files, the competitor gap sheet, your fix checklist, and a free re-scan 30 days later. Fewer than 3 problems specific to your business? Your $49 back."}, {"@type": "Offer", "name": "Competitor Breakdown", "price": "25", "priceCurrency": "USD", "description": "Add-on to the AI Visibility Audit: the top 3 businesses AI names instead of you, side by side with you, and up to 3 things they have that you don't."}, {"@type": "Offer", "name": "Be the Answer", "price": "499", "priceCurrency": "USD", "description": "Everything in the AI Visibility Audit, plus a re-scan every month for a year in up to 3 towns you serve, a monthly email with what changed and your next 3 fixes, competitor alerts, the Competitor Breakdown, a directory checklist for 30+ sites with the exact text to paste, and 12 Google posts written for you. Not useful in the first 60 days? Full refund."}]}</script>
@@ -294,14 +294,18 @@
 <section class="section" id="request">
   <div class="wrap">
     <div class="request">
-      <div class="request-intro">
-        <h2>Is your business the answer?</h2>
-        <p class="intro">Tell us your business. We&rsquo;ll ask AI what your customers ask, live, and show you every word.</p>
-        <ul>
+      <div class="request-intro" id="request-intro">
+        <!-- Free by default. A paid pricing button ("Get my audit", "Be the answer") switches this to the
+             paid path: same three fields, then Stripe checkout (setMode in the script below). -->
+        <p class="plan-chip" id="plan-chip" hidden></p>
+        <h2 id="intro-title">Is your business the answer?</h2>
+        <p class="intro" id="intro-text">Tell us your business. We&rsquo;ll ask AI what your customers ask, live, and show you every word.</p>
+        <ul id="intro-points">
           <li>Free. No sign-up, no card</li>
           <li>No email to start</li>
           <li>Public data only, no logins</li>
         </ul>
+        <p class="plan-switch" id="plan-switch" hidden><button type="button" class="link-btn" id="plan-free">Rather start with the free report?</button></p>
       </div>
       <div class="request-col" id="request-col">
       <form id="request-form" method="post" action="/api/request" novalidate>
@@ -321,6 +325,7 @@
       </form>
         <!-- Turnstile bot check (invisible unless Cloudflare needs a click). The Worker fills in the site key;
              empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
+        <p class="ts-help" id="ts-help" hidden>One quick check: tap the box below to confirm you&rsquo;re a person.</p>
         <div class="ts-box" id="ts-request" data-turnstile-sitekey=""></div>
       </div>
 
@@ -340,24 +345,33 @@
             <p class="live-cites" id="live-cites"></p>
             <p class="live-note" id="live-note"></p>
           </div>
-          <p class="live-msg" id="live-msg" role="status"></p>
-          <button class="btn-secondary live-retry" id="live-retry" type="button" hidden>Try again</button>
+        </div>
+        <!-- The one next step: their private report page. The heading follows the live answer
+             (named / not named / no answer); the button appears once the request is saved. -->
+        <div class="rq-block rq-next" id="rq-next" tabindex="-1">
+          <h3 id="next-title">Your free report asks every question</h3>
+          <p class="rq-sub" id="next-sub">Whether AI names you, who it names instead, and your AI Found Score.</p>
+          <p class="rq-actions" id="next-actions" hidden>
+            <a class="btn" id="next-open" href="#">Open my free report</a>
+            <button type="button" class="link-btn" id="next-copy">Copy link</button>
+          </p>
+          <p class="rq-count" id="next-note" hidden>Private to you. It fills in as soon as it&rsquo;s ready, so bookmark it.</p>
         </div>
         <div class="rq-block" id="rq-questions" tabindex="-1">
           <h3 id="rq-title">Here's exactly what we'll ask</h3>
           <p class="rq-sub" id="rq-sub">We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.</p>
+          <button type="button" class="link-btn rq-toggle" id="rq-toggle" hidden aria-expanded="false" aria-controls="rq-list">Show them</button>
           <ol class="rq-list" id="rq-list"></ol>
-          <p class="rq-count" id="rq-count">Your free report shows whether AI names you, and who it names instead.</p>
         </div>
         <p class="status" id="request-save" role="status"></p>
         <form class="rq-block rq-email" id="email-form" novalidate>
-          <h3>Want your free report? Whether AI names you, who it names instead, and your AI Found Score.</h3>
-          <p class="rq-sub">Optional. We use your email only to send your private report link, usually within one business day. No sales call.</p>
+          <h3>Want the link by email too?</h3>
+          <p class="rq-sub">Optional. We&rsquo;ll email you the moment your report is ready. No sales call.</p>
           <label><span>Email <small class="opt">(optional)</small></span> <input name="email" type="email" maxlength="160" autocomplete="email" placeholder="you@yourbusiness.com"></label>
           <div class="ts-box" id="ts-email"></div>
-          <button class="btn" type="submit">Send my full report</button>
+          <button class="btn-secondary" type="submit">Email me the link</button>
           <p class="status" id="email-status" role="status"></p>
-          <p class="form-note">Rather not? That's fine. Email <a href="mailto:hello@aifoundscore.com?subject=My%20report%20link" style="color:#DCE6F4">hello@aifoundscore.com</a> with your business name whenever you want the link. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
+          <p class="form-note">We only email you about this report. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
         </form>
       </div>
     </div>
@@ -424,6 +438,7 @@
   var savedReq = null;     // the first save, so the email step never races it
   var previewToken = null; // signed by /api/request after the bot check; unlocks one live answer
   var shownQuestions = []; // [{id, text}] from /api/questions
+  var reportUrl = '';      // their private report page, once the first save returns it
 
   function show(el, kind, html) { el.className = 'status ' + kind; el.innerHTML = html; }
   function esc(t) { var d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; }
@@ -456,7 +471,15 @@
   function tsWidget(box) {
     var w = { id: null, api: null, token: '', dead: !TS_KEY, waiters: [] };
     var col = document.getElementById('request-col');
-    function live(on) { box.classList.toggle('ts-live', on); if (box === TS_BOX && col) col.classList.toggle('ts-shown', on); }
+    function live(on) {
+      box.classList.toggle('ts-live', on);
+      if (box !== TS_BOX) return;
+      if (col) col.classList.toggle('ts-shown', on);
+      // A challenge that needs a tap must be where the visitor is looking (the page has scrolled on).
+      var help = document.getElementById('ts-help');
+      if (help) help.hidden = !on;
+      if (on) { try { (help || box).scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
+    }
     function settle() { var q = w.waiters; w.waiters = []; q.forEach(function (f) { f(); }); }
     if (!w.dead) loadTurnstile().then(function (api) {
       if (!api) { w.dead = true; settle(); return; }
@@ -511,28 +534,119 @@
   if (q === 'ok') show(status, 'ok', 'Got it. We\'ll run your report, usually within one business day.');
   if (q === 'error') show(status, 'error', fallback);
 
+  // ---- Two paths. Free (default): details -> a live answer -> their report page, email optional.
+  // Paid (a pricing button: "Get my audit" / "Be the answer"): the same details -> Stripe checkout.
+  // The free report stays one click away ("Rather start with the free report?"), and leaving
+  // checkout unpaid lands on the free report (/api/checkout/cancel).
+  function el(id) { return document.getElementById(id); }
+  var PLANS = {
+    full_audit: {
+      tier: 'xray', chip: 'AI Visibility Audit · $49', title: 'Your AI Visibility Audit',
+      text: 'Tell us your business, then pay securely with Stripe. We ask every customer question on every AI assistant we check, and email you your full audit, usually within the hour.',
+      points: ['Every answer word for word, and every fix', 'Fewer than 3 problems specific to you? Your $49 back', 'Public data only, no logins'],
+      button: 'Continue to payment · $49'
+    },
+    be_the_answer: {
+      tier: 'be_the_answer', chip: 'Be the Answer · $499 for the year', title: 'Be the Answer',
+      text: 'Tell us your business, then pay securely with Stripe. Your full audit starts right away, then we re-check every month for a year.',
+      points: ['Monthly re-scans in up to 3 towns', 'Not useful in the first 60 days? Full refund', 'One payment, no auto-renew'],
+      button: 'Continue to payment · $499'
+    }
+  };
+  var plan = null; // null = the free report; else a PLANS entry
+  var submitBtn = form.querySelector('button[type=submit]');
+  var intro = { title: el('intro-title').textContent, text: el('intro-text').innerHTML, points: el('intro-points').innerHTML, button: submitBtn.innerHTML };
+  function setPlan(offer) {
+    plan = PLANS[offer] || null;
+    el('plan-chip').hidden = !plan;
+    el('plan-switch').hidden = !plan;
+    if (plan) {
+      el('plan-chip').textContent = plan.chip;
+      el('intro-title').textContent = plan.title;
+      el('intro-text').textContent = plan.text;
+      el('intro-points').innerHTML = plan.points.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('');
+      submitBtn.textContent = plan.button;
+    } else {
+      el('intro-title').textContent = intro.title;
+      el('intro-text').innerHTML = intro.text;
+      el('intro-points').innerHTML = intro.points;
+      submitBtn.innerHTML = intro.button;
+    }
+    status.className = 'status'; status.textContent = '';
+  }
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('[data-offer]') : null;
+    if (a) setPlan(a.getAttribute('data-offer'));
+  });
+  el('plan-free').addEventListener('click', function () {
+    setPlan(null);
+    try { sessionStorage.setItem('afs_offer', 'free_snapshot'); } catch (err) {}
+    push({ event: 'offer_switch_free' });
+  });
+  // A link can open the paid path too: /?plan=audit#request or /?plan=be_the_answer#request
+  (function () {
+    var p = new URLSearchParams(location.search).get('plan');
+    if (p === 'audit' || p === 'xray' || p === 'full_audit') setPlan('full_audit');
+    else if (p === 'be_the_answer') setPlan('be_the_answer');
+  })();
+
   // Questions panel. While the live answer runs (and after it), the first question is the live one,
-  // so the list shows the other four, numbered on from 2.
+  // so the list shows the others, numbered on from 2. After an answer the list folds away.
   var LIVE_Q = 'q1';
   var liveState = 'idle'; // idle | preparing | waiting | done | failed
-  function el(id) { return document.getElementById(id); }
+  var liveNamed = false;
   function paintQuestions() {
     var list = el('rq-list');
     var withLive = liveState === 'preparing' || liveState === 'waiting' || liveState === 'done';
     var rest = withLive ? shownQuestions.filter(function (qq) { return qq.id !== LIVE_Q; }) : shownQuestions;
-    el('rq-title').textContent = liveState === 'done' ? 'The other ' + rest.length + ' questions in your full report'
+    var folded = liveState === 'done';
+    el('rq-title').textContent = folded ? rest.length + ' more question' + (rest.length === 1 ? '' : 's') + ' in your report'
       : withLive ? 'What else we’ll ask' : 'Here’s exactly what we’ll ask';
-    el('rq-sub').textContent = liveState === 'done'
-      ? 'We ask every question to the AI assistants your customers use. Your report shows whether they named you, and who they named instead.'
-      : 'We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.';
+    el('rq-sub').hidden = folded;
+    el('rq-sub').textContent = 'We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.';
+    var toggle = el('rq-toggle');
+    toggle.hidden = !folded || !rest.length;
+    list.hidden = folded && toggle.getAttribute('aria-expanded') !== 'true';
     list.style.counterReset = 'rq ' + (withLive && rest.length < shownQuestions.length ? 1 : 0);
     list.innerHTML = rest.map(function (qq) { return '<li>' + esc(qq.text) + '</li>'; }).join('');
+    paintNext();
+  }
+  el('rq-toggle').addEventListener('click', function () {
+    var open = this.getAttribute('aria-expanded') !== 'true';
+    this.setAttribute('aria-expanded', open ? 'true' : 'false');
+    this.textContent = open ? 'Hide them' : 'Show them';
+    el('rq-list').hidden = !open;
+  });
+  // The one next step, worded by what the live answer showed. Soft on purpose: the name match is
+  // literal, so "we didn't see your name" is true where "AI doesn't name you" might not be.
+  function paintNext() {
+    var n = shownQuestions.length;
+    var every = n ? 'all ' + n + ' questions' : 'every question';
+    var title, sub;
+    if (liveState === 'done' && liveNamed) {
+      title = 'AI named you here. Do the others?';
+      sub = 'Your free report asks ' + every + ' and shows who AI names alongside you, plus your AI Found Score.';
+    } else if (liveState === 'done') {
+      title = 'See who AI names instead of you';
+      sub = 'Your free report asks ' + every + ', shows who AI named in your place, and gives you your AI Found Score.';
+    } else if (liveState === 'failed') {
+      title = 'Your free report asks ' + every;
+      sub = 'We couldn’t get a live answer just now. Your report has every answer, who AI names instead, and your AI Found Score.';
+    } else {
+      title = 'Your free report asks ' + every;
+      sub = 'Whether AI names you, who it names instead, and your AI Found Score.';
+    }
+    el('next-title').textContent = title;
+    el('next-sub').textContent = sub;
+    el('next-actions').hidden = !reportUrl;
+    el('next-note').hidden = !reportUrl;
   }
   function renderQuestions(res) {
     if (!res || !res.questions || !res.questions.length) {
       el('rq-sub').innerHTML = 'We couldn\'t load the questions just now. They\'re three plain questions a customer in ' + esc(biz.town) + ' would ask, and every one is in your report.';
       el('rq-list').innerHTML = '';
       shownQuestions = [];
+      paintNext();
       return;
     }
     shownQuestions = res.questions.map(function (qq) { return { id: String(qq.id), text: String(qq.text) }; });
@@ -546,14 +660,10 @@
   // ---- Live answer: ask the first question to one assistant as soon as the request is saved ----
   // (POST /api/live-preview with the signed token /api/request returned after the bot check).
   // The answer is third-party text: it only ever goes into the page through textContent / text nodes.
-  var LIVE_BUSY = 'Lots of owners are checking right now, so we couldn\'t ask AI live. Here are your questions. Add your email and we\'ll send you your report.';
-  var LIVE_FAILED = 'We couldn\'t ask AI live just now. Here are your questions. Add your email and we\'ll send you your report.';
   var liveBox = el('rq-live');
   function liveWaiting(text) {
     liveBox.hidden = false;
     el('live-out').hidden = true;
-    el('live-msg').textContent = '';
-    el('live-retry').hidden = true;
     el('live-wait').hidden = false;
     el('live-wait-q').textContent = text;
   }
@@ -582,23 +692,22 @@
       var b = res.body || {};
       if (res.ok && typeof b.answer === 'string' && b.answer) {
         liveState = 'done';
+        liveNamed = !!b.named;
         renderLive(b);
         paintQuestions();
         push({ event: 'live_preview_answer', named: !!b.named });
         return;
       }
+      // No live answer (daily cap, every engine down): no error box. The live area folds away and
+      // the next step says, in one calm line, that the report has every answer. The focus was on
+      // the live box, so it moves to the next step.
       liveState = 'failed';
+      liveBox.hidden = true;
       paintQuestions();
-      var reason = String(b.reason || '');
-      el('live-msg').textContent = reason === 'cap' ? LIVE_BUSY
-        : (reason === 'ip' || reason === 'request' || reason === 'token') && typeof b.message === 'string' && b.message ? b.message
-        : LIVE_FAILED;
-      // Worth another try only if it was a hiccup; caps and expired pages are final.
-      el('live-retry').hidden = !(res.status === 0 || reason === 'busy' || reason === 'engine' || reason === 'timeout');
-      push({ event: 'live_preview_failed', reason: reason || String(res.status) });
+      try { el('rq-next').focus({ preventScroll: true }); } catch (err) {}
+      push({ event: 'live_preview_failed', reason: String(b.reason || '') || String(res.status) });
     });
   }
-  el('live-retry').addEventListener('click', function () { runLive(LIVE_Q); });
   function shortDate(iso) {
     var d = new Date(iso || Date.now());
     if (isNaN(d)) d = new Date();
@@ -637,6 +746,70 @@
     el('live-out').hidden = false;
   }
 
+  // Did /api/questions tell us what the business is? If not (it failed, or was rate-limited) and the
+  // owner hasn't said, the request could never be scanned: ask first instead of losing it quietly.
+  function kindUnknown(res, data) {
+    if (res && res.needKind) return true;
+    return !(res && res.ok && res.trade) && !data.trade && !presetKind;
+  }
+  function fetchQuestions(data) {
+    var qs = new URLSearchParams({ trade: data.trade, preset: presetKind, name: data.business_name, website: data.website, town: data.town, zip: data.zip, state: data.state || 'NY' });
+    return fetch('/api/questions?' + qs.toString())
+      .then(function (r) {
+        if (r.status === 429) return r.json().catch(function () { return {}; }).then(function (j) { return { limited: j.error || 'Too many tries. Wait a minute and try again.' }; });
+        if (r.status === 422) return r.json().catch(function () { return null; });
+        return r.ok ? r.json() : null;
+      })
+      .catch(function () { return null; });
+  }
+  function askKindAgain(btn, btnLabel, res) {
+    btn.disabled = false; btn.textContent = btnLabel;
+    var why = res && res.limited ? esc(res.limited) + ' Meanwhile: ' : 'One quick thing: ';
+    show(status, 'error', why + 'what kind of business is it? Type it above, like bakery or dentist.');
+    askKind();
+  }
+  function reportPath(res) {
+    var u = res && res.body && res.body.report_url;
+    return typeof u === 'string' && /^\/report\/[A-Za-z0-9_-]{8,64}$/.test(u) ? u : '';
+  }
+
+  // Paid path: save the request (its free scan waits), then straight to Stripe.
+  function paidSubmit(data, btn, btnLabel) {
+    var chosen = plan;
+    fetchQuestions(data).then(function (res) {
+      if (kindUnknown(res, data)) { askKindAgain(btn, btnLabel, res); return; }
+      data.trade = (res && res.ok && res.trade) || data.trade || presetKind;
+      data.intent = chosen.tier;
+      btn.textContent = 'Taking you to secure checkout…';
+      return tsRequest.take(30000).then(function (token) {
+        if (token) data['cf-turnstile-response'] = token;
+        return postJson('/api/request', data);
+      }).then(function (res) {
+        var path = reportPath(res);
+        if (!res.ok || !path) {
+          btn.disabled = false; btn.textContent = btnLabel;
+          show(status, 'error', (res.body && res.body.error ? esc(res.body.error) + ' ' : 'We couldn\'t start checkout just now. ') + 'Try again in a minute.');
+          return;
+        }
+        requestId = res.body.id;
+        markConverted();
+        var token = path.split('/').pop();
+        return postJson('/api/checkout', { token: token, tier: chosen.tier, prepay: true }).then(function (co) {
+          if (co.ok && co.body.url) {
+            try { localStorage.setItem('afs_checkout', JSON.stringify({ token: token, tier: chosen.tier, prepay: true })); } catch (err) {}
+            push({ event: 'begin_checkout', tier: chosen.tier, path: 'prepay' });
+            location.href = co.body.url;
+            return;
+          }
+          btn.disabled = false; btn.textContent = btnLabel;
+          // Checkout can't open (e.g. this business already has a report): the free report is ready to go.
+          show(status, 'error', (co.body && co.body.error ? esc(co.body.error) + ' ' : 'We couldn\'t open checkout just now. ')
+            + '<a href="/api/checkout/cancel?t=' + encodeURIComponent(token) + '">Open your free report instead</a>.');
+        });
+      });
+    });
+  }
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var data = {};
@@ -662,19 +835,13 @@
     }
     status.className = 'status'; status.textContent = '';
     biz = data;
-    var btn = form.querySelector('button'); var btnLabel = btn.textContent; btn.disabled = true; btn.textContent = 'One moment…';
+    var btn = submitBtn; var btnLabel = btn.textContent; btn.disabled = true; btn.textContent = 'One moment…';
+    if (plan) { paidSubmit(data, btn, btnLabel); return; }
 
-    var qs = new URLSearchParams({ trade: data.trade, preset: presetKind, name: data.business_name, website: data.website, town: data.town, zip: data.zip, state: data.state || 'NY' });
-    var questions = fetch('/api/questions?' + qs.toString())
-      .then(function (r) {
-        if (r.status === 429) return r.json().catch(function () { return {}; }).then(function (j) { return { limited: j.error || 'Too many tries. Wait a minute and try again.' }; });
-        if (r.status === 422) return r.json().catch(function () { return null; });
-        return r.ok ? r.json() : null;
-      })
-      .catch(function () { return null; });
+    var questions = fetchQuestions(data);
     // The save waits for the kind of business (so the report and the live answer use it) and the bot check.
     var saved = savedReq = questions.then(function (res) {
-      if (res && res.needKind) return null;
+      if (kindUnknown(res, data)) return null;
       data.trade = (res && res.ok && res.trade) || data.trade || presetKind;
       return tsRequest.take(30000).then(function (token) {
         if (token) data['cf-turnstile-response'] = token;
@@ -684,13 +851,7 @@
 
     // The questions show even if the save failed: the owner still sees what we'd ask.
     questions.then(function (res) {
-      if (res && res.needKind) {
-        // Couldn't tell from the name or the website: ask, then they press the button again.
-        btn.disabled = false; btn.textContent = btnLabel;
-        show(status, 'error', 'One quick thing: what kind of business is it? Type it above, like bakery or dentist.');
-        askKind();
-        return null;
-      }
+      if (kindUnknown(res, data)) { askKindAgain(btn, btnLabel, res); return null; }
       var limited = res && res.limited;
       // With the bot check on, the save usually comes back with a live-answer token: show the
       // waiting state now so the answer area doesn't jump in later.
@@ -700,7 +861,7 @@
       form.hidden = true;
       next.hidden = false;
       box.classList.add('done');
-      var head = liveState === 'preparing' ? liveBox : el('rq-questions');
+      var head = liveState === 'preparing' ? liveBox : el('rq-next');
       head.scrollIntoView({ behavior: 'smooth', block: 'start' });
       try { head.focus({ preventScroll: true }); } catch (err) { head.focus(); }
       return saved;
@@ -710,18 +871,12 @@
         requestId = res.body.id;
         markConverted();
         if (typeof res.body.preview_token === 'string') previewToken = res.body.preview_token;
-        // Their own report link, shown right away (the page says "in progress" until it's ready).
-        if (typeof res.body.report_url === 'string' && /^\/report\/[A-Za-z0-9_-]{8,64}$/.test(res.body.report_url)) {
-          var abs = location.origin + res.body.report_url;
-          saveNote.className = 'status ok';
-          saveNote.replaceChildren();
-          var p = document.createElement('p');
-          p.textContent = 'Your report will appear at this link. Bookmark it: ';
-          var a = document.createElement('a');
-          a.href = res.body.report_url;
-          a.textContent = abs;
-          p.appendChild(a);
-          saveNote.appendChild(p);
+        // Their own report page (it says "in progress" until it's ready): the main next step.
+        var path = reportPath(res);
+        if (path) {
+          reportUrl = location.origin + path;
+          el('next-open').href = path;
+          paintNext();
         }
       } else {
         // 403/503 = bot check, 429 = rate limit: the Worker's message says what to do.
@@ -811,11 +966,17 @@
     });
   })();
 
+  el('next-copy').addEventListener('click', function () {
+    var b = this;
+    if (!reportUrl || !navigator.clipboard) { b.hidden = true; return; }
+    navigator.clipboard.writeText(reportUrl).then(function () { b.textContent = 'Copied'; }, function () { b.hidden = true; });
+  });
+
   emailForm.addEventListener('submit', function (e) {
     e.preventDefault();
     var email = String(emailForm.elements.email.value || '').trim();
     if (!EMAIL_RE.test(email)) {
-      show(emailStatus, 'error', email ? 'That email doesn\'t look right. Check it and try again.' : 'Type an email, or skip this step. Your request is in either way.');
+      show(emailStatus, 'error', email ? 'That email doesn\'t look right. Check it and try again.' : 'Type your email, or skip this. Your report link is above either way.');
       return;
     }
     var btn = emailForm.querySelector('button'); btn.disabled = true; btn.textContent = 'Saving…';
@@ -837,10 +998,14 @@
         push({ event: 'report_email_added', trade: biz.trade });
         saveNote.className = 'status';
         saveNote.innerHTML = '';
-        emailForm.innerHTML = '<h3>You\'re all set</h3><p class="status ok" role="status">We\'ll send your private report link to <strong>' + esc(email) + '</strong>, usually within one business day. One email with the link. Unsubscribe anytime.</p>';
+        // The first save had failed and this one made the request: its link is the next step now.
+        var path = reportPath(res);
+        if (path && !reportUrl) { reportUrl = location.origin + path; el('next-open').href = path; paintNext(); }
+        // Only the email box changes: the report link above stays put.
+        emailForm.innerHTML = '<h3>You\'re all set</h3><p class="status ok" role="status">We just sent your report link to <strong>' + esc(email) + '</strong>, and we\'ll email again the moment your report is ready. Unsubscribe anytime.</p>';
       } else {
         show(emailStatus, 'error', ((res.body && res.body.error) ? esc(res.body.error) + ' ' : '') + 'Try again, or email ' + HELLO + ' with your business name, town and this email.');
-        btn.disabled = false; btn.textContent = 'Send my full report';
+        btn.disabled = false; btn.textContent = 'Email me the link';
       }
     });
   });

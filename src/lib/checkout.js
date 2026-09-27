@@ -5,7 +5,10 @@
 // Breakdown can ride along with the audit as an add-on; and every session carries metadata.tier, so a
 // payment is never recorded as 'unknown'. The buyer still pays on Stripe's own hosted page.
 //
-//   POST /api/checkout { token, tier, addons? } → { ok, url } (redirect the browser to url)
+//   POST /api/checkout { token, tier, addons?, prepay? } → { ok, url } (redirect the browser to url)
+//     prepay true: the visitor clicked a paid plan on the homepage, so there's no report yet, only the
+//     request's queued scan (src/lib/auto-scan.js PAID_INTENT). xray / be_the_answer at full price;
+//     the paid scan starts when the webhook records the payment.
 //     tier   'xray' ($49 audit, Fix Kit included) | 'competitor_breakdown' ($25) | 'be_the_answer' ($499)
 //     addons ['competitor_breakdown'], with 'xray' only
 //
@@ -22,6 +25,7 @@ import { getReport, getPayments } from './db.js';
 import { rateLimit } from './rate-limit.js';
 import { xrayOffered } from '../../shared/report-v2.js';
 import { TIER_BY_CENTS } from './stripe.js';
+import { pendingReportStatus } from './auto-scan.js';
 
 export const PRICES = Object.freeze({ xray: 4900, competitor_breakdown: 2500, be_the_answer: 49900 });
 export const PRODUCTS = Object.freeze({
@@ -39,6 +43,8 @@ export const SUBMIT_MESSAGES = Object.freeze({
 /** Never charge less than this for Be the Answer after credits (Stripe's floor is $0.50). */
 export const MIN_CENTS = 100;
 const AUDIT_TIERS = ['xray', 'fix_kit', 'be_the_answer'];
+/** Plans that can be bought before the report exists (the paid path from the pricing buttons). */
+export const PREPAY_TIERS = ['xray', 'be_the_answer'];
 const SHOWCASE_TOKENS = ['mega-wash-and-dry'];
 const TOKEN_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -59,8 +65,19 @@ export function paidTiers(payments) {
  * What this checkout would charge, or why it can't happen. Pure.
  * → { ok: true, items: [{ tier, cents, name, description }], credit, total } | { ok: false, status, error }
  */
-export function priceCheckout({ report, payments = [], tier, addons = [], livemode = true }) {
+export function priceCheckout({ report, payments = [], tier, addons = [], livemode = true, prepay = false }) {
   if (!PRICES[tier]) return { ok: false, status: 400, error: 'Unknown plan.' };
+  // Paying up front (the visitor clicked "Get my audit" / "Be the answer"): no report exists yet,
+  // only the request's queued scan. The audit is made after payment; the refund promise on Stripe's
+  // page ("fewer than 3 problems, your $49 back") covers what xrayOffered checks on a finished report.
+  if (!report && prepay) {
+    if (!PREPAY_TIERS.includes(tier)) return { ok: false, status: 409, error: 'Get your free report first.' };
+    if ((Array.isArray(addons) ? addons : []).length) return { ok: false, status: 400, error: 'Add-ons come after your report is made.' };
+    const mine = payments.filter((p) => (p.livemode !== false) === livemode);
+    if (paidTiers(mine).has(tier)) return { ok: false, status: 409, error: 'That’s already paid for. Open your report.' };
+    const items = [{ tier, cents: PRICES[tier], ...PRODUCTS[tier] }];
+    return { ok: true, items, credit: 0, total: items[0].cents, prepay: true };
+  }
   if (!report || report.version !== 2) return { ok: false, status: 404, error: 'Report not found' };
   if (report.sample || SHOWCASE_TOKENS.includes(String(report.id || ''))) return { ok: false, status: 400, error: 'This is an example report. Get your own free report first.' };
   const extras = [...new Set((Array.isArray(addons) ? addons : []).map(String))];
@@ -89,12 +106,14 @@ export function priceCheckout({ report, payments = [], tier, addons = [], livemo
 }
 
 /** Stripe's form encoding for the Checkout Session. */
-export function sessionForm({ items, credit, token, tier, addons, origin }) {
+export function sessionForm({ items, credit, token, tier, addons, origin, prepay = false }) {
   const f = new URLSearchParams();
   f.set('mode', 'payment');
   f.set('client_reference_id', token);
   f.set('success_url', `${origin}/success?tier=${encodeURIComponent(tier)}&session_id={CHECKOUT_SESSION_ID}`);
-  f.set('cancel_url', `${origin}/report/${encodeURIComponent(token)}`);
+  // Left checkout before a report existed: /api/checkout/cancel starts the free report, then shows it.
+  f.set('cancel_url', prepay ? `${origin}/api/checkout/cancel?t=${encodeURIComponent(token)}` : `${origin}/report/${encodeURIComponent(token)}`);
+  if (prepay) f.set('metadata[prepay]', '1');
   f.set('metadata[tier]', tier);
   f.set('metadata[report_id]', token);
   if (addons.length) f.set('metadata[addons]', addons.join(','));
@@ -118,9 +137,9 @@ export function sessionForm({ items, credit, token, tier, addons, origin }) {
   return f;
 }
 
-/** deps (tests pass fakes): { getReport, getPayments, rateLimit, fetchImpl, mockReports } */
+/** deps (tests pass fakes): { getReport, getPayments, pendingStatus, rateLimit, fetchImpl, mockReports } */
 export async function handleCheckout(request, url, env, deps = {}) {
-  const d = { getReport, getPayments, rateLimit, fetchImpl: (...a) => fetch(...a), mockReports: {}, ...deps };
+  const d = { getReport, getPayments, pendingStatus: pendingReportStatus, rateLimit, fetchImpl: (...a) => fetch(...a), mockReports: {}, ...deps };
   const limited = await d.rateLimit(env, request, 'checkout');
   if (limited) return limited;
   const key = String(env?.STRIPE_SECRET_KEY || '').trim();
@@ -134,20 +153,23 @@ export async function handleCheckout(request, url, env, deps = {}) {
 
   let report;
   let payments;
+  let prepay = false;
   try {
     report = await d.getReport(env, token, d.mockReports);
-    payments = report ? await d.getPayments(env, token) : [];
+    // No report yet: fine only for a request whose scan is waiting (the paid path from pricing).
+    if (!report && body?.prepay === true) prepay = (await d.pendingStatus(env, token)) != null;
+    payments = report || prepay ? await d.getPayments(env, token) : [];
   } catch (e) {
     console.error('[checkout] read failed', e);
     return json({ ok: false, error: 'Could not start checkout. Try again in a minute.' }, 503);
   }
   if (report) report = { ...report, id: token };
   const livemode = key.startsWith('sk_live_') || key.startsWith('rk_live_');
-  const price = priceCheckout({ report, payments, tier, addons, livemode });
+  const price = priceCheckout({ report, payments, tier, addons, livemode, prepay });
   if (!price.ok) return json({ ok: false, error: price.error }, price.status);
 
   const origin = String(env?.SITE_URL || url.origin).replace(/\/+$/, '');
-  const form = sessionForm({ ...price, token, tier, addons: price.items.slice(1).map((i) => i.tier), origin });
+  const form = sessionForm({ ...price, token, tier, addons: price.items.slice(1).map((i) => i.tier), origin, prepay: !!price.prepay });
   let res;
   try {
     res = await d.fetchImpl('https://api.stripe.com/v1/checkout/sessions', {

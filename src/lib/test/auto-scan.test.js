@@ -6,6 +6,7 @@ import {
   startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey,
   newRequestToken, requestScanId, autoScanOn, autoScanLimits, estimateRequestScanUsd, REQUEST_TOKEN_RE,
   DRY_RUN_REQUESTS, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, monthlyScanId,
+  pickRecoveries, PAID_INTENT, ABANDONED_CHECKOUT_MINUTES,
 } from '../auto-scan.js';
 import { freeEngines, activeEngines } from '../../../scanner/config.js';
 import { handleReportRequest } from '../report-request.js';
@@ -506,4 +507,30 @@ test('Be the Answer monthly scan: a failed month is started once more, then left
   const again = await startDueMonthly(env, { now: now + day, fetchImpl: db.fetch });
   assert.deepEqual(again.started, []);
   assert.equal(again.skipped.already, 1);
+});
+
+test('statusFromRows: paid scan running, retry pending after one failure, failed after two', () => {
+  assert.equal(statusFromRows([{ status: 'running', trigger: 'paid' }, { status: 'queued', trigger: 'request' }]), 'paid');
+  assert.equal(statusFromRows([{ status: 'failed', trigger: 'request' }]), 'queued', 'the cron retries it once');
+  assert.equal(statusFromRows([{ status: 'failed', trigger: 'request' }, { status: 'done', report_valid: false, trigger: 'request' }]), 'failed');
+});
+
+test('pickRecoveries: retry once, paid always, abandoned checkout after an hour, never over a paid scan', () => {
+  const now = Date.parse('2026-09-27T12:00:00Z');
+  const ago = (min) => new Date(now - min * 60_000).toISOString();
+  const rows = [
+    { id: 'a1', report_token: 'A', trigger: 'request', status: 'failed', created_at: ago(90) },
+    { id: 'b1', report_token: 'B', trigger: 'request', status: 'failed', created_at: ago(90) },
+    { id: 'b2', report_token: 'B', trigger: 'request', status: 'failed', created_at: ago(60) },
+    { id: 'c1', report_token: 'C', trigger: 'paid', status: 'failed', created_at: ago(30) },
+    { id: 'd1', report_token: 'D', trigger: 'request', status: 'queued', notes: `free-report request x · queued: ${PAID_INTENT}`, created_at: ago(ABANDONED_CHECKOUT_MINUTES + 1) },
+    { id: 'e1', report_token: 'E', trigger: 'request', status: 'queued', notes: `x · queued: ${PAID_INTENT}`, created_at: ago(5) },
+    { id: 'f1', report_token: 'F', trigger: 'request', status: 'queued', notes: `x · queued: ${PAID_INTENT}`, created_at: ago(120) },
+    { id: 'f2', report_token: 'F', trigger: 'paid', status: 'running', created_at: ago(3) },
+    { id: 'g1', report_token: 'G', trigger: 'request', status: 'queued', notes: 'x · queued: auto-scan-off', created_at: ago(120) },
+  ];
+  const on = pickRecoveries(rows, { now, autoScan: true }).map((p) => `${p.kind}:${p.token}`).sort();
+  assert.deepEqual(on, ['abandoned:D', 'paid-retry:C', 'request-retry:A']);
+  const off = pickRecoveries(rows, { now, autoScan: false }).map((p) => `${p.kind}:${p.token}`);
+  assert.deepEqual(off, ['paid-retry:C'], 'with AUTO_SCAN off only paid scans are retried');
 });

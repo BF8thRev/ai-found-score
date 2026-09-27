@@ -48,3 +48,24 @@
 .r2-quote { margin: 4px 0 12px; padding: 8px 14px; border-left: 3px solid var(--line); color: var(--ink); font-style: italic; }
 .r2-addon label { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; justify-content: center; text-align: left; }
 .r2-addon input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; }
+
+/* The 5-second answer (report.js verdictV2): one verdict line next to the AI Found Score. */
+.r2-verdict { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: center; margin: 24px 0 8px; }
+.r2-verdict-line { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 700; color: var(--navy); letter-spacing: -.01em; }
+.r2-verdict .r2-score { margin: 0; }
+.r2-score-how { margin: 12px 0 0; }
+.r2-score-how summary { cursor: pointer; font-size: 14.5px; font-weight: 600; color: var(--navy); }
+.r2-score-how .r2-score-parts { margin-top: 10px; }
+@media (max-width: 720px) {
+  .r2-verdict { grid-template-columns: 1fr; }
+  .r2-verdict-line { font-size: 21px; }
+}
+
+/* Pending page: whose report this is. */
+.r2-pending-biz { margin: 0 0 14px; font-weight: 700; color: var(--navy); font-size: 17px; }
+
+/* Share / Save as PDF sit at the bottom of the report. */
+.r2 > .r2-tools { margin: 8px 0 40px; }
+
+/* ?offer=… highlights that plan's buy button. */
+.r2-offer-focus { outline: 3px solid var(--amber); outline-offset: 4px; }
