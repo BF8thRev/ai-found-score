@@ -47,7 +47,8 @@ function timingSafeEqual(a, b) {
 
 /**
  * Tier from the amount paid, so Payment Links need no metadata. Keep in step with the prices on
- * the site. On sale (Sep 2026): the $49 AI Visibility X-Ray (`xray`). Retired tiers keep their
+ * the site. On sale (Sep 2026): the $49 AI Visibility Audit (`xray`, Fix Kit included), the $25 Competitor Breakdown.
+ * Prefer metadata.tier on every Payment Link: a coupon or credit changes the amount and falls through to 'unknown'. Retired tiers keep their
  * keys so an old or stray payment is still recorded under the right name.
  */
 export const TIER_BY_CENTS = Object.freeze({
@@ -57,7 +58,9 @@ export const TIER_BY_CENTS = Object.freeze({
   5900: 'before_after',   // retired: $59 Fix it and re-check
   6900: 'full_year',      // retired: $69 Full Year
   19900: 'listing_fix',   // retired: $199 Full listing build
-  14900: 'fix_kit',       // $149 Fix Kit: confirm details, download the ready-to-install files (/fix-kit/<token>)
+  2500: 'competitor_breakdown', // $25 Competitor Breakdown, bought on its own after the audit
+  7400: 'xray',           // $49 Audit + $25 Competitor Breakdown in one checkout (set metadata.tier on the link to be sure)
+  14900: 'fix_kit',       // retired: $149 Fix Kit on its own (now included in the $49 audit); still opens /fix-kit/<token>
   49900: 'be_the_answer', // $499 Be the Answer (includes the Fix Kit)
 });
 

@@ -9,7 +9,7 @@
 // sites (only a count stays), which website checks failed, what's wrong on each listing, the fix
 // titles, descriptions, steps and copyText, and the X-Ray sections (gap sheet, checklist, reviews).
 // Any recorded payment for the token unlocks all of it.
-import { xraySections, computeVisibilityScore } from '../../shared/report-v2.js';
+import { xraySections, computeVisibilityScore, isGenericFix, buildCompetitorBreakdown } from '../../shared/report-v2.js';
 
 /** The fields of an issue that survive locking. Everything else (description, steps, copyText, …) is dropped. */
 export const LOCKED_ISSUE_FIELDS = ['kind', 'severity', 'title'];
@@ -94,7 +94,9 @@ export function lockReport(r) {
       listings: (r.listings || []).map((l) =>
         l.status === 'match' ? l : { platform: l.platform, status: l.status, locked: true }),
       // Only the count (and how serious): titles like "Unblock GPTBot in robots.txt" are the fix.
-      issues: (r.issues || []).map((i) => pick(i, LOCKED_V2_ISSUE_FIELDS, { locked: true })),
+      // `generic` marks the general advice every report gets, so the page can count the fixes
+      // specific to this business (the audit's refund promise, xrayOffered).
+      issues: (r.issues || []).map((i) => pick(i, LOCKED_V2_ISSUE_FIELDS, isGenericFix(i) ? { locked: true, generic: true } : { locked: true })),
       // The cited sites are the "why": free gets the tally only.
       sources: [],
       sourcesSummary: {
@@ -114,14 +116,21 @@ export function lockReport(r) {
   };
 }
 
+/** Plans that include the Competitor Breakdown (the $25 add-on, and Be the Answer). */
+export const BREAKDOWN_TIERS = Object.freeze(['competitor_breakdown', 'be_the_answer']);
+
 /**
  * The body served for a report. Unlocked v2 reports say locked: false and carry the X-Ray
  * sections (built from the report's own data); locked ones go through lockReport.
+ * opts.breakdown: also carry the Competitor Breakdown (paid for, or the sample). Never on a locked report.
  */
-export function reportBody(report, unlocked) {
+export function reportBody(report, unlocked, { breakdown = false } = {}) {
   // v2: the AI Found Score is computed from the report's own data every time it is served, so it
   // always matches what the page shows (shared/report-v2.js computeVisibilityScore). Free, never locked.
   const withScore = (r) => (r.version === 2 ? { ...r, score: computeVisibilityScore(report) } : r);
   if (!unlocked) return withScore(lockReport(report));
-  return report.version === 2 ? withScore({ ...report, locked: false, xray: xraySections(report) }) : report;
+  if (report.version !== 2) return report;
+  return withScore({
+    ...report, locked: false, xray: xraySections(report), ...(breakdown ? { breakdown: buildCompetitorBreakdown(report) } : {}),
+  });
 }

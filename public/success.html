@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=8">
+  <link rel="stylesheet" href="/css/styles.css?v=9">
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
   <!-- Google Tag Manager -->
   <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-K58KFVJC');</script>
@@ -50,15 +50,17 @@
     // Plan names by tier key (?tier= from the Stripe redirect, or the saved checkout).
     var TIER_LABEL = {
       xray: 'AI Visibility Audit',
+      competitor_breakdown: 'Competitor Breakdown',
       fix_kit: 'Fix Kit',
       be_the_answer: 'Be the Answer',
       snapshot: 'Fix steps',
       before_after: 'Fix it and re-check'
     };
     var TIER_NEXT = {
-      xray: 'Your report is unlocked now. We’re also asking all 5 customer questions on every AI assistant we check; your report updates with those answers when they’re ready, usually within the hour. We re-scan free 30 days from now, so you can see what changed. If we can’t show you 3 things to fix, it’s free.',
-      fix_kit: 'Next: check your business details and download your kit.',
-      be_the_answer: 'Next: check your business details and download your kit. Your full audit is being made too.'
+      xray: 'Your report is unlocked now. We’re also asking all 5 customer questions on every AI assistant we check; your report updates with those answers when they’re ready, usually within the hour. Your Fix Kit is included: open it from your report. We re-scan free 30 days from now, so you can see what changed. Fewer than 3 problems specific to your business? Your $49 back.',
+      fix_kit: 'Next: check your business details and download your kit.', // retired $149 standalone
+      competitor_breakdown: 'It’s in your report now, below the competitor gap sheet.',
+      be_the_answer: 'Next: open your plan page to add your towns and confirm your details. Your report is unlocked, with your Competitor Breakdown.'
     };
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem('afs_checkout') || 'null'); } catch (e) {}
@@ -72,11 +74,13 @@
     var msg = document.getElementById('success-msg');
     var link = document.getElementById('success-link');
     // Fix Kit buyers go on to confirm their details and download the kit (public/fix-kit.html).
-    var kit = tier === 'fix_kit' || tier === 'be_the_answer';
-    var url = (kit ? '/fix-kit/' : '/report/') + encodeURIComponent(saved.token);
+    // Be the Answer buyers go to their plan page (public/plan.html).
+    var kit = tier === 'fix_kit';
+    var plan = tier === 'be_the_answer';
+    var url = (plan ? '/plan/' : kit ? '/fix-kit/' : '/report/') + encodeURIComponent(saved.token);
     msg.textContent = 'Unlocking your full report…';
     link.href = url;
-    link.textContent = kit ? 'Get my Fix Kit' : 'Open my report';
+    link.textContent = plan ? 'Open my plan' : kit ? 'Get my Fix Kit' : 'Open my report';
     link.className = 'btn';
     var tries = 0;
     (function poll() {
@@ -131,7 +135,7 @@
   </div>
 </footer>
 
-<script src="/js/config.js?v=10"></script>
+<script src="/js/config.js?v=11"></script>
 <script src="/js/analytics.js?v=8"></script>
 </body>
 </html>

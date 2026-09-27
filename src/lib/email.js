@@ -135,26 +135,38 @@ export function leadEmail(env, { token, name }) {
   });
 }
 
-const TIER_NAMES = { xray: 'AI Visibility Audit', fix_kit: 'Fix Kit', be_the_answer: 'Be the Answer' };
+const TIER_NAMES = { xray: 'AI Visibility Audit', fix_kit: 'Fix Kit', be_the_answer: 'Be the Answer', competitor_breakdown: 'Competitor Breakdown' };
 
 /** Right after payment (a receipt: sent even to an address that unsubscribed from updates). */
-export function receiptEmail(env, { token, name, tier }) {
+export function receiptEmail(env, { token, name, tier, addons = [] }) {
   const plan = TIER_NAMES[tier] || 'your plan';
-  const kit = tier === 'fix_kit' || tier === 'be_the_answer';
+  const kitUrl = `${siteUrl(env)}/fix-kit/${encodeURIComponent(token)}`;
+  const planUrl = `${siteUrl(env)}/plan/${encodeURIComponent(token)}`;
   const paragraphs = [`Thanks. Your ${plan}${name ? ` for ${name}` : ''} is paid for.`];
-  if (tier === 'xray' || tier === 'be_the_answer') {
+  let button = 'Open my report';
+  let url = reportUrl(env, token);
+  let note = '';
+  if (tier === 'xray') {
     paragraphs.push('Your report is unlocked now. We’re also asking all 5 customer questions again on every AI assistant we check; we’ll email you when those answers are in, usually within the hour.');
+    paragraphs.push(`Your Fix Kit is included: check your business details, then download the files and hand them to whoever runs your website. ${kitUrl}`);
+    if (addons.includes('competitor_breakdown')) paragraphs.push('Your Competitor Breakdown is in your report too: the top 3 businesses AI names instead of you, side by side with you.');
     paragraphs.push('In 30 days we re-scan for free and email you what changed.');
+    note = 'Fewer than 3 problems specific to your business? Your $49 back. Just reply.';
+  } else if (tier === 'be_the_answer') {
+    paragraphs.push('Your report is unlocked, with your Competitor Breakdown. We re-scan every month for a year and email you what changed, with your next 3 fixes.');
+    paragraphs.push('Start on your plan page: add up to 2 more towns you serve, confirm your details for your Fix Kit, then work through your directory checklist and your Google posts.');
+    button = 'Open my plan';
+    url = planUrl;
+    note = `Your report: ${reportUrl(env, token)}. Not useful in the first 60 days? Full refund. Just reply.`;
+  } else if (tier === 'competitor_breakdown') {
+    paragraphs.push('Your Competitor Breakdown is in your report now: the top 3 businesses AI names instead of you, side by side with you.');
+  } else if (tier === 'fix_kit') {
+    paragraphs.push('Next: check your business details, then download your Fix Kit and hand it to whoever runs your website.');
+    button = 'Get my Fix Kit';
+    url = kitUrl;
+    note = `Your report: ${reportUrl(env, token)}`;
   }
-  if (kit) paragraphs.push('Next: check your business details, then download your Fix Kit and hand it to whoever runs your website.');
-  return layout({
-    subject: `Receipt: ${plan}${name ? ` for ${name}` : ''}`,
-    paragraphs,
-    button: kit ? 'Get my Fix Kit' : 'Open my report',
-    url: kit ? `${siteUrl(env)}/fix-kit/${encodeURIComponent(token)}` : reportUrl(env, token),
-    unsubUrl: unsubFor(env, token),
-    note: kit ? `Your report: ${reportUrl(env, token)}` : 'If we can’t show you 3 things to fix, it’s free. Just reply.',
-  });
+  return layout({ subject: `Receipt: ${plan}${name ? ` for ${name}` : ''}`, paragraphs, button, url, unsubUrl: unsubFor(env, token), note });
 }
 
 /** The paid full scan finished. */
@@ -189,10 +201,42 @@ export function recheckEmail(env, { token, name, totals, before }) {
     paragraphs: [
       'We ran your audit again, free, 30 days after you bought it.',
       line,
-      'Want us to do the rest? Be the Answer covers every town you serve, submits your details to 30+ directories and data providers, and re-scans every month for a year. Your $49 counts toward it. Just reply to this email.',
+      'Want us to keep watching? Be the Answer re-scans every month for a year in up to 3 towns you serve, sends a one-page “what changed” with your next 3 fixes, emails you when a competitor starts getting named instead of you, and gives you your directory checklist with the exact text to paste. Everything you’ve paid us counts toward it. Just reply to this email.',
     ],
     button: 'See what changed',
     url: reportUrl(env, token),
     unsubUrl: unsubFor(env, token),
+  });
+}
+
+/**
+ * Be the Answer's monthly email (and its first re-check): what changed, an alert when the business AI
+ * names most is a new one, and the next 3 fixes. `planToken` is the plan's own report (a town report's
+ * parent), for the plan link.
+ */
+export function monthlyEmail(env, { token, planToken, name, town, totals, before, next3 = [], alert = null }) {
+  const n = named(totals);
+  const b = named(before);
+  let line = 'Your report shows this month’s answers.';
+  if (n && b) {
+    const pn = totals.namedYou / totals.answers;
+    const pb = before.namedYou / before.answers;
+    line = pn > pb ? `AI named you in ${b} answers last time. Now it’s ${n}. That’s progress.`
+      : pn < pb ? `AI named you in ${b} answers last time. Now it’s ${n}. Your report shows who took your place.`
+        : `AI named you in ${b} answers last time, and it’s still ${n}.`;
+  } else if (n) {
+    line = `AI named you in ${n} answers.`;
+  }
+  const where = town ? ` in ${town}` : '';
+  const paragraphs = [`We asked the AI assistants again${where}.`, line];
+  if (alert) paragraphs.push(`Heads up: the business AI names most${where} is now ${alert.now}${alert.before ? ` (it was ${alert.before})` : ''}. Your report shows where they’re listed and you’re not.`);
+  if (next3.length) paragraphs.push(`Your next ${next3.length === 1 ? 'fix' : `${next3.length} fixes`}:`, ...next3.map((t, i) => `${i + 1}. ${t}`));
+  return layout({
+    subject: alert ? `Heads up: AI now names ${alert.now} most${where}` : `This month: what AI says about ${name || 'you'}${where}`,
+    paragraphs,
+    button: 'See what changed',
+    url: reportUrl(env, token),
+    unsubUrl: unsubFor(env, token),
+    note: `Your plan (directory checklist, Google posts, towns): ${siteUrl(env)}/plan/${encodeURIComponent(planToken || token)}`,
   });
 }

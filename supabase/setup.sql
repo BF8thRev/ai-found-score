@@ -71,8 +71,8 @@ drop policy if exists "worker insert" on public.page_visits;
 create policy "worker insert" on public.page_visits for insert to anon with check (true);
 drop policy if exists "worker insert" on public.email_events;
 create policy "worker insert" on public.email_events for insert to anon with check (true);
+-- payments: service key only since v8 (a payments row unlocks a report). No anon policy.
 drop policy if exists "worker insert" on public.payments;
-create policy "worker insert" on public.payments for insert to anon with check (true);
 
 -- ---------------------------------------------------------------------------
 -- Additions for the channel test
@@ -137,6 +137,7 @@ create policy "worker insert" on public.leads for insert to anon with check (tru
 -- Unlock check. Security definer so anon can ask "is this token paid?"
 -- without being able to read the payments table.
 -- ---------------------------------------------------------------------------
+-- (supabase/v8_be_the_answer.sql replaces this function: re-run v8 after re-running this file.)
 create or replace function public.report_unlocked(p_token text) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.payments where report_token = p_token);
@@ -177,7 +178,7 @@ create policy "worker insert" on public.report_requests for insert to anon with 
 -- Newer Supabase projects don't grant these by default.
 grant usage on schema public to anon;
 grant select on public.businesses, public.scan_results, public.report_links to anon;
-grant insert on public.page_visits, public.email_events, public.payments,
+grant insert on public.page_visits, public.email_events,
                 public.leads, public.unsubscribes, public.report_requests to anon;
 
 -- ---------------------------------------------------------------------------

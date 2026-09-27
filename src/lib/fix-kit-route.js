@@ -5,7 +5,7 @@
 //                                    404 when there is no report for the token.
 //   POST /api/fix-kit/<token>      JSON { confirm: true, details: {...} } → validate, save → { ok, details }
 //                                    422 { ok:false, errors:[{ field, message }] } when something needs fixing.
-//                                    Only for a token paid for 'fix_kit' or 'be_the_answer' (402 otherwise).
+//                                    Only for a token paid for 'xray', 'fix_kit' or 'be_the_answer' (402 otherwise).
 //   GET  /api/fix-kit/<token>.zip  → the zip (src/lib/fix-kit.js), paid AND confirmed only (402 / 409).
 //
 // Paid = a payments row for the token whose tier (or amount, TIER_BY_CENTS) is one of FIX_KIT_TIERS,
@@ -19,6 +19,7 @@
 import { getReport, getPaidTiers, getFixKitDetails, saveFixKitDetails } from './db.js';
 import { rateLimit } from './rate-limit.js';
 import { FIX_KIT_TIERS, prefillDetails, validateDetails, buildFixKitFiles, zipFiles, zipName } from './fix-kit.js';
+import { directoryChecklistTxt, googlePostsTxt } from './plan.js';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{1,200}$/;
 const MAX_BODY = 20_000;
@@ -26,7 +27,7 @@ const NO_STORE = { 'Cache-Control': 'private, no-store' };
 
 const json = (body, status = 200) => Response.json(body, { status, headers: NO_STORE });
 const notFound = () => json({ ok: false, error: 'Report not found' }, 404);
-const notPaid = () => json({ ok: false, error: 'The Fix Kit comes with the Fix Kit and Be the Answer plans.' }, 402);
+const notPaid = () => json({ ok: false, error: 'The Fix Kit comes with the AI Visibility Audit and Be the Answer.' }, 402);
 
 /**
  * deps (all optional; tests pass fakes): { mockReports, getReport, getPaidTiers, getFixKitDetails,
@@ -60,9 +61,11 @@ export async function handleFixKit(request, url, env, deps = {}) {
   if (!report) return notFound();
 
   let paid = isSample;
+  let onPlan = isSample;
   if (!isSample) {
     const tiers = await d.getPaidTiers(env, token).catch((e) => { console.error('[fix-kit] paid check failed', e); return []; });
     paid = tiers.some((t) => FIX_KIT_TIERS.includes(t));
+    onPlan = tiers.includes('be_the_answer');
   }
 
   if (request.method === 'POST') return postDetails(request, env, d, token, paid, isSample);
@@ -83,6 +86,11 @@ export async function handleFixKit(request, url, env, deps = {}) {
       details = validateDetails(saved.details).details;
     }
     const files = buildFixKitFiles(details, report, { origin: url.origin, token, date: d.now() });
+    // Be the Answer adds the directory checklist and the year's Google posts (src/lib/plan.js).
+    if (onPlan) {
+      files.push({ path: 'directory-checklist.txt', content: directoryChecklistTxt(details) });
+      files.push({ path: 'google-posts.txt', content: googlePostsTxt(details, { start: d.now() }) });
+    }
     return new Response(zipFiles(files, { date: d.now() }), {
       headers: {
         ...NO_STORE,
@@ -102,6 +110,7 @@ export async function handleFixKit(request, url, env, deps = {}) {
     confirmed: !!saved,
     confirmedAt: saved?.confirmed_at || null,
     sample: isSample,
+    plan: onPlan,
     details: saved?.details || prefillDetails(report),
   });
 }

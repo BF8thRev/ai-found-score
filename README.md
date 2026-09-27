@@ -6,11 +6,12 @@ One Cloudflare Worker serving the static site, the report API, and the admin sca
 
 | Path | What it is |
 |---|---|
-| `/` | Landing page (site copy v2): hero with the sample report's headline answer, what the report shows, how it works, the ladder (free Snapshot → $99 AI Visibility Audit → $499 Be the Answer, a scan every month for a year; nothing listed under it), FAQ, and the free-report form (shows the owner their 3 questions first, then asks for an optional email) |
+| `/` | Landing page (site copy v2): hero with the sample report's headline answer, what the report shows, how it works, the ladder (free Snapshot → $49 AI Visibility Audit with the Fix Kit included and a $25 Competitor Breakdown add-on → $499 Be the Answer, a scan every month for a year; nothing listed under it), FAQ, and the free-report form (shows the owner their 3 questions first, then asks for an optional email) |
 | `/report/sample-001` | Sample v2 report (fictional plumbing business, fictional competitors, made-up answers). Also `sample-edge-failed` (one engine didn't respond), `sample-recheck` (before/after strip) and `sample-v1` (legacy renderer) |
 | `/report/[id]` | Report page for any id — reads from `GET /api/report/[id]` |
 | `/r/[code]` | Postcard short code (e.g. `/r/K7M2QX`, case/dash-insensitive) → 302 to that recipient's `/report/[token]`. Unknown code → friendly not-found page |
-| `/fix-kit/[token]` | Fix Kit page ($149 `fix_kit` / $499 `be_the_answer`): the owner checks their prefilled details, ticks "I own or manage this business", confirms, then downloads a zip (robots.txt, llms.txt, LocalBusiness schema, FAQ page, Google Business Profile text, review QR code, README). API: `GET/POST /api/fix-kit/[token]`, `GET /api/fix-kit/[token].zip` (`src/lib/fix-kit-route.js`, files from `src/lib/fix-kit.js`). Needs `supabase/v6_fix_kit.sql` and `SUPABASE_SERVICE_KEY`. `/fix-kit/sample-001` is a working demo with no database |
+| `/fix-kit/[token]` | Fix Kit page (included with the $49 audit `xray` and $499 `be_the_answer`; the retired $149 `fix_kit` still opens it): the owner checks their prefilled details, ticks "I own or manage this business", confirms, then downloads a zip (robots.txt, llms.txt, LocalBusiness schema, FAQ page, Google Business Profile text, review QR code, README). API: `GET/POST /api/fix-kit/[token]`, `GET /api/fix-kit/[token].zip` (`src/lib/fix-kit-route.js`, files from `src/lib/fix-kit.js`). Needs `supabase/v6_fix_kit.sql` and `SUPABASE_SERVICE_KEY`. `/fix-kit/sample-001` is a working demo with no database |
+| `/plan/[token]` | Be the Answer page ($499, `be_the_answer`): the plan's towns (up to 3; each extra town gets its own report token in `plan_towns` and a first scan right away), the directory checklist (30+ sites with the text to paste) and 12 Google posts, both built from the details confirmed on the Fix Kit page (`src/lib/plan.js`). API: `GET/POST /api/plan/[token]` (`src/lib/plan-route.js`). Needs `supabase/v8_be_the_answer.sql`. `/plan/sample-001` is a working demo with no database |
 | `/success` | Post-payment page. If checkout started on a report page, waits for the webhook and links back to the unlocked report |
 | `/about`, `/privacy`, `/contact`, `/terms`, `/refunds` | Static info pages. Footer on every page carries the mailing address (120 Terminal Drive, Plainview, NY 11803) |
 | `/unsubscribe`, `/stop` | Opt-out. `GET ?t=<token>` from email links, `POST` with `List-Unsubscribe=One-Click` (RFC 8058) from mail clients, the on-page email form, or the postcard code (`/stop` form, or `GET /stop?c=CODE`). Writes to the `unsubscribes` table; a token row suppresses that business for mail and email |
@@ -26,7 +27,7 @@ One Cloudflare Worker serving the static site, the report API, and the admin sca
 | `POST /api/lead` | "Email me this report". Writes `leads` (status `new`) with the arm from the token |
 | `POST /api/stripe-webhook` | Stripe webhook: verifies signature, reads `client_reference_id` (report token), looks up business + arm in `report_links`, writes `payments` |
 
-`public/js/config.js` holds `STRIPE_LINKS` — the one file where real Stripe Payment Links get dropped in later.
+**Checkout** is our own (`src/lib/checkout.js`, `POST /api/checkout`): the report page sends `{ token, tier, addons }`, the Worker prices it for that report and creates a Stripe Checkout Session, and the buyer pays on Stripe's hosted page. On sale (`OFFERED_TIERS` in `public/js/config.js`): the $49 audit (`xray`, with an optional $25 Competitor Breakdown checkbox), the $25 Competitor Breakdown on its own after the audit, and Be the Answer at $499 minus what that report has already paid. Every session carries `metadata.tier` and `metadata.addons`; the webhook records both. Needs `STRIPE_SECRET_KEY`; without it the buttons say checkout opens soon.
 
 ## Supabase setup
 
@@ -59,6 +60,15 @@ Code: `src/lib/auto-scan.js` (called from `src/lib/report-request.js`). Needs [`
 - **Brakes** (a request that trips one is queued, never dropped; the owner keeps the link): same business name + ZIP within 7 days → nothing new runs, and the request gets its OWN new link (never the earlier one: anyone can type a business name and ZIP, and that link may be paid for): a locked copy of the finished report, or a queued "duplicate" row while it is not ready; per-IP `REQUEST_LIMITER` (bucket `autoscan`); daily caps over today's (UTC) automatic scans, `AUTO_SCAN_DAILY_MAX` (default 25) and `AUTO_SCAN_DAILY_USD` (default 20). The caps use reserve-then-verify (the row is written with its estimated cost first, then today's rows are re-read), so racing requests can't overshoot.
 - **The report page while it's being made:** `GET /api/report/<token>` answers `202 {"status":"running"|"queued"}` until the report is saved; `/report/<token>` shows "We're asking the AI assistants now…" (or the queued wording) and re-checks every 30 seconds. A failed scan or a report that didn't pass the guardrails shows as queued: it waits for a person (Run now makes a fresh scan under the same link).
 - **Local test:** `npx wrangler dev --var SCANNER_DRY_RUN:1 --var AUTO_SCAN:on --var TURNSTILE_SITE_KEY:1x00000000000000000000AA --var TURNSTILE_SECRET_KEY:1x0000000000000000000000000000000AA`, then POST the form with `cf-turnstile-response: XXXX.DUMMY.TOKEN.XXXX`. The scan answers from the fixtures, nothing is stored, and the link shows "in progress" until the workflow finishes (then "isn't ready yet", since a dry run stores no report).
+
+## Be the Answer and the Competitor Breakdown
+
+Apply [`supabase/v8_be_the_answer.sql`](supabase/v8_be_the_answer.sql) after `v7_email.sql`: it adds the `monthly` scan trigger, `plan_towns`, and a `report_unlocked()` that ignores a $25 Competitor Breakdown payment on its own and unlocks a plan's town reports.
+
+- **Monthly re-scans:** the daily cron runs the 30-day re-check, then `startDueMonthly` (`src/lib/auto-scan.js`): for each live Be the Answer payment, month 1..12 counted from the payment, a full scan of the plan's report and each extra town, once per month (skipped when that report was scanned in the last 20 days). Scans run as the `ScanWorkflow`, so this needs Workers Paid.
+- **Monthly email** (`monthlyEmail`, `src/lib/notify.js`): what changed since the last scan, an alert when the business AI names most is a new one, and the next 3 fixes. Be the Answer buyers get it for the 30-day re-check too, instead of the Be the Answer pitch. A town's email goes to the plan's buyer.
+- **Competitor Breakdown** (`buildCompetitorBreakdown`, `shared/report-v2.js`): the top 3 competitors side by side with the owner, built at serve time from the report's own data. Served on a report paid for `competitor_breakdown` or `be_the_answer` (and on the sample); never on a locked report.
+- **Fix Kit zip** for a plan also carries `directory-checklist.txt` and `google-posts.txt`.
 
 ## Refund requests
 
@@ -126,6 +136,7 @@ npm test           # scanner, extractor and outreach tests (node --test) + sampl
 |---|---|---|
 | `SUPABASE_URL` | `src/lib/db.js` | In `wrangler.jsonc` `vars` (not secret). Don't set it in the dashboard: `wrangler deploy` replaces dashboard Text vars with the config file |
 | `SUPABASE_ANON_KEY` | `src/lib/db.js` | The project's **publishable** key (`sb_publishable_...`, Supabase → Project Settings → API Keys). Add as a Worker secret |
+| `STRIPE_SECRET_KEY` | `POST /api/checkout` (creates Checkout Sessions) | Worker secret. A restricted key with write access to Checkout Sessions is enough. `sk_test_`/`rk_test_` for sandbox |
 | `STRIPE_WEBHOOK_SECRET` | `POST /api/stripe-webhook` | **Not yet available — add when the Stripe webhook is created** |
 | `ADMIN_TOKEN` | `/api/admin/*` | Long random string, Worker secret. Unset = admin routes return 404 |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `PERPLEXITY_API_KEY`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD` | Scanner engines + extractor (`scanner/config.js`, which also accepts common alternate names) | Worker secrets |

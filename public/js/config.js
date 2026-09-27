@@ -1,57 +1,59 @@
-// Site-wide config — the ONE file where later wiring happens.
-// Replace the "#" placeholders with real Stripe Payment Links when ready.
-// Each Payment Link: after-payment redirect
-// https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}
+// Site-wide config: which plans are on sale, and the buy buttons (our checkout, src/lib/checkout.js).
 
-const STRIPE_LINKS = {
-  // Keys are stable ids (analytics, webhook TIER_BY_CENTS); only the labels changed.
-  fix_kit: '#',         // Fix Kit — $149 one-time, offered on paid reports (TIER_BY_CENTS 14900; paste the live Stripe Payment Link here)
-  xray: '#',            // AI Visibility Audit (was the X-Ray) — $49 one-time, includes a free 30-day re-scan (paste the live Stripe Payment Link here)
-  // Off sale since the Sep 2026 offer ladder; keys kept so old analytics/webhook keys still resolve.
-  snapshot: '#',        // Fix steps (off sale; its Stripe link is kept out of the page source) — $29 one-time
-  before_after: '#',    // Fix it and re-check (off sale; its Stripe link is kept out of the page source) — $59 one-time
-  full_year: '#',       // Full Year (off sale; its Stripe link is kept out of the page source) — $69 one-time
-  listing_fix: '#',     // Full listing (off sale; its Stripe link is kept out of the page source) build — $199 one-time
-};
-
-// Tiers on sale right now. The report page never renders a button or link for a tier that
-// isn't listed here. Known: 'xray', 'fix_kit', 'snapshot', 'before_after', 'full_year', 'listing_fix'.
-// Sep 2026 ladder: only the AI Visibility X-Ray ($49) is on sale. The $499 Front Door Overhaul
-// is shown as "coming soon" on the homepage with no checkout.
-const OFFERED_TIERS = ['xray', 'fix_kit'];
+// Plans on sale. The report page never renders a button or link for a tier that isn't listed here.
+// Prices are set server-side per report (src/lib/checkout.js): the $49 audit (Fix Kit included), the
+// $25 Competitor Breakdown (after the audit, or as a checkbox on the audit), and Be the Answer ($499
+// minus what the owner already paid on that report). Retired tier keys (fix_kit, snapshot,
+// before_after, full_year, listing_fix) still resolve in the webhook (src/lib/stripe.js TIER_BY_CENTS).
+const OFFERED_TIERS = ['xray', 'competitor_breakdown', 'be_the_answer'];
 window.OFFERED_TIERS = OFFERED_TIERS;
 window.tierOffered = (tier) => OFFERED_TIERS.includes(tier);
 
-// Attach buy links to every [data-tier] element under root. On a report
-// page, pass the report token: it rides to Stripe as client_reference_id
-// so the webhook can tie the payment to the business and its test arm.
-// If a link is still "#", the button shows a "coming soon" note instead.
+// Wire every [data-tier] button under root to our checkout. On a report page, pass the report token:
+// POST /api/checkout { token, tier, addons } answers { url } on Stripe's hosted page, and the browser
+// goes there. Add-ons are ticked [data-addon] checkboxes inside the same [data-offer-band]. Without a
+// token (homepage, static pages, the sample) a payment would unlock nothing, so the button starts the
+// free report instead.
 function wireCheckout(root, token) {
   root.querySelectorAll('[data-tier]').forEach((el) => {
     if (el.dataset.wired) return;
     el.dataset.wired = '1';
     const tier = el.getAttribute('data-tier');
-    // Every plan is bought for one report. Without a report token (homepage, static pages, the
-    // sample) a payment would unlock nothing, so the button starts the free report instead.
     if (!token) {
       el.setAttribute('href', '/#request');
       return;
     }
-    const base = STRIPE_LINKS[tier];
-    if (base && base !== '#') {
-      const u = new URL(base);
-      if (token) u.searchParams.set('client_reference_id', token);
-      el.setAttribute('href', u.toString());
-      // Lets /success link back to the (now unlocked) report.
-      el.addEventListener('click', () => {
-        try { localStorage.setItem('afs_checkout', JSON.stringify({ token, tier })); } catch {}
-      });
-    } else {
-      el.addEventListener('click', (e) => {
-        e.preventDefault();
-        alert('Checkout opens soon. Email hello@aifoundscore.com and we’ll hold your spot.');
-      });
-    }
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (el.dataset.busy) return;
+      const band = el.closest('[data-offer-band]');
+      const addons = band ? [...band.querySelectorAll('input[data-addon]:checked')].map((x) => x.getAttribute('data-addon')) : [];
+      el.dataset.busy = '1';
+      const label = el.textContent;
+      el.textContent = 'Opening checkout…';
+      fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, tier, addons }),
+      })
+        .then((r) => r.json().catch(() => ({})))
+        .then((body) => {
+          if (body && body.ok && body.url) {
+            // Lets /success link back to the (now unlocked) report.
+            try { localStorage.setItem('afs_checkout', JSON.stringify({ token, tier })); } catch {}
+            location.href = body.url;
+            return;
+          }
+          delete el.dataset.busy;
+          el.textContent = label;
+          alert((body && body.error) || 'Could not start checkout. Try again in a minute.');
+        })
+        .catch(() => {
+          delete el.dataset.busy;
+          el.textContent = label;
+          alert('Could not reach us. Check your connection and try again.');
+        });
+    });
   });
 }
 window.wireCheckout = wireCheckout;

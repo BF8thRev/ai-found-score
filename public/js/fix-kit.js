@@ -1,6 +1,6 @@
 // public/js/fix-kit.js — the Fix Kit page (/fix-kit/<token>, public/fix-kit.html).
 //
-// Loads GET /api/fix-kit/<token> ({ paid, confirmed, sample, details }), fills the form with the saved
+// Loads GET /api/fix-kit/<token> ({ paid, confirmed, sample, plan, details }), fills the form with the saved
 // or prefilled details, and on "Confirm my details" POSTs { confirm, details } as JSON. The server
 // checks everything (src/lib/fix-kit.js validateDetails) and answers 422 with [{ field, message }] for
 // anything to fix, shown under that field. Once confirmed, the download button links to
@@ -89,6 +89,9 @@
       if (!data.paid) { show('unpaid'); return; }
       fill(data.details || {});
       document.querySelector('[data-sample-note]').hidden = !data.sample;
+      // Be the Answer: the kit also carries the directory checklist and the Google posts.
+      document.querySelectorAll('[data-plan-only]').forEach(function (el) { el.hidden = !data.plan; });
+      document.querySelectorAll('[data-plan-link]').forEach(function (a) { a.href = '/plan/' + encodeURIComponent(token); });
       if (data.confirmed) {
         form.elements.confirm.checked = true;
         showDownload(false);

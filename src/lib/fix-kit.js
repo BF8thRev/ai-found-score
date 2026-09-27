@@ -1,6 +1,7 @@
 // src/lib/fix-kit.js — the Fix Kit: ready-to-install files built from the owner's confirmed details.
 //
-// Sold with the $149 Fix Kit ('fix_kit') and the $499 Be the Answer ('be_the_answer') plans. Fully
+// Comes with the $49 AI Visibility Audit ('xray') and the $499 Be the Answer ('be_the_answer'); the retired
+// $149 standalone Fix Kit ('fix_kit') still opens it for anyone who bought it. Fully
 // automatic: the owner checks their details on /fix-kit/<token> (public/fix-kit.html), confirms them,
 // and downloads a zip. Nobody at AI Found Score touches it. Routes: src/lib/fix-kit-route.js.
 //
@@ -25,7 +26,7 @@ import { phoneKey } from '../../scanner/extract/normalize.js';
 import { qrSvg } from './vendor/qrcode.js';
 
 /** Tiers whose buyers get the Fix Kit (tier keys from TIER_BY_CENTS in src/lib/stripe.js). */
-export const FIX_KIT_TIERS = Object.freeze(['fix_kit', 'be_the_answer']);
+export const FIX_KIT_TIERS = Object.freeze(['xray', 'fix_kit', 'be_the_answer']);
 
 export const LIMITS = Object.freeze({
   name: 120, trade: 60, phone: 40, street: 160, town: 60, zip: 10, website: 300, hours: 300,

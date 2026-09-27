@@ -315,18 +315,19 @@ function fakes({ tiers = [], saved = null, report = SAMPLE } = {}) {
   };
 }
 
-test('tiers: $149 and $499 map to the Fix Kit tiers', () => {
+test('tiers: the $49 audit, $499 and the retired $149 Fix Kit all open the Fix Kit', () => {
+  assert.equal(TIER_BY_CENTS[4900], 'xray');
   assert.equal(TIER_BY_CENTS[14900], 'fix_kit');
   assert.equal(TIER_BY_CENTS[49900], 'be_the_answer');
-  assert.deepEqual([...FIX_KIT_TIERS], ['fix_kit', 'be_the_answer']);
+  assert.deepEqual([...FIX_KIT_TIERS], ['xray', 'fix_kit', 'be_the_answer']);
 });
 
 test('GET: 404 without a report; unpaid says so; sample is a paid demo with prefilled details', async () => {
   const { deps } = fakes();
   assert.equal((await handleFixKit(...req('/api/fix-kit/nope'), ENV, deps)).status, 404);
   assert.equal((await handleFixKit(...req('/api/fix-kit/bad%20token'), ENV, deps)).status, 404);
-  const unpaid = await (await handleFixKit(...req('/api/fix-kit/real_tok'), ENV, fakes({ tiers: ['xray'] }).deps)).json();
-  assert.equal(unpaid.paid, false);
+  const unpaid = await (await handleFixKit(...req('/api/fix-kit/real_tok'), ENV, fakes({ tiers: ['competitor_breakdown'] }).deps)).json();
+  assert.equal(unpaid.paid, false, 'a payment for a plan without the kit does not open it');
   const sample = await handleFixKit(...req('/api/fix-kit/sample-001'), ENV, deps);
   assert.match(sample.headers.get('Cache-Control'), /no-store/);
   const s = await sample.json();

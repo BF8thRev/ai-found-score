@@ -22,9 +22,12 @@
 //                                needs the signed token /api/request returned after Turnstile
 //   GET  /api/zip           -> town for ?zip= (src/lib/zip.js, zippopotam.us, cached 30 days; per-IP rate limit)
 //   GET|POST /api/fix-kit/[token], GET /api/fix-kit/[token].zip -> Fix Kit details form + zip download
-//                                ($149 fix_kit / $499 be_the_answer); src/lib/fix-kit-route.js
+//                                ($49 xray, which includes it / $499 be_the_answer / retired $149 fix_kit); src/lib/fix-kit-route.js
 //   GET  /fix-kit/[token]     -> the Fix Kit page (public/fix-kit.html)
-//   cron (daily)              -> the free 30-day re-check of every paid report (src/lib/auto-scan.js startDueRechecks)
+//   GET|POST /api/plan/[token] -> Be the Answer: towns, directory checklist, Google posts; src/lib/plan-route.js
+//   GET  /plan/[token]        -> the Be the Answer page (public/plan.html)
+//   cron (daily)              -> the free 30-day re-check of every paid report (src/lib/auto-scan.js startDueRechecks),
+//                                then Be the Answer's monthly re-scans (startDueMonthly)
 //   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h
 //   GET  /                    -> homepage; the hero's real AI answer card comes from showcase_answers
 //                                (src/lib/showcase.js, filled by `node scanner/showcase.js`), cached 1 h
@@ -35,7 +38,7 @@
 
 import {
   recordPayment, recordUnsubscribe, recordVisit, recordLead,
-  getReport, getReportLink, isReportUnlocked,
+  getReport, getReportLink, isReportUnlocked, getPaidTiers,
 } from './lib/db.js';
 import { freeQuestions, normalizeTrade } from '../scanner/questions.js';
 import { handleReportRequest } from './lib/report-request.js';
@@ -44,8 +47,8 @@ import { rateLimit } from './lib/rate-limit.js';
 import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
-import { reportBody } from './lib/lock.js';
-import { pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks } from './lib/auto-scan.js';
+import { reportBody, BREAKDOWN_TIERS } from './lib/lock.js';
+import { pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent } from './lib/auto-scan.js';
 import { notifyPayment, notifyLead } from './lib/notify.js';
 import { resolveKeys, enginesConfigured } from '../scanner/config.js';
 import { handleAdminRequest, isAdminPath } from './admin/routes.js';
@@ -54,6 +57,8 @@ import { handleLivePreview, livePreviewStatus } from './lib/live-preview.js';
 import { handleProof } from './lib/proof.js';
 import { handleZip } from './lib/zip.js';
 import { handleFixKit } from './lib/fix-kit-route.js';
+import { handlePlan } from './lib/plan-route.js';
+import { handleCheckout } from './lib/checkout.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 
@@ -114,6 +119,11 @@ export default {
       return handleLead(request, env);
     }
 
+    // Our own checkout: prices set per report, then Stripe's hosted page (src/lib/checkout.js).
+    if (url.pathname === '/api/checkout' && request.method === 'POST') {
+      return handleCheckout(request, url, env, { mockReports: MOCK_REPORTS });
+    }
+
     if (url.pathname === '/api/stripe-webhook' && request.method === 'POST') {
       return handleStripeWebhook(request, env);
     }
@@ -126,6 +136,11 @@ export default {
     // Fix Kit: confirm details, download the zip (src/lib/fix-kit-route.js; sample-* works with no database).
     if (url.pathname.startsWith('/api/fix-kit/') && (request.method === 'GET' || request.method === 'POST')) {
       return handleFixKit(request, url, env, { mockReports: MOCK_REPORTS });
+    }
+
+    // Be the Answer: towns, directory checklist, Google posts (src/lib/plan-route.js; sample-* works with no database).
+    if (url.pathname.startsWith('/api/plan/') && (request.method === 'GET' || request.method === 'POST')) {
+      return handlePlan(request, url, env, { mockReports: MOCK_REPORTS });
     }
 
     if (url.pathname.startsWith('/api/report/') && request.method === 'GET') {
@@ -143,6 +158,9 @@ export default {
     if (url.pathname.startsWith('/fix-kit/') && url.pathname.length > '/fix-kit/'.length) {
       return serveAsset(env, request, '/fix-kit');
     }
+    if (url.pathname.startsWith('/plan/') && url.pathname.length > '/plan/'.length) {
+      return serveAsset(env, request, '/plan');
+    }
     if (url.pathname === '/success') {
       return serveAsset(env, request, '/success');
     }
@@ -154,7 +172,11 @@ export default {
   // Daily cron (wrangler.jsonc triggers): the free 30-day re-check for every paid report
   // (src/lib/auto-scan.js startDueRechecks). RECHECK_SCAN=off turns it off.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(startDueRechecks(env).then((r) => console.log('[recheck]', JSON.stringify(r))));
+    // One after the other: a plan's month 1 is skipped when the re-check just scanned that report.
+    ctx.waitUntil(startDueRechecks(env)
+      .then((r) => console.log('[recheck]', JSON.stringify(r)))
+      .then(() => startDueMonthly(env))
+      .then((r) => console.log('[monthly]', JSON.stringify(r))));
   },
 };
 
@@ -166,6 +188,7 @@ async function handleHealth(env) {
     supabaseKey: !!env.SUPABASE_ANON_KEY,
     supabaseKeyType: keyType(env.SUPABASE_ANON_KEY),
     stripeWebhookSecret: !!env.STRIPE_WEBHOOK_SECRET,
+    stripeSecretKey: !!String(env.STRIPE_SECRET_KEY || '').trim(),
     stripeWebhookSecretTest: !!env.STRIPE_WEBHOOK_SECRET_TEST,
     // Scanner keys: present or not, never the values.
     // `claude` uses ANTHROPIC_API_KEY; config.js wins once it reports it itself.
@@ -272,8 +295,19 @@ async function handleGetReport(id, url, env, dryRun = false) {
       });
     }
   }
+  // Paid plans on this report. A Be the Answer town report (plan_towns) takes its plan's.
+  let tiers = [];
+  let planToken = null;
+  if (unlocked && !isSample && !dryRun) {
+    planToken = await readPlanParent(env, id).catch(() => null);
+    tiers = await getPaidTiers(env, planToken || id).catch((e) => { console.error('[report] tiers read failed', e); return []; });
+  }
+  const onPlan = tiers.includes('be_the_answer');
   // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
-  const body = reportBody(report, unlocked);
+  // The sample shows the Competitor Breakdown too, as a demo.
+  const body = reportBody(report, unlocked, { breakdown: isSample || tiers.some((t) => BREAKDOWN_TIERS.includes(t)) });
+  // Be the Answer: the page links to the plan (and its Fix Kit) instead of offering the plan again.
+  if (onPlan) body.plan = { token: planToken || id, town: !!planToken };
   // Paid, and the full scan (every question, every assistant) is still running: the page says so.
   if (unlocked && !isSample && !dryRun && (await paidScanRunning(env, id))) body.fullScanPending = true;
   return Response.json(body, {
@@ -486,8 +520,8 @@ async function handleStripeWebhook(request, env) {
     return Response.json({ received: true });
   }
 
-  // The report page appends ?client_reference_id=<report token> to the
-  // Payment Link; business + arm come from that token's report_links row.
+  // Our checkout (src/lib/checkout.js) sets client_reference_id to the report token;
+  // business + arm come from that token's report_links row.
   const reportToken = session.client_reference_id || session.metadata?.report_id || null;
 
   try {
@@ -500,6 +534,8 @@ async function handleStripeWebhook(request, env) {
       amountCents: session.amount_total ?? null,
       currency: session.currency ?? 'usd',
       stripeSessionId: session.id,
+      // Add-ons bought in the same checkout (src/lib/checkout.js), e.g. the $25 Competitor Breakdown.
+      addons: String(session.metadata?.addons || '').split(',').map((a) => a.trim()).filter((a) => a === 'competitor_breakdown'),
       stripePaymentIntent: session.payment_intent ?? null,
       customerEmail: session.customer_details?.email ?? null,
       status: 'paid',
@@ -518,7 +554,8 @@ async function handleStripeWebhook(request, env) {
   const full = await startPaidScan(env, { token: reportToken, sessionId: session.id, tier: tierForSession(session) });
   console.log('[webhook] full scan', JSON.stringify(full));
   // The receipt (src/lib/notify.js). Nothing is sent until RESEND_API_KEY is set.
-  const receipt = await notifyPayment(env, { token: reportToken, email: session.customer_details?.email, tier: tierForSession(session), sessionId: session.id });
+  const addons = String(session.metadata?.addons || '').split(',').filter((a) => a === 'competitor_breakdown');
+  const receipt = await notifyPayment(env, { token: reportToken, email: session.customer_details?.email, tier: tierForSession(session), addons, sessionId: session.id });
   console.log('[webhook] receipt', JSON.stringify(receipt));
 
   return Response.json({ received: true });
