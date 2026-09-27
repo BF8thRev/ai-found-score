@@ -495,3 +495,21 @@ test('routes: login sets a __Host- cookie; CSRF refused cross-origin; same-origi
   });
   assert.equal(r.status, 503, 'no service key and not a localhost URL → refused, not a dry run');
 });
+
+test('routes: /admin/scan/paid re-runs a paid audit by token; gated, CSRF-checked, validated', async () => {
+  const bearer = { Authorization: `Bearer ${SECRET}` };
+  const post = (env, token, headers = bearer) => call(env, '/admin/scan/paid', {
+    method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token }).toString(),
+  });
+  assert.equal((await post({ ADMIN_TOKEN: '  ' }, 'tok_123456')).status, 404, 'no ADMIN_TOKEN');
+  const { env, created } = mockEnv();
+  const anon = await post(env, 'tok_123456', {});
+  assert.equal(anon.status, 303, 'unauthenticated → the login page');
+  assert.equal(created.length, 0, 'nothing started without signing in');
+  assert.equal((await post(env, 'bad token!')).status, 422);
+  // Reachable (not the 404 allow-list): with no database configured it answers the reason, never throws.
+  const r = await post(env, 'tok_123456');
+  assert.equal(r.status, 409);
+  assert.match(await r.text(), /no-store/);
+  assert.equal((await call(env, '/admin/scan/paid', { headers: bearer })).status, 303, 'GET goes back to the page');
+});
