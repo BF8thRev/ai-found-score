@@ -94,7 +94,7 @@
         <p class="sc-intro-line">Your free report shows this for your business and your town:</p>
         <figure class="sc-card">
           <div class="sc-head"><figcaption class="sc-label">ChatGPT&rsquo;s answer</figcaption></div>
-          <p class="sc-q">What's the best laundromat in North Babylon, NY?</p>
+          <p class="sc-q">What's the best laundromat in North Babylon,&nbsp;NY?</p>
           <div class="sc-full"><p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p><button type="button" class="sc-expand" data-sc-expand aria-expanded="false">Read the full answer, word for word</button></div>
           <p class="sc-k">AI sent this customer to</p>
           <ul class="sc-names"><li>Mega Wash &amp; Dry</li><li>One Hour Laundry</li></ul>
@@ -899,6 +899,23 @@
     push({ event: 'showcase_check_click' });
   });
 
+  // Question bubble: CSS keeps a wrapped bubble at its full allowed width, leaving a gap on the right.
+  // Shrink it to its longest line, like a chat app.
+  function fitBubble() {
+    var q = document.querySelector('.sc-q');
+    if (!q) return;
+    q.style.width = '';
+    var r = document.createRange();
+    r.selectNodeContents(q);
+    var widest = 0;
+    Array.prototype.forEach.call(r.getClientRects(), function (x) { widest = Math.max(widest, x.width); });
+    var cs = getComputedStyle(q);
+    if (widest) q.style.width = Math.ceil(widest + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)) + 'px';
+  }
+  fitBubble();
+  window.addEventListener('resize', fitBubble);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitBubble);
+
   // Hero card (src/lib/showcase.js): the picker swaps in that trade's stored answer for the same town.
   (function () {
     var pick = document.querySelector('[data-sc-trade]');
@@ -910,7 +927,8 @@
     pick.addEventListener('change', function () {
       var a = sc && sc.answers && sc.answers[pick.value];
       if (!a) return;
-      document.querySelector('[data-sc-q]').textContent = a.question;
+      document.querySelector('[data-sc-q]').textContent = String(a.question).replace(/ (\S+)$/, '\xa0$1');
+      fitBubble();
       var src = document.querySelector('[data-sc-src]');
       if (src) src.textContent = a.engine && sc.engines && sc.engines[a.engine] ? sc.engines[a.engine] + '’s answer' : 'Real AI answer';
       document.querySelector('[data-sc-date]').textContent = new Date(a.askedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });

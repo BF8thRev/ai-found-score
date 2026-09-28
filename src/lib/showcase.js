@@ -88,6 +88,11 @@ export function escapeHtml(s) {
 }
 
 /** The excerpt as HTML: escaped text, named businesses in <b>, a trailing … when cut. */
+// Keep the question's last two words together so a lone "NY?" never wraps onto its own line.
+export function keepLastWords(s) {
+  return String(s).replace(/ (\S+)$/, '\xa0$1');
+}
+
 export function answerHtml(a) {
   // Blank lines between list items are collapsed (the card shows line breaks; see .sc-a).
   const text = (s) => escapeHtml(s.replace(/\n{2,}/g, '\n'));
@@ -181,7 +186,7 @@ export function renderShowcase(p) {
     <figcaption class="sc-label"><span data-sc-src>${sourceLabel(a)}</span> &middot; asked <span data-sc-date>${escapeHtml(formatDate(a.askedAt))}</span></figcaption>
     <label class="sc-pick"><span class="sr-only">Show the answer for</span><select data-sc-trade>${options}</select></label>
   </div>
-  <p class="sc-q" data-sc-q>${escapeHtml(a.question)}</p>
+  <p class="sc-q" data-sc-q>${escapeHtml(keepLastWords(a.question))}</p>
   <div class="sc-full">${answerBlockHtml(a)}<button type="button" class="sc-expand" data-sc-expand aria-expanded="false">Read the full answer, word for word</button></div>
   <p class="sc-k">AI sent this customer to</p>
   <ul class="sc-names" data-sc-names>${namesHtml(a)}</ul>
