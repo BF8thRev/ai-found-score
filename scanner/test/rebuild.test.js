@@ -20,7 +20,7 @@ async function setup() {
     const host = new URL(String(url)).hostname;
     let body = null;
     try { body = typeof init.body === 'string' ? JSON.parse(init.body) : null; } catch { /* not json */ }
-    hits.push(host === 'api.anthropic.com' ? (body?.output_config ? 'extract' : 'claude') : host);
+    hits.push(host === 'api.anthropic.com' ? (body?.output_config?.format ? 'extract' : 'claude') : host);
     return d.fetchImpl(url, init);
   };
   return { ...d, fetchImpl, hits };
@@ -94,7 +94,7 @@ test('--rebuild never replaces a saved report with one that fails validation', a
   let n = 0;
   const failing = { ...s, fetchImpl: async (url, init = {}) => {
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
-    if (new URL(String(url)).hostname === 'api.anthropic.com' && body?.output_config && n++ === 2) {
+    if (new URL(String(url)).hostname === 'api.anthropic.com' && body?.output_config?.format && n++ === 2) {
       return new Response(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'nope' } }), { status: 400, headers: { 'content-type': 'application/json' } });
     }
     return s.fetchImpl(url, init);
@@ -130,7 +130,7 @@ test('a local scan checks AI facts against the business file facts', async () =>
   s.fetchImpl = async (url, init = {}) => {
     const res = await base(url, init);
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
-    if (new URL(String(url)).hostname !== 'api.anthropic.com' || !body?.output_config) return res;
+    if (new URL(String(url)).hostname !== 'api.anthropic.com' || !body?.output_config?.format) return res;
     const msg = await res.json();
     const answer = body.messages[0].content.split('<answer>\n')[1].split('\n</answer>')[0];
     const block = msg.content.find((b) => b.type === 'text');

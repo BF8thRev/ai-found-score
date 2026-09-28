@@ -92,7 +92,7 @@ export function dryRunFetch({ delayMs = 400 } = {}) {
       if (u.includes('/v1/models/')) return json(anthropicModel);
       let body = null;
       try { body = typeof init.body === 'string' ? JSON.parse(init.body) : null; } catch { /* not JSON */ }
-      return body?.output_config ? json(extractorReply(body)) : json(claude);
+      return body?.output_config?.format ? json(extractorReply(body)) : json(claude);
     }
     // Directory pages, Supabase, anything else: never leave the machine in a dry run.
     return new Response('dry-run: no fixture for this host', { status: 599 });
