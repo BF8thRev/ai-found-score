@@ -95,7 +95,7 @@ export const TYPICAL_CALL = {
   google_ai_mode: { tasks: 1 },
   // Search results (and dynamic-filtering code runs) are re-read across the server-side loop,
   // so input is large. Estimate only; recalibrate from the first live scans' usage.
-  claude: { inputTokens: 18_000, outputTokens: 1_200, searches: 2 },
+  claude: { inputTokens: 25_000, outputTokens: 900, searches: 2 }, // medium effort, Sep 28 2026 test
   // System prompt + target + one answer in; thinking + JSON out. Recalibrate from live usage.
   extract: { inputTokens: 1_500, outputTokens: 1_500 },
 };

@@ -119,7 +119,7 @@ test('local scan: a flipped re-ask moves the headline and is stored as run 2 (fa
   const fetchImpl = async (url, init = {}) => {
     const host = new URL(String(url)).hostname;
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
-    if (host === 'api.anthropic.com' && body?.output_config && ++extracts === 16) {
+    if (host === 'api.anthropic.com' && body?.output_config?.format && ++extracts === 16) {
       return new Response(JSON.stringify({
         id: 'msg_x', type: 'message', role: 'assistant', model: 'claude-sonnet-5',
         content: [{ type: 'text', text: JSON.stringify({ businesses: [], ownerFacts: [], ownerDescriptors: [] }) }],

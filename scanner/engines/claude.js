@@ -27,20 +27,26 @@ import { makeCitations, questionText, baseResult, finish, timedPing, truncate, s
 
 export const id = 'claude';
 export const API_URL = 'https://api.anthropic.com/v1/messages';
-export const MAX_SEARCHES = 5;
+// Searches per answer. 3 caps the worst case: on Sep 28 2026 an "open now" question at 5 searches read 97k tokens ($0.28).
+export const MAX_SEARCHES = 3;
+/** Effort for the answer call (output_config.effort). Medium made the same picks as the default (high) on the same
+ *  3 questions for about half the cost (fewer searches, less page text read). Override with CLAUDE_EFFORT. */
+export const DEFAULT_EFFORT = 'medium';
 /** How many times a paused turn (stop_reason "pause_turn") is resumed before giving up. */
 export const MAX_CONTINUATIONS = 3;
 
-export function buildRequest({ question, business, model }) {
+export function buildRequest({ question, business, model, effort = DEFAULT_EFFORT, maxSearches = MAX_SEARCHES }) {
   const location = { type: 'approximate', country: 'US' };
   if (business?.town) location.city = String(business.town);
   if (business?.state || business?.town) location.region = stateName(business?.state);
-  return {
+  const body = {
     model,
     max_tokens: 16000,
     messages: [{ role: 'user', content: questionText(question) }],
-    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: MAX_SEARCHES, user_location: location }],
+    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: maxSearches, user_location: location }],
   };
+  if (effort) body.output_config = { effort };
+  return body;
 }
 
 const isToolBlock = (b) => b && (b.type === 'server_tool_use' || /_tool_result$/.test(b.type || ''));
@@ -139,7 +145,9 @@ async function createWithRetry(client, body, { timeoutMs, retries, retryDelayMs 
 export async function ask({ question, business, env, fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS, retries = 1, retryDelayMs = 2000 } = {}) {
   const keys = resolveKeys(env);
   const model = keys.claudeModel;
-  const body = buildRequest({ question, business, model });
+  const effort = env?.CLAUDE_EFFORT || DEFAULT_EFFORT;
+  const maxSearches = Number(env?.CLAUDE_MAX_SEARCHES) > 0 ? Number(env.CLAUDE_MAX_SEARCHES) : MAX_SEARCHES;
+  const body = buildRequest({ question, business, model, effort, maxSearches });
   const request = { method: 'POST', url: API_URL, body };
   const result = baseResult(id, model, request);
   try {
