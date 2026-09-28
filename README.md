@@ -228,10 +228,12 @@ The code lives at `github.com/BF8thRev/ai-found-score`.
 1. In the Cloudflare dashboard, go to **Workers & Pages** → **Create** → **Connect to Git**.
 2. Authorize the GitHub account and select the repo.
 3. Project name: `ai-found-score`. Framework preset: **None**.
-4. Build command: leave empty (no build step). Deploy command: `npx wrangler deploy`.
+4. Build command: `npm ci && npm test` (a failing test stops the deploy; the site keeps the last good version). Deploy command: `npx wrangler deploy`. Branch control: `master` only.
 5. Root directory: the repo root (this folder is the repo root).
 6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above: `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `ADMIN_TOKEN`, `GOOGLE_PLACES_API_KEY` and the engine keys. `SUPABASE_URL` lives in `wrangler.jsonc`. Secrets set here are available to every deployment.
 7. Save — Cloudflare deploys on every push to `master` from now on.
+
+Connected since Sep 2026 (Workers Builds). Every change goes through a PR into `master`; merging it is the deploy. Each build shows as the **Workers Builds: ai-found-score** check on the merge commit. No check on a merge commit means Cloudflare missed it: retry the build under the Worker's **Deployments**, or merge the next PR.
 
 Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` first).
 
