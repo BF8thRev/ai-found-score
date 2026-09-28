@@ -6,6 +6,8 @@
 //   POST /admin/expenses        add a manual expense
 //   POST /admin/scan            start a background scan from the form
 //   POST /admin/scan/run        "Run now" for a queued (or failed) free-report request scan (src/lib/auto-scan.js)
+//   POST /admin/email/sent      log a hand-sent cold email → 303 /admin?sent=<token> (shows the links to paste; sends nothing)
+//   POST /admin/prospects       add a business to email (src/admin/outreach.js)
 //   GET  /admin/admin.js        the page's small script
 //   /api/admin/*                see src/admin/api.js
 //
@@ -14,7 +16,7 @@
 // same-origin Origin header (with SameSite=Strict, that is the CSRF defence).
 
 import { adminAuth, tokenMatches, signSession, sessionCookie, clearSessionCookie, sameOrigin } from './session.js';
-import { loadDashboard, insertExpense } from './data.js';
+import { loadDashboard, insertExpense, insertProspect, prospectDetails } from './data.js';
 import { renderLogin, renderDashboard, ADMIN_JS } from './page.js';
 import { parseExpenseForm, scanFormToBody } from './metrics.js';
 import { handleAdminPing, handleAdminScanStart, handleAdminScanStatus, startScan, ALL_ENGINES, NO_STORE } from './api.js';
@@ -22,6 +24,8 @@ import { dryRunEnabled, isLocalRequest } from './dry-run.js';
 import { redact } from './redact.js';
 import { defaultScanEngines } from '../../scanner/config.js';
 import { runQueuedScan, cancelRequestScan, startFullScan } from '../lib/auto-scan.js';
+import { parseSentForm, parseProspectForm } from './outreach.js';
+import { recordEmailSent, validToken } from '../lib/email-tracking.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -108,7 +112,8 @@ export async function handleAdminRequest(request, url, env) {
     return redirect(url, '/admin', { 'Set-Cookie': clearSessionCookie() });
   }
 
-  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/cancel' && path !== '/admin/scan/paid') return notFound();
+  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/cancel' && path !== '/admin/scan/paid'
+    && path !== '/admin/email/sent' && path !== '/admin/prospects') return notFound();
 
   const who = await adminAuth(request, adminToken);
   if (!who) {
@@ -120,12 +125,42 @@ export async function handleAdminRequest(request, url, env) {
     return new Response('Cross-origin request refused', { status: 403, headers: NO_STORE });
   }
 
-  const render = async ({ flash = {}, watch = [], status = 200 } = {}) => {
+  const render = async ({ flash = {}, watch = [], status = 200, sent = null } = {}) => {
     const n = nonce();
     const dash = await loadDashboard(env);
     const dryRun = dryRunEnabled(env) && isLocalRequest(url);
-    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env) }), { status, nonce: n });
+    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env), sent, siteOrigin: url.origin }), { status, nonce: n });
   };
+
+  // Log a cold email sent by hand. Writes the 'sent' row only; the redirect shows what to paste.
+  if (path === '/admin/email/sent') {
+    if (method !== 'POST') return redirect(url, '/admin#log-email');
+    const f = await form(request);
+    const parsed = parseSentForm(f ? Object.fromEntries(f.entries()) : {});
+    const fail = (text, status) => render({ flash: { email: { ok: false, text } }, status });
+    if (!parsed.ok) return fail(parsed.error, 422);
+    try {
+      const biz = await prospectDetails(env, parsed.row.businessId);
+      if (!biz) return fail('That business isn’t in the database.', 422);
+      const r = await recordEmailSent(env, { ...parsed.row, town: parsed.row.town || biz.town, reportToken: biz.reportToken });
+      return redirect(url, `/admin?sent=${encodeURIComponent(r.token)}${r.existing ? '&again=1' : ''}#log-email`);
+    } catch (e) {
+      return fail(`Could not save: ${redact(env, e?.message || e, 200)}`, 500);
+    }
+  }
+
+  if (path === '/admin/prospects') {
+    if (method !== 'POST') return redirect(url, '/admin#log-email');
+    const f = await form(request);
+    const parsed = parseProspectForm(f ? Object.fromEntries(f.entries()) : {});
+    if (!parsed.ok) return render({ flash: { email: { ok: false, text: parsed.error } }, status: 422 });
+    try {
+      const r = await insertProspect(env, parsed.row);
+      return redirect(url, `/admin?prospect=${r.existing ? 'exists' : 'added'}#log-email`);
+    } catch (e) {
+      return render({ flash: { email: { ok: false, text: `Could not save: ${redact(env, e?.message || e, 200)}` } }, status: 500 });
+    }
+  }
 
   if (path === '/admin/expenses') {
     if (method !== 'POST') return redirect(url, '/admin#expenses');
@@ -190,5 +225,9 @@ export async function handleAdminRequest(request, url, env) {
   if (watch.length) flash.run = { ok: true, text: 'Scan started. Progress updates below every few seconds.' };
   if (url.searchParams.get('expense') === 'saved') flash.expense = { ok: true, text: 'Expense saved.' };
   if (url.searchParams.get('cancelled') === '1') flash.requests = { ok: true, text: 'Request cancelled. It will not run.' };
-  return render({ flash, watch });
+  if (url.searchParams.get('prospect') === 'added') flash.email = { ok: true, text: 'Prospect added. Pick it in “Log a sent email”.' };
+  if (url.searchParams.get('prospect') === 'exists') flash.email = { ok: true, text: 'A business with that exact name is already there. Pick it in “Log a sent email”.' };
+  if (url.searchParams.get('again') === '1') flash.email = { ok: true, text: 'Already logged for this business and campaign: the same links as before.' };
+  const sentParam = url.searchParams.get('sent');
+  return render({ flash, watch, sent: validToken(sentParam || '') ? sentParam : null });
 }

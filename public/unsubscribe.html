@@ -83,8 +83,9 @@
   (function () {
     var q = new URLSearchParams(window.location.search);
     var s = q.get('status');
-    // A link from an email (?t=) or a card (?c=) asks first: the button posts back to this same address.
-    var hasLink = !!(q.get('t') || q.get('c'));
+    // A link from an email (?t=, or ?ref= from a tracked cold email) or a card (?c=) asks first: the
+    // button posts back to this same address.
+    var hasLink = !!(q.get('t') || q.get('c') || q.get('ref'));
     var state = s === 'ok' ? 'done' : s === 'error' || s === 'notfound' ? s : hasLink ? 'confirm' : 'form';
     if (state === 'confirm') document.querySelector('[data-confirm-form]').setAttribute('action', window.location.pathname + window.location.search);
     document.querySelector('#unsub-root [data-state="' + state + '"]').hidden = false;

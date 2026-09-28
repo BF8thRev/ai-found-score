@@ -13,7 +13,8 @@
 //   GET  /api/questions       -> the 3 questions the free scan asks for ?trade=&town=&zip=&state=
 //                                (per-IP rate limit)
 //   POST /api/stripe-webhook  -> Stripe webhook, verified signature, writes payment
-//   GET|POST /unsubscribe, /stop -> email or postcard opt-out
+//   GET|POST /unsubscribe, /stop -> email or postcard opt-out (?ref= from a tracked cold email: src/lib/email-tracking.js)
+//   GET  /e/open, /e/click    -> cold-email open pixel / tracked link (src/lib/email-tracking.js)
 //   /admin, /admin/*          -> business dashboard (session cookie or Bearer ADMIN_TOKEN); src/admin/routes.js
 //   GET  /api/admin/ping      -> live key check per engine + extractor (cookie or Bearer ADMIN_TOKEN)
 //   POST /api/admin/scan      -> start a background scan (Cloudflare Workflow) -> { scanId, instanceId, statusUrl }
@@ -72,6 +73,7 @@ import { handleCheckout, SHOWCASE_TOKENS, SHOWCASE_ALIASES } from './lib/checkou
 import { handleRefundEvent, REFUND_EVENTS } from './lib/refunds.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
+import { handleEmailOpen, handleEmailClick, logEmailEvent, validToken, REF_PARAM } from './lib/email-tracking.js';
 
 // The background scan runner (Cloudflare Workflows entrypoint; binding SCAN_WORKFLOW).
 export { ScanWorkflow } from './scan-workflow.js';
@@ -92,6 +94,13 @@ export default {
 
     if (isAdminPath(url.pathname)) {
       return handleAdminRequest(request, url, env);
+    }
+
+    if (url.pathname === '/e/open' && (request.method === 'GET' || request.method === 'HEAD')) {
+      return handleEmailOpen(request, url, env, ctx);
+    }
+    if (url.pathname === '/e/click' && (request.method === 'GET' || request.method === 'HEAD')) {
+      return handleEmailClick(request, url, env, ctx);
     }
 
     if (url.pathname.startsWith('/r/') && request.method === 'GET') {
@@ -492,11 +501,14 @@ function handleLivePreviewRoute(request, url, env, ctx) {
 //   POST /unsubscribe?t=<token>  List-Unsubscribe=One-Click   RFC 8058, from the mail client
 //   POST /unsubscribe  email=<address>            the form on the page, for people without a link
 //   GET  /stop?c=<code>, POST /stop  code=<code>  postcard opt-out (code printed on the card)
+//   GET  /stop?ref=<token>, POST (confirm)        tracked cold email (src/lib/email-tracking.js): the
+//                                                 'unsubscribed' event + the unsubscribes row, in one RPC
 // A token row suppresses that business for both mail and email.
 // Nothing to act on -> just serve the page (which shows the forms).
 async function handleUnsubscribe(request, url, env) {
   let token = (url.searchParams.get('t') || '').trim() || null;
   let code = normalizeCode(url.searchParams.get('c'));
+  const ref = validToken(url.searchParams.get(REF_PARAM) || '') ? url.searchParams.get(REF_PARAM) : null;
   let email = null;
   let oneClick = false;
 
@@ -518,13 +530,22 @@ async function handleUnsubscribe(request, url, env) {
       : serveAsset(env, request, '/unsubscribe', 'GET');
   };
 
-  if (!token && !email && !code) return servePage(null);
+  if (!token && !email && !code && !ref) return servePage(null);
   // A GET (the link in an email or a typed /stop?c=) only shows a confirm button: mail scanners open
   // every link in a message, and a paying customer's plan emails must not stop because one did.
   // The button POSTs back to this URL; the RFC 8058 one-click POST from the mail client needs none.
   if (request.method !== 'POST') return servePage(null);
 
   try {
+    // A tracked cold email: the RPC writes the unsubscribes row (the address the email went to) and
+    // the funnel's 'unsubscribed' event together.
+    if (ref) {
+      const known = await logEmailEvent(env, { token: ref, event: 'unsubscribed', userAgent: request.headers.get('User-Agent') || null });
+      if (!token && !code && !email) {
+        if (!known) return oneClick ? new Response('Unknown link', { status: 404 }) : servePage('notfound');
+        return oneClick ? new Response('Unsubscribed', { status: 200 }) : servePage('ok');
+      }
+    }
     if (code && !token) {
       const link = await getReportLink(env, { code });
       if (!link) return servePage('notfound');

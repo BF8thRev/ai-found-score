@@ -7,6 +7,7 @@ import {
   esc, usd, pct, moneySummary, engineVerdicts, activityFeed, shortTime, nyDate, EXPENSE_CATEGORIES,
   FIXED_COSTS, STRIPE_FEE, chargeDates, fixedCosts, unitEconomics,
 } from './metrics.js';
+import { emailFunnelTable, prospectsSection, logEmailSection, OUTREACH_CSS, OUTREACH_JS } from './outreach.js';
 
 const engineName = (id) => ENGINE_NAMES[id] || id;
 
@@ -66,6 +67,7 @@ const CSS = `
 .login{max-width:380px;margin:12vh auto 0;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow)}
 .login h1{font-size:22px;margin-bottom:12px}
 .login button{margin-top:12px;width:100%}
+${OUTREACH_CSS}
 @media (max-width:600px){.adm.wrap,.adm-top .wrap{padding-left:16px;padding-right:16px}.adm section{padding:14px 12px 10px}.adm th,.adm td{padding:6px 6px}}
 `;
 
@@ -402,12 +404,14 @@ function funnelSection(d, errors) {
   const rows = d.funnel || [];
   return `<section id="funnel">
   <h2>Funnel by arm</h2>
+  <h3>Mail arm</h3>
   <p class="sub">Recipients in report_links; visits are unique tokens; paying counts live payments only.</p>
   ${sectionError(errors, 'funnel')}
   ${rows.length ? `<div class="tw"><table>
     <thead><tr><th>Arm</th><th class="n">Recipients</th><th class="n">Visited</th><th class="n">Leads</th><th class="n">Paying</th><th class="n">Revenue</th><th class="n">Visit rate</th><th class="n">Pay rate</th></tr></thead>
     <tbody>${rows.map((r) => `<tr><td><b>${esc(r.arm)}</b></td><td class="n">${esc(r.recipients)}</td><td class="n">${esc(r.visited)}</td><td class="n">${esc(r.leads)}</td><td class="n">${esc(r.paying)}</td><td class="n">${usd(r.revenue_usd)}</td><td class="n">${pct(r.visit_rate)}</td><td class="n">${pct(r.pay_rate)}</td></tr>`).join('')}</tbody>
   </table></div>` : (errors.funnel ? '' : '<p class="small">No recipients yet (report_links is empty).</p>')}
+  ${emailFunnelTable(d.emailFunnel, errors)}
 </section>`;
 }
 
@@ -474,7 +478,7 @@ export function creditBanner(credits) {
  * The dashboard. `dash` = loadDashboard() result; `flash` = { run, expense } messages
  * ({ ok: boolean, text }); `watch` = scan ids to show live status for.
  */
-export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES }) {
+export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES, sent = null, siteOrigin = 'https://aifoundscore.com' }) {
   const d = dash.data || {};
   const errors = dash.errors || {};
   const flashHtml = (f) => (f ? `<p class="${f.ok ? 'ok-msg' : 'err'}" role="status">${esc(f.text)}</p>` : '');
@@ -490,7 +494,7 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
 <main class="adm wrap">
   <nav class="adm-nav" aria-label="Sections">
     <a href="#money">Money</a><a href="#costs">Costs</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
-    <a href="#funnel">Funnel</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
+    <a href="#funnel">Funnel</a><a href="#prospects">Prospects</a><a href="#log-email">Log email</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
   </nav>
   ${creditBanner(d.credits)}
   ${notConfigured}
@@ -501,6 +505,8 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
   ${scansSection(d, errors)}
   ${enginesSection(d, errors)}
   ${funnelSection(d, errors)}
+  ${prospectsSection(d, errors)}
+  ${logEmailSection(d, errors, { flash: flashHtml(flash.email), sent, base: siteOrigin })}
   ${gatesSection(d, errors)}
   ${activitySection(d, errors)}
   ${rechecksSection(d, errors)}
@@ -546,6 +552,7 @@ export const ADMIN_JS = `(() => {
       .catch((e) => { set(el, 'hint', 'Status unavailable (' + e.message + '), retrying'); setTimeout(() => poll(el), 15000); });
   }
   document.querySelectorAll('[data-watch]').forEach(poll);
+${OUTREACH_JS}
 
   const pingBtn = document.getElementById('ping-btn');
   const pingOut = document.getElementById('ping-out');
