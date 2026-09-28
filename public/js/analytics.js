@@ -35,7 +35,7 @@
   }
 
   // --- Conversion events ---
-  var TIER_PRICE = { xray: 49, snapshot: 29, before_after: 59, full_year: 69, listing_fix: 199 };
+  var TIER_PRICE = { xray: 49, competitor_breakdown: 25, be_the_answer: 499, snapshot: 29, before_after: 59, full_year: 69, listing_fix: 199 };
   var CTA_ID = {
     xray: 'xray_49',
     snapshot: 'snapshot_29',
@@ -49,19 +49,30 @@
   // Report page visit: token from URL path, arm from ?arm=.
   if (path.indexOf('/report/') === 0) {
     var token = path.split('/').filter(Boolean).pop() || '';
-    window.dataLayer.push({ event: 'report_view', report_token: token, arm: arm });
+    // The token is the private link to a paid report: never sent as its own field.
+    window.dataLayer.push({ event: 'report_view', arm: arm });
   }
 
   // Successful purchase landing: tier/value from ?tier= and price table.
   if (path === '/success' || path === '/success/') {
+    // v = dollars charged (after credit, with add-ons; src/lib/checkout.js success_url), else list price.
+    // transaction_id = the Checkout Session, so a reload of this page isn't a second purchase.
     var tier = params.get('tier') || '';
-    window.dataLayer.push({
-      event: 'purchase',
-      tier: tier,
-      arm: arm,
-      value: TIER_PRICE[tier] || 0,
-      currency: 'USD',
-    });
+    var charged = Number(params.get('v'));
+    var sessionId = params.get('session_id') || '';
+    var seen = false;
+    try { seen = !!sessionId && sessionStorage.getItem('afs_purchase_' + sessionId) === '1'; } catch (err) {}
+    if (!seen) {
+      window.dataLayer.push({
+        event: 'purchase',
+        transaction_id: sessionId || undefined,
+        tier: tier,
+        arm: arm,
+        value: isFinite(charged) && params.get('v') !== null ? charged : TIER_PRICE[tier] || 0,
+        currency: 'USD',
+      });
+      try { if (sessionId) sessionStorage.setItem('afs_purchase_' + sessionId, '1'); } catch (err) {}
+    }
   }
 
   // Every pricing/CTA click + checkout start (delegated so report.js-rendered
@@ -76,7 +87,7 @@
 
   // Homepage offer ladder: which tier people reach for, while checkout isn't wired there.
   // The choice is remembered for the tab so the free-report request can carry it.
-  var OFFER_PRICE = { free_snapshot: 0, full_audit: 99, be_the_answer: 499 };
+  var OFFER_PRICE = { free_snapshot: 0, full_audit: 49, be_the_answer: 499 };
   document.addEventListener('click', function (e) {
     var el = e.target && e.target.closest ? e.target.closest('[data-offer]') : null;
     if (!el) return;

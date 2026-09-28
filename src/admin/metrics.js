@@ -160,7 +160,8 @@ export function activityFeed({ scans = [], requests = [], leads = [], payments =
   for (const p of payments) {
     items.push({
       at: p.paid_at, kind: 'payment', tone: p.livemode === false ? 'neutral' : 'good',
-      text: `${p.livemode === false ? 'Test payment' : 'Payment'}: ${usd((num(p.amount_cents) || 0) / 100)} ${p.tier || ''}${p.arm ? ` (${p.arm})` : ''}`.trim(),
+      text: `${p.livemode === false ? 'Test payment' : 'Payment'}: ${usd((num(p.amount_cents) || 0) / 100)} ${p.tier || ''}${p.arm ? ` (${p.arm})` : ''}${
+        p.revoked_at ? ' (refunded)' : num(p.refunded_cents) > 0 ? ` (${usd(num(p.refunded_cents) / 100)} refunded)` : ''}`.trim(),
     });
   }
   return items

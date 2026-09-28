@@ -37,7 +37,7 @@
 <section class="section">
   <div class="wrap page">
     <h1>Privacy</h1>
-    <p class="fine">Updated September 24, 2026</p>
+    <p class="fine">Updated September 27, 2026</p>
     <h2>Business data</h2>
     <p>Reports use public information about your business: what AI assistants say about it and the websites they cite. Report pages are not indexed by search engines and are reachable only by their link.</p>
     <h2>The free-report form</h2>
@@ -48,10 +48,25 @@
     <h2>Mail</h2>
     <p>If we mailed you a postcard, the address came from your public business listing. Enter the code on the card at <a href="/stop">aifoundscore.com/stop</a> and we stop all mail and email to your business.</p>
     <h2>Your report page</h2>
-    <p>When you open your report, we record the visit (time, browser type, and the page that linked you). If you ask us to email you the report, we keep that address to send it. We don't sell or share your information.</p>
+    <p>When you open your report, we record the visit (time, browser type, and the page that linked you). If you ask us to email you the report, we keep that address to send it.</p>
+    <h2>When you buy</h2>
+    <p>Stripe runs checkout. We receive your name and email from it, what you bought and the amount, never your card number. We use your email for your receipt, for "your audit is ready", for the free 30-day re-scan and, on Be the Answer, for the monthly email.</p>
+    <p>For your Fix Kit and Be the Answer we keep the business details you confirm: name, phone, address, hours, services and the towns you add. We use them to build your files, your fixes and your monthly re-scans.</p>
+    <h2>Who handles your data for us</h2>
+    <p>We don't sell your information. We share it only with the companies that run parts of the service for us, and only what each one needs:</p>
+    <ul>
+      <li>Cloudflare hosts the site and runs the bot check on the free-report form.</li>
+      <li>Supabase stores our database.</li>
+      <li>Stripe takes payments.</li>
+      <li>Resend sends our emails.</li>
+      <li>The AI providers whose assistants we check get the questions (your trade, town and ZIP). The AI model that reads their answers gets your business's public details, as described above. Neither gets your email.</li>
+      <li>Google Tag Manager and Google Analytics count visits and clicks (see below).</li>
+    </ul>
     <h2>Site analytics</h2>
-    <p>This site uses Cloudflare Web Analytics and Google Tag Manager to count visits and button clicks. Payment pages are run by Stripe. We never see your card number.</p>
+    <p>This site uses Cloudflare Web Analytics and Google Tag Manager to count visits and button clicks. The page address goes with each visit, and for a report, Fix Kit or plan page that address contains the private link. We use it only to count visits; it isn't used to identify you. Payment pages are run by Stripe. We never see your card number.</p>
     <p>We use your approximate location from your connection (city level, provided by our hosting network) only to show local examples on the page; it isn't stored.</p>
+    <h2>Keeping and deleting your data</h2>
+    <p>We keep your report and the details behind it while your report link is in use, so it keeps working and your re-scans can compare against it. Email us and we'll delete your report, your details and your email address within 30 days. We keep payment records as long as tax and accounting rules require.</p>
     <h2>Contact</h2>
     <p>Questions about your data: <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a> or Fields Holding d/b/a GetAiFound Score, 120 Terminal Drive, Plainview, NY 11803.</p>
   </div>
@@ -92,6 +107,6 @@
 </footer>
 
 <script src="/js/config.js?v=12"></script>
-<script src="/js/analytics.js?v=8"></script>
+<script src="/js/analytics.js?v=9"></script>
 </body>
 </html>

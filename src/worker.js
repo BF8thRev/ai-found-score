@@ -53,7 +53,7 @@ import {
   pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent,
   retryFailedScans, startAbandonedCheckout, REQUEST_TOKEN_RE,
 } from './lib/auto-scan.js';
-import { sendCreditAlerts } from './lib/alerts.js';
+import { sendCreditAlerts, sendPaidScanAlert } from './lib/alerts.js';
 
 /** wrangler.jsonc triggers: this one is the half-hourly recovery + credit check; the other is daily. */
 const RECOVERY_CRON = '*/30 * * * *';
@@ -66,7 +66,8 @@ import { handleProof } from './lib/proof.js';
 import { handleZip } from './lib/zip.js';
 import { handleFixKit } from './lib/fix-kit-route.js';
 import { handlePlan } from './lib/plan-route.js';
-import { handleCheckout } from './lib/checkout.js';
+import { handleCheckout, SHOWCASE_TOKENS } from './lib/checkout.js';
+import { handleRefundEvent, REFUND_EVENTS } from './lib/refunds.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 
@@ -215,6 +216,10 @@ async function handleHealth(env) {
     stripeWebhookSecret: !!env.STRIPE_WEBHOOK_SECRET,
     stripeSecretKey: !!String(env.STRIPE_SECRET_KEY || '').trim(),
     stripeWebhookSecretTest: !!env.STRIPE_WEBHOOK_SECRET_TEST,
+    // live | test | unset, from the key's prefix (sk_live_/rk_live_ vs sk_test_/rk_test_). Never the key.
+    stripeMode: (() => { const k = String(env.STRIPE_SECRET_KEY || '').trim(); return !k ? 'unset' : /^[sr]k_live_/.test(k) ? 'live' : /^[sr]k_test_/.test(k) ? 'test' : 'unknown'; })(),
+    // Receipts, "audit ready", monthly emails and alerts all need it (src/lib/email.js).
+    resendKey: !!String(env.RESEND_API_KEY || '').trim(),
     // Scanner keys: present or not, never the values.
     // `claude` uses ANTHROPIC_API_KEY; config.js wins once it reports it itself.
     engineKeys: { claude: !!String(env.ANTHROPIC_API_KEY || '').trim(), ...enginesConfigured(env) },
@@ -303,7 +308,10 @@ async function handleGetReport(id, url, env, dryRun = false) {
   }
   try {
     report = await getReport(env, id, MOCK_REPORTS);
-    if (report && !isSample) {
+    // The showcase (homepage "See what you get: a real full report") is open to everyone, like the sample.
+    if (report && SHOWCASE_TOKENS.includes(id)) {
+      unlocked = true;
+    } else if (report && !isSample) {
       // If the check itself fails, show the locked page rather than an error.
       unlocked = await isReportUnlocked(env, id).catch((e) => {
         console.error('[report] unlock check failed', e);
@@ -342,7 +350,7 @@ async function handleGetReport(id, url, env, dryRun = false) {
   const onPlan = tiers.includes('be_the_answer');
   // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
   // The sample shows the Competitor Breakdown too, as a demo.
-  const body = reportBody(report, unlocked, { breakdown: isSample || tiers.some((t) => BREAKDOWN_TIERS.includes(t)) });
+  const body = reportBody(report, unlocked, { breakdown: isSample || SHOWCASE_TOKENS.includes(id) || tiers.some((t) => BREAKDOWN_TIERS.includes(t)) });
   // Be the Answer: the page links to the plan (and its Fix Kit) instead of offering the plan again.
   if (onPlan) body.plan = { token: planToken || id, town: !!planToken };
   // Paid, and the full scan (every question, every assistant) is still running: the page says so.
@@ -473,7 +481,8 @@ function handleLivePreviewRoute(request, url, env, ctx) {
 }
 
 // One-click unsubscribe. Every way in writes the same suppression row:
-//   GET  /unsubscribe?t=<report token>          link in the email footer
+//   GET  /unsubscribe?t=<report token>          link in the email footer: shows a confirm button, writes nothing
+//   POST /unsubscribe?t=<token>  confirm=1       that button
 //   POST /unsubscribe?t=<token>  List-Unsubscribe=One-Click   RFC 8058, from the mail client
 //   POST /unsubscribe  email=<address>            the form on the page, for people without a link
 //   GET  /stop?c=<code>, POST /stop  code=<code>  postcard opt-out (code printed on the card)
@@ -504,6 +513,10 @@ async function handleUnsubscribe(request, url, env) {
   };
 
   if (!token && !email && !code) return servePage(null);
+  // A GET (the link in an email or a typed /stop?c=) only shows a confirm button: mail scanners open
+  // every link in a message, and a paying customer's plan emails must not stop because one did.
+  // The button POSTs back to this URL; the RFC 8058 one-click POST from the mail client needs none.
+  if (request.method !== 'POST') return servePage(null);
 
   try {
     if (code && !token) {
@@ -558,6 +571,19 @@ async function handleStripeWebhook(request, env) {
     return Response.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
+  // A refund or lost dispute takes back what the payment unlocked (src/lib/refunds.js). 500 on a
+  // failed write so Stripe retries.
+  if (REFUND_EVENTS.includes(event.type)) {
+    try {
+      const result = await handleRefundEvent(env, event);
+      console.log('[webhook] refund', event.type, JSON.stringify(result));
+      return Response.json({ received: true });
+    } catch (e) {
+      console.error('[webhook] refund write failed', e);
+      return Response.json({ error: 'Refund write failed' }, { status: 500 });
+    }
+  }
+
   // A checkout counts once the money is in: card payments are 'paid' at
   // checkout.session.completed; delayed methods (bank debits) complete as
   // 'unpaid' and pay later via async_payment_succeeded. Ack everything else.
@@ -602,6 +628,10 @@ async function handleStripeWebhook(request, env) {
   // same token. Never fails the webhook (the payment is recorded); a miss shows in the log and /admin.
   const full = await startPaidScan(env, { token: reportToken, sessionId: session.id, tier: tierForSession(session) });
   console.log('[webhook] full scan', JSON.stringify(full));
+  // A paid audit that didn't start has no scans row, so no cron will retry it: tell a person.
+  if (!full.ok && !['tier', 'already'].includes(full.reason)) {
+    await sendPaidScanAlert(env, { token: reportToken, stage: 'start', reason: full.reason, key: session.id });
+  }
   // The receipt (src/lib/notify.js). Nothing is sent until RESEND_API_KEY is set.
   const addons = String(session.metadata?.addons || '').split(',').filter((a) => a === 'competitor_breakdown');
   const receipt = await notifyPayment(env, { token: reportToken, email: session.customer_details?.email, tier: tierForSession(session), addons, sessionId: session.id });

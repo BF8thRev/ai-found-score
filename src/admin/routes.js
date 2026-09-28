@@ -21,7 +21,7 @@ import { handleAdminPing, handleAdminScanStart, handleAdminScanStatus, startScan
 import { dryRunEnabled, isLocalRequest } from './dry-run.js';
 import { redact } from './redact.js';
 import { defaultScanEngines } from '../../scanner/config.js';
-import { runQueuedScan } from '../lib/auto-scan.js';
+import { runQueuedScan, startFullScan } from '../lib/auto-scan.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -108,7 +108,7 @@ export async function handleAdminRequest(request, url, env) {
     return redirect(url, '/admin', { 'Set-Cookie': clearSessionCookie() });
   }
 
-  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run') return notFound();
+  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/paid') return notFound();
 
   const who = await adminAuth(request, adminToken);
   if (!who) {
@@ -147,6 +147,19 @@ export async function handleAdminRequest(request, url, env) {
     if (!UUID_RE.test(id)) return render({ flash: { requests: { ok: false, text: 'Bad scan id.' } }, status: 422 });
     const r = await runQueuedScan(env, id);
     if (!r.ok) return render({ flash: { requests: { ok: false, text: redact(env, r.error, 300) } }, status: r.status || 500 });
+    return redirect(url, `/admin?started=${r.scanId}#run`);
+  }
+
+  // Re-run a paid audit by report token (a paid scan that failed twice, or never started). A fresh id
+  // each time (Workflow ids are single-use); refused while a paid scan for the token is running or done.
+  if (path === '/admin/scan/paid') {
+    if (method !== 'POST') return redirect(url, '/admin#run');
+    const f = await form(request);
+    const token = String(f?.get('token') || '').trim();
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(token)) return render({ flash: { run: { ok: false, text: 'Bad report token.' } }, status: 422 });
+    const r = await startFullScan(env, { token, trigger: 'paid', scanId: crypto.randomUUID(), notes: 'paid scan, re-run from /admin' })
+      .catch((e) => ({ ok: false, reason: String(e?.message || e) }));
+    if (!r.ok) return render({ flash: { run: { ok: false, text: r.reason === 'already' ? 'A paid scan for that report is running or already done.' : redact(env, r.reason, 300) } }, status: 409 });
     return redirect(url, `/admin?started=${r.scanId}#run`);
   }
 

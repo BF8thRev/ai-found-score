@@ -40,6 +40,14 @@
       <h1>You're unsubscribed.</h1>
       <p>No more mail or email from AI Found Score. Nothing else to do.</p>
     </div>
+    <div data-state="confirm" hidden>
+      <h1>Stop these emails?</h1>
+      <p>We'll stop sending emails about this report. Receipts for anything you buy still arrive.</p>
+      <form method="post" class="unsub-form" data-confirm-form>
+        <input type="hidden" name="confirm" value="1">
+        <button class="btn" type="submit">Stop these emails</button>
+      </form>
+    </div>
     <div data-state="form" hidden>
       <h1>Stop hearing from us</h1>
       <div data-form="mail">
@@ -75,7 +83,10 @@
   (function () {
     var q = new URLSearchParams(window.location.search);
     var s = q.get('status');
-    var state = s === 'ok' ? 'done' : s === 'error' || s === 'notfound' ? s : 'form';
+    // A link from an email (?t=) or a card (?c=) asks first: the button posts back to this same address.
+    var hasLink = !!(q.get('t') || q.get('c'));
+    var state = s === 'ok' ? 'done' : s === 'error' || s === 'notfound' ? s : hasLink ? 'confirm' : 'form';
+    if (state === 'confirm') document.querySelector('[data-confirm-form]').setAttribute('action', window.location.pathname + window.location.search);
     document.querySelector('#unsub-root [data-state="' + state + '"]').hidden = false;
     // /stop is the address printed on postcards and leads with the code form;
     // /unsubscribe (email footers) leads with the email form.
@@ -121,6 +132,6 @@
 </footer>
 
 <script src="/js/config.js?v=12"></script>
-<script src="/js/analytics.js?v=8"></script>
+<script src="/js/analytics.js?v=9"></script>
 </body>
 </html>

@@ -377,3 +377,45 @@ export async function noteBillingError(env, engine, errorText, deps = {}) {
     return { alerted: false, reason: String(err?.message || err).slice(0, 200) };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Paid scan alerts: a buyer has paid and their full audit didn't get made. The report page tells them
+// it's being looked at; this tells a person to look (Run now in /admin makes a fresh scan).
+// ---------------------------------------------------------------------------
+
+/** The alert email for a paid scan that didn't start or didn't finish. Pure. */
+export function paidScanAlertEmail(env, { token, stage, reason }) {
+  const admin = `${siteUrl(env)}/admin#run`;
+  const report = token ? `${siteUrl(env)}/report/${encodeURIComponent(token)}` : '(no report token)';
+  const what = stage === 'start' ? 'didn’t start' : 'failed';
+  const subject = `Paid audit ${what}: a customer is waiting`;
+  const text = [
+    `A paid scan ${what}. The customer has paid and is waiting for their full audit.`,
+    `Report: ${report}`,
+    `Reason: ${reason || 'unknown'}`,
+    stage === 'start'
+      ? 'Nothing will retry this on its own. In /admin, "Re-run a paid audit" with this report\'s token.'
+      : 'A failed paid scan is retried once by the 30-minute cron; if this was the retry, use "Re-run a paid audit" in /admin with this report\'s token.',
+    `Admin: ${admin}`,
+  ].join('\n\n');
+  const html = `<!doctype html><html><body style="font-family:sans-serif"><p><strong>A paid scan ${escHtml(what)}.</strong> The customer has paid and is waiting for their full audit.</p>
+<p>Report: <a href="${escHtml(report)}">${escHtml(report)}</a><br>Reason: ${escHtml(reason || 'unknown')}</p>
+<p>${stage === 'start' ? 'Nothing will retry this on its own. In /admin, use <strong>Re-run a paid audit</strong> with this report’s token.' : 'A failed paid scan is retried once by the 30-minute cron; if this was the retry, use <strong>Re-run a paid audit</strong> in /admin with this report’s token.'}</p>
+<p><a href="${escHtml(admin)}">Open /admin</a></p></body></html>`;
+  return { subject, text, html };
+}
+
+/** Email ALERT_EMAILS that a paid scan didn't start (stage 'start') or failed (stage 'scan'). Never throws. */
+export async function sendPaidScanAlert(env, { token, stage, reason, key }, deps = {}) {
+  try {
+    const mail = paidScanAlertEmail(env, { token, stage, reason });
+    const send = deps.sendEmail || sendEmail;
+    const results = await Promise.all(alertEmails(env).map((to) => send(env, {
+      to, ...mail, transactional: true, idempotencyKey: `paid-scan-alert:${stage}:${key || token}:${to}`,
+    }, { fetchImpl: deps.fetchImpl || ((...a) => fetch(...a)) }).catch((e) => ({ ok: false, reason: String(e?.message || e) }))));
+    return { sent: results.filter((r) => r?.ok).length };
+  } catch (e) {
+    console.error('[alerts] paid scan alert failed', e);
+    return { sent: 0 };
+  }
+}

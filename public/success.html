@@ -13,6 +13,22 @@
   <link rel="stylesheet" href="/css/styles.css?v=10">
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
   <!-- Google Tag Manager -->
+  <script>
+    // The report link (?t=, src/lib/checkout.js success_url) is read here and taken out of the address
+    // before analytics loads, so the private link isn't sent with the page view.
+    (function () {
+      try {
+        var u = new URL(location.href);
+        var t = u.searchParams.get('t');
+        if (t) {
+          window.__afsSuccess = { token: t, prepay: u.searchParams.get('prepay') === '1' };
+          u.searchParams.delete('t');
+          u.searchParams.delete('prepay');
+          history.replaceState(null, '', u.pathname + u.search + u.hash);
+        }
+      } catch (e) {}
+    })();
+  </script>
   <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-K58KFVJC');</script>
   <!-- End Google Tag Manager -->
 </head>
@@ -64,6 +80,8 @@
     };
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem('afs_checkout') || 'null'); } catch (e) {}
+    // The link in the redirect wins (it's this checkout's); localStorage is the fallback for old links.
+    if (window.__afsSuccess) saved = { tier: saved && saved.tier, token: window.__afsSuccess.token, prepay: window.__afsSuccess.prepay };
     var tier = new URLSearchParams(location.search).get('tier') || (saved && saved.tier) || '';
     if (TIER_LABEL[tier]) {
       var plan = document.getElementById('success-plan');
@@ -150,6 +168,6 @@
 </footer>
 
 <script src="/js/config.js?v=12"></script>
-<script src="/js/analytics.js?v=8"></script>
+<script src="/js/analytics.js?v=9"></script>
 </body>
 </html>

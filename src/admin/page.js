@@ -171,6 +171,12 @@ function runSection(d, { watch = [], engineIds, flash, activeIds = ACTIVE_ENGINE
     <div class="full"><button class="primary" type="submit">Start scan</button>
       <span class="small" id="run-estimate">Estimated cost: ${usd(est.total)} (typical usage)</span></div>
   </form>
+  <h3>Re-run a paid audit</h3>
+  <p class="sub">For a “Paid audit failed / didn’t start” alert: the full scan for that report, under the same link. Refused while one is running or already done.</p>
+  <form class="grid" method="post" action="/admin/scan/paid">
+    <label>Report token<input type="text" name="token" required pattern="[A-Za-z0-9_-]{6,64}" maxlength="64" placeholder="from the /report/… link"></label>
+    <div class="full"><button class="primary" type="submit">Re-run paid audit</button></div>
+  </form>
 </section>`;
 }
 
@@ -252,7 +258,7 @@ function refundsSection(d, errors) {
   const rows = d.refunds || [];
   return `<section id="refunds">
   <h2>Refund requests</h2>
-  <p class="sub">“If we can’t show you 3 things to fix, it’s free.” Check the report, refund the payment in Stripe, then set the row’s status (open → refunded or declined) in Supabase.</p>
+  <p class="sub">Check the report, then refund the payment in Stripe. A full refund locks the report again and marks this row refunded on its own (src/lib/refunds.js); set declined by hand in Supabase.</p>
   ${sectionError(errors, 'refunds')}
   ${rows.length ? `<div class="tw"><table>
     <thead><tr><th>When</th><th>Email</th><th>Reason</th><th>Status</th><th>Report</th><th>Payment</th></tr></thead>

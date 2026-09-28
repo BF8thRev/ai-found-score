@@ -169,7 +169,11 @@ test('checkSpeed: no key → no call; PAGESPEED_API_KEY first, else the Places k
   assert.equal(new URL(calls[1]).searchParams.get('key'), 'places');
   assert.equal(await checkSpeed('https://acme.com/', { PAGESPEED_API_KEY: 'k' }, { fetchImpl: async () => new Response('forbidden', { status: 403 }) }), null);
   // A slow PageSpeed run is skipped at the timeout, never waited on forever.
-  const hang = (url, init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
+  // AbortSignal.timeout's timer doesn't keep Node's event loop alive; a ref'd timer does until the abort.
+  const hang = (url, init) => new Promise((_, reject) => {
+    const alive = setInterval(() => {}, 1000);
+    init.signal.addEventListener('abort', () => { clearInterval(alive); reject(init.signal.reason); });
+  });
   assert.equal(await checkSpeed('https://acme.com/', { PAGESPEED_API_KEY: 'k' }, { fetchImpl: hang, timeoutMs: 20 }), null);
   assert.equal(resolveKeys({ PSI_API_KEY: 'x' }).pagespeedKey, 'x');
 });

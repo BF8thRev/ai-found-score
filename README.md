@@ -88,9 +88,19 @@ Apply [`supabase/v8_be_the_answer.sql`](supabase/v8_be_the_answer.sql) after `v7
 - **Competitor Breakdown** (`buildCompetitorBreakdown`, `shared/report-v2.js`): the top 3 competitors side by side with the owner, built at serve time from the report's own data. Served on a report paid for `competitor_breakdown` or `be_the_answer` (and on the sample); never on a locked report.
 - **Fix Kit zip** for a plan also carries `directory-checklist.txt` and `google-posts.txt`.
 
-## Refund requests
+## Refunds
 
-`refund_requests` (`supabase/v4_ladder.sql`; id, report_token, email, reason, created_at, status open | refunded | declined; service key only) backs the X-Ray promise "If we can't show you 3 things to fix, it's free." There is no public form yet. `/admin` lists the rows with a "Find in Stripe" link (dashboard search by email, else report token). Refunds are made by a person in Stripe; then set the row's status in Supabase.
+The promises are on `/refunds` (`public/refunds.html`): $49 audit, fewer than 3 business-specific problems → $49 back (30 days); $25 Competitor Breakdown, not delivered as described → $25 back (30 days); Be the Answer, not useful in the first 60 days → full refund. Owners ask by replying to their receipt or emailing us; a person refunds in the Stripe dashboard.
+
+The webhook then does the rest (`src/lib/refunds.js`, needs `supabase/v9_refunds.sql` and the `charge.refunded` / `charge.dispute.closed` events):
+
+- **Full refund or lost dispute:** the payment gets `revoked_at`. It no longer unlocks the report, the Fix Kit or the Be the Answer plan and its towns, no 30-day re-check or monthly scan starts for it, it no longer counts as credit at checkout, and the token's open `refund_requests` rows are marked `refunded`.
+- **Partial refund of exactly $25** on a checkout that included the Competitor Breakdown: the add-on is removed, the audit stays.
+- **Any other partial refund:** recorded (`refunded_cents`), access kept.
+- **Money:** `v_money` counts a refund as money out on the day it was made; `channel_funnel` revenue is net of refunds.
+- A refund for a payment recorded before v9 (no `stripe_payment_intent`) is only logged: set `revoked_at` on that row by hand.
+
+`refund_requests` (`supabase/v4_ladder.sql`; id, report_token, email, reason, created_at, status open | refunded | declined; service key only) has no public form. `/admin` lists the rows with a "Find in Stripe" link (dashboard search by email, else report token).
 
 ## Homepage real AI answer card (showcase)
 
@@ -155,7 +165,7 @@ npm test           # scanner, extractor and outreach tests (node --test) + sampl
 | `SUPABASE_URL` | `src/lib/db.js` | In `wrangler.jsonc` `vars` (not secret). Don't set it in the dashboard: `wrangler deploy` replaces dashboard Text vars with the config file |
 | `SUPABASE_ANON_KEY` | `src/lib/db.js` | The project's **publishable** key (`sb_publishable_...`, Supabase → Project Settings → API Keys). Add as a Worker secret |
 | `STRIPE_SECRET_KEY` | `POST /api/checkout` (creates Checkout Sessions) | Worker secret. A restricted key with write access to Checkout Sessions is enough. `sk_test_`/`rk_test_` for sandbox |
-| `STRIPE_WEBHOOK_SECRET` | `POST /api/stripe-webhook` | **Not yet available — add when the Stripe webhook is created** |
+| `STRIPE_WEBHOOK_SECRET` | `POST /api/stripe-webhook` | **Required before taking payments.** Worker secret: the live endpoint's signing secret (`whsec_...`). Without it every webhook is rejected and no payment unlocks anything |
 | `ADMIN_TOKEN` | `/api/admin/*` | Long random string, Worker secret. Unset = admin routes return 404 |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `PERPLEXITY_API_KEY`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD` | Scanner engines + extractor (`scanner/config.js`, which also accepts common alternate names) | Worker secrets |
 | `SUPABASE_SERVICE_KEY` | Scanner writes (`scan_raw`, `scan_results`, `scans`, `scan_usage`) and every `/admin` read | Worker secret. Never sent to the browser |
@@ -165,6 +175,16 @@ npm test           # scanner, extractor and outreach tests (node --test) + sampl
 | `STRIPE_WEBHOOK_SECRET_TEST` | `POST /api/stripe-webhook` | Optional. Signing secret of the Stripe **sandbox** webhook; accepted only for `livemode: false` events. Sandbox payments are stored with `payments.livemode = false` and excluded from `channel_funnel`. Delete once live testing is done |
 | `TURNSTILE_SITE_KEY` | Free-report form bot check (`src/lib/turnstile.js`) | Public. In `wrangler.jsonc` `vars`; the Worker writes it into the homepage. See **Bot protection** |
 | `TURNSTILE_SECRET_KEY` | `POST /api/request` Siteverify | Worker secret: `npx wrangler secret put TURNSTILE_SECRET_KEY`. See **Bot protection** |
+| `RESEND_API_KEY` | Every email: receipts, "report ready", re-checks, monthly, credit alerts (`src/lib/email.js`) | Worker secret. **Required before taking payments** (no key = no receipts). The sending domain `mail.aifoundscore.com` must be verified in Resend |
+| `EMAIL_FROM` | Sender of every email | Optional plain var; default `AI Found Score <reports@mail.aifoundscore.com>` |
+| `SITE_URL` | Links in emails; Stripe's success/cancel URLs | Optional plain var; default `https://aifoundscore.com` (checkout falls back to the request's origin) |
+| `GOOGLE_PLACES_API_KEY` | Google listing, reviews and competitor reviews in the scan (`scanner/owner-checks.js`) | Worker secret. Unset = those checks are skipped |
+| `PAGESPEED_API_KEY` | Mobile speed score | Optional; falls back to the Places key (enable the PageSpeed Insights API on its project) |
+| `ALERT_EMAILS`, `CREDIT_BUDGET_*` | Engine credit alerts (see **Credit alerts**) | Plain vars in `wrangler.jsonc` |
+| `RECHECK_SCAN` | `off` stops the daily 30-day re-checks and Be the Answer monthly scans | Optional plain var; set `off` only in previews |
+| `LIVE_PREVIEW_DAILY_USD` | Global daily spend cap on the homepage live answer | Optional; default 1.00, 0 turns previews off |
+| `PROOF_MIN_SCANS` | Scans needed before the homepage shows its proof numbers | Optional; default 20 |
+| `OPENAI_MODEL`, `GEMINI_MODEL`, `PERPLEXITY_MODEL`, `CLAUDE_MODEL`, `EXTRACT_MODEL`, `EXTRACT_EFFORT` | Model overrides (`scanner/config.js` `DEFAULT_MODELS`) | Optional |
 
 For local dev, create `.dev.vars` (git-ignored):
 
@@ -185,7 +205,7 @@ Owner steps:
 1. Cloudflare dashboard → **Turnstile** → **Add widget**. Hostnames `aifoundscore.com` and `www.aifoundscore.com` (add `localhost` only if you want to test the real widget locally). Widget mode **Managed**.
 2. Copy the **site key** into `TURNSTILE_SITE_KEY` in `wrangler.jsonc` `vars` (or send it to whoever deploys). It is public.
 3. Store the **secret key** as a Worker secret (it never goes in a file): `npx wrangler secret put TURNSTILE_SECRET_KEY`
-4. Deploy, then check `https://aifoundscore.com/api/health` shows `"turnstile": true`.
+4. Deploy, then check `https://aifoundscore.com/api/health` shows `"turnstile": true`. The same page shows every other setting as true/false (never the values): `stripeMode` should read `live`, and `stripeWebhookSecret`, `supabaseServiceKey`, `resendKey` and `adminToken` should be `true`.
 
 Local dev uses Cloudflare's test keys (always pass), without touching `.dev.vars`:
 
@@ -201,16 +221,7 @@ Two ways: manual (`npm run deploy`) or auto-deploy from GitHub (recommended — 
 
 ### Push to GitHub
 
-The project is already a git repo with an initial commit. Nothing has been pushed.
-
-```bash
-cd ai-found-score-site
-# 1. Create an empty repo on github.com (e.g. ai-found-score-site) — do NOT add a README/license there
-# 2. Then:
-git remote add origin https://github.com/<your-username>/ai-found-score-site.git
-git branch -M master
-git push -u origin master
-```
+The code lives at `github.com/BF8thRev/ai-found-score`.
 
 ### Connect Cloudflare for auto-deploys
 
@@ -219,7 +230,7 @@ git push -u origin master
 3. Project name: `ai-found-score`. Framework preset: **None**.
 4. Build command: leave empty (no build step). Deploy command: `npx wrangler deploy`.
 5. Root directory: the repo root (this folder is the repo root).
-6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above (`SUPABASE_ANON_KEY`, `STRIPE_WEBHOOK_SECRET`). `SUPABASE_URL` lives in `wrangler.jsonc`. Secrets set here are available to every deployment.
+6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above: `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `ADMIN_TOKEN`, `GOOGLE_PLACES_API_KEY` and the engine keys. `SUPABASE_URL` lives in `wrangler.jsonc`. Secrets set here are available to every deployment.
 7. Save — Cloudflare deploys on every push to `master` from now on.
 
 Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` first).
@@ -227,14 +238,14 @@ Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` 
 ### After the first deploy
 
 1. In the Cloudflare dashboard, add a custom domain (e.g. `aifoundscore.com`) to the Worker.
-2. In Stripe dashboard → Developers → Webhooks, create an endpoint pointing at `https://<your-domain>/api/stripe-webhook`, subscribe to `checkout.session.completed` and `checkout.session.async_payment_succeeded`, and copy the signing secret into the `STRIPE_WEBHOOK_SECRET` secret.
-3. Replace the `#` placeholders in `public/js/config.js` with the real Stripe Payment Links and push (or redeploy).
+2. In Stripe dashboard → Developers → Webhooks, create an endpoint pointing at `https://<your-domain>/api/stripe-webhook`, subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` and `charge.dispute.closed`, and copy the signing secret into the `STRIPE_WEBHOOK_SECRET` secret.
+3. Make one real $49 purchase end to end (report unlocks, receipt arrives, full scan starts), then refund it in Stripe and check the report locks again.
 
 ## Wiring checklist (the things filled in later)
 
-1. **Supabase.** Run `supabase/setup.sql`, then `supabase/scan_v2.sql`, then `supabase/admin_v3.sql`, then `supabase/v4_ladder.sql`, then `supabase/showcase_v5.sql`. Add `SUPABASE_ANON_KEY` as a Worker secret.
-2. **Stripe payment links.** Paste the four real links into `STRIPE_LINKS` in `public/js/config.js` (keys: `snapshot`, `before_after`, `full_year`, `listing_fix`). On each Payment Link in the Stripe dashboard, set the after-payment redirect to `https://aifoundscore.com/success?tier=<key>&session_id={CHECKOUT_SESSION_ID}`. No metadata is needed: the webhook takes the tier from the amount paid (`TIER_BY_CENTS` in `src/lib/stripe.js`: 4900 → `xray`, the $49 AI Visibility X-Ray; the retired $29/$59/$69/$199 keys stay so an old payment still records; update it if prices change). Any recorded payment for a report token unlocks that whole report, X-Ray sections included. Business and arm come from the report token: the report page appends `client_reference_id=<report token>` and the webhook looks the rest up. Report tokens must be letters, digits, `-` or `_` (Stripe's rule for `client_reference_id`).
-3. **Stripe webhook.** Endpoint `https://aifoundscore.com/api/stripe-webhook`, events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Store its signing secret (`whsec_...`) as the runtime secret `STRIPE_WEBHOOK_SECRET`. Only paid checkouts are recorded.
+1. **Supabase.** Run, in this order: `setup.sql`, `scan_v2.sql`, `admin_v3.sql`, `v4_ladder.sql`, `v5_paid_scan.sql`, `showcase_v5.sql`, `v6_fix_kit.sql`, `v7_email.sql`, `v8_be_the_answer.sql`, `v9_refunds.sql` (all in `supabase/`, all safe to re-run). `v9_refunds.sql` must be applied **before** deploying a Worker that includes the refund handling: every payments read filters on its `revoked_at` column. Add `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_KEY` as Worker secrets.
+2. **Stripe checkout.** Checkout is our own (`POST /api/checkout`, `src/lib/checkout.js`, Stripe Checkout Sessions in payment mode). Add `STRIPE_SECRET_KEY` as a Worker secret; prices live in `PRICES` in `src/lib/checkout.js`. Nothing goes in `public/js/config.js` except which plans are on sale (`OFFERED_TIERS`).
+3. **Stripe webhook.** Endpoint `https://aifoundscore.com/api/stripe-webhook`, events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` and `charge.dispute.closed`. Store its signing secret (`whsec_...`) as the runtime secret `STRIPE_WEBHOOK_SECRET`. Only paid checkouts are recorded; a full refund or a lost dispute takes access back (see **Refunds**).
 4. **Postcards.** QR code and printed URL both point at `https://aifoundscore.com/r/<short_code>`; opt-out line: `aifoundscore.com/stop` + the same code.
 
 ## Notes
@@ -242,4 +253,4 @@ Manual deploy still works anytime: `npm run deploy` (needs `npx wrangler login` 
 - Report pages are data-driven: `public/js/report.js` renders whatever `GET /api/report/[id]` returns. The shape is documented in `DATA_MODEL.md`.
 - `GET /api/report/[id]` returns 404 JSON for unknown ids; the page shows a friendly "report not found" message. Real reports are `Cache-Control: private, no-store` because they change the moment they're paid for.
 - The webhook returns 400 on bad signatures (Stripe won’t retry) and 500 on payment-write failures (Stripe will retry).
-- Contact email used in footers: `hello@aifoundscore.com` — confirm/create this mailbox before launch.
+- Contact email used in footers: `hello@aifoundscore.com` — confirm this mailbox receives mail before launch (email replies go to `hello@getaifoundscore.com`, `src/lib/email.js` `REPLY_TO`).

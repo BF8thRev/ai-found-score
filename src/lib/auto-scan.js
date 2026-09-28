@@ -134,8 +134,14 @@ export function statusFromRows(rows) {
   if (!list.length) return null;
   const running = list.filter((r) => r.status === 'running');
   if (running.length) return running.some((r) => r.trigger === 'paid') ? 'paid' : 'running';
+  // Paid for: the paid scan decides, not the free request row left queued on the way to checkout.
+  // A failed paid attempt is retried once by the cron (still 'paid'); after MAX_ATTEMPTS it's 'failed'.
+  const paid = list.filter((r) => r.trigger === 'paid');
+  if (paid.length) {
+    if (paid.some((r) => r.status === 'queued' || (r.status === 'done' && r.report_valid === true && !storeFailed(r)))) return 'paid';
+    return paid.length >= MAX_ATTEMPTS ? 'failed' : 'paid';
+  }
   if (list.some((r) => r.status === 'queued')) return 'queued';
-  const storeFailed = (r) => (Array.isArray(r.errors) ? r.errors : []).some((e) => e && e.kind === 'store');
   // Done and valid: the report row is being written (or the read raced it).
   if (list.some((r) => r.status === 'done' && r.report_valid === true && !storeFailed(r))) return 'running';
   return list.length >= MAX_ATTEMPTS ? 'failed' : 'queued';
@@ -430,7 +436,9 @@ export const ABANDONED_CHECKOUT_MINUTES = 60;
 /** Most scans started per cron run. */
 export const RETRY_MAX_PER_RUN = 10;
 
-const attemptFailed = (r) => r.status === 'failed' || (r.status === 'done' && r.report_valid === false);
+const storeFailed = (r) => (Array.isArray(r.errors) ? r.errors : []).some((e) => e && e.kind === 'store');
+/** An attempt that produced no usable report: failed, report failed the guardrails, or not stored. */
+const attemptFailed = (r) => r.status === 'failed' || (r.status === 'done' && (r.report_valid === false || storeFailed(r)));
 
 /**
  * What the cron should start, from recent scans rows (pure). A token is picked when:
@@ -451,9 +459,10 @@ export function pickRecoveries(rows, { now = Date.now(), autoScan = false } = {}
   }
   const out = [];
   for (const [token, list] of byToken) {
-    const busy = list.some((r) => r.status === 'running' || (r.status === 'done' && r.report_valid === true));
-    if (busy) continue;
+    // Paid for: only the paid rows decide (the free report that came first is done, not busy).
     const paid = list.filter((r) => r.trigger === 'paid');
+    const busy = (paid.length ? paid : list).some((r) => r.status === 'running' || (r.status === 'done' && r.report_valid === true && !storeFailed(r)));
+    if (busy) continue;
     if (paid.length) {
       if (paid.length < MAX_ATTEMPTS && paid.every(attemptFailed)) out.push({ kind: 'paid-retry', id: paid[0].id, token });
       continue;
@@ -480,7 +489,7 @@ export async function retryFailedScans(env, { now = Date.now(), fetchImpl = (...
   try {
     if (!env.SCAN_WORKFLOW || !canStore(env)) return { ok: false, reason: 'not configured' };
     const since = new Date(now - RETRY_WINDOW_HOURS * 3600_000).toISOString();
-    const rows = await readRows(env, `trigger=in.(request,paid)&report_token=not.is.null&created_at=gte.${encodeURIComponent(since)}&select=id,report_token,trigger,status,report_valid,notes,created_at&order=created_at.desc&limit=1000`, fetchImpl);
+    const rows = await readRows(env, `trigger=in.(request,paid)&report_token=not.is.null&created_at=gte.${encodeURIComponent(since)}&select=id,report_token,trigger,status,report_valid,errors,notes,created_at&order=created_at.desc&limit=1000`, fetchImpl);
     const picks = pickRecoveries(rows, { now, autoScan: autoScanOn(env) });
     const results = [];
     for (const p of picks) {
@@ -506,7 +515,7 @@ export async function retryFailedScans(env, { now = Date.now(), fetchImpl = (...
 export async function startAbandonedCheckout(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
   try {
     if (!autoScanOn(env) || !REQUEST_TOKEN_RE.test(String(token || ''))) return { ok: false, reason: 'off' };
-    const rows = await readRows(env, `report_token=eq.${encodeURIComponent(token)}&select=id,report_token,trigger,status,report_valid,notes,created_at&order=created_at.desc&limit=10`, fetchImpl);
+    const rows = await readRows(env, `report_token=eq.${encodeURIComponent(token)}&select=id,report_token,trigger,status,report_valid,errors,notes,created_at&order=created_at.desc&limit=10`, fetchImpl);
     const pick = pickRecoveries(rows, { now: Infinity, autoScan: true }).find((p) => p.kind === 'abandoned');
     if (!pick) return { ok: false, reason: 'nothing to start' };
     return await runQueuedScan(env, pick.id, { fetchImpl });
@@ -565,7 +574,7 @@ export async function startPaidScan(env, { token, sessionId, tier }, { fetchImpl
  * `trigger` 'paid' (after payment) or 'recheck' (30 days later); one of each per token. Throws on
  * a store failure; a workflow that won't start marks the row failed and returns { ok: false }.
  */
-async function startFullScan(env, { token, trigger, scanId, notes, business: given = null }, { fetchImpl }) {
+export async function startFullScan(env, { token, trigger, scanId, notes, business: given = null }, { fetchImpl = (...a) => fetch(...a) } = {}) {
   if (!env.SCAN_WORKFLOW) return { ok: false, reason: 'no-workflow' };
   if (!canStore(env)) return { ok: false, reason: 'no-store' };
   // 'paid' and 'recheck' run once per token; a 'monthly' scan once per scan id (one per month).
@@ -573,7 +582,8 @@ async function startFullScan(env, { token, trigger, scanId, notes, business: giv
     if ((await readRows(env, `id=eq.${scanId}&select=id`, fetchImpl)).length) return { ok: false, reason: 'already' };
   } else {
     const rows = await readByToken(env, token, { fetchImpl });
-    if (rows.some((r) => r.trigger === trigger && r.status !== 'failed')) return { ok: false, reason: 'already' };
+    // A failed attempt (failed, report failed the guardrails, or not stored) may be tried again.
+    if (rows.some((r) => r.trigger === trigger && !attemptFailed(r))) return { ok: false, reason: 'already' };
   }
   const engines = activeEngines(env);
   if (!engines.length) return { ok: false, reason: 'no-engine' };
@@ -614,7 +624,7 @@ export function readDuePayments(env, nowMs, { fetchImpl = fetch } = {}) {
   const until = new Date(nowMs - RECHECK_DAYS * 86400_000).toISOString();
   const since = new Date(nowMs - (RECHECK_DAYS + RECHECK_WINDOW_DAYS) * 86400_000).toISOString();
   const { base, headers } = supa(env);
-  const q = `tier=in.(${FULL_SCAN_TIERS.join(',')})&livemode=eq.true&report_token=not.is.null&paid_at=lte.${encodeURIComponent(until)}&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=200`;
+  const q = `tier=in.(${FULL_SCAN_TIERS.join(',')})&livemode=eq.true&revoked_at=is.null&report_token=not.is.null&paid_at=lte.${encodeURIComponent(until)}&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=200`;
   return fetchImpl(`${base}/payments?${q}`, { headers, signal: AbortSignal.timeout(8000) }).then(async (res) => {
     if (!res.ok) throw new Error(`payments read failed: ${res.status}`);
     return res.json();
@@ -642,7 +652,12 @@ export async function startDueRechecks(env, { now = Date.now(), fetchImpl = (...
   for (const token of tokens) {
     if (out.started.length >= RECHECK_MAX_PER_RUN) { skip('max-per-run'); continue; }
     try {
-      const r = await startFullScan(env, { token, trigger: 'recheck', scanId: await stableUuid(`recheck-scan:${token}`), notes: '30-day re-check' }, { fetchImpl });
+      // Workflow ids are single-use: a retry after a failed re-check needs a new one. MAX_ATTEMPTS in all.
+      const tries = (await readByToken(env, token, { fetchImpl })).filter((r) => r.trigger === 'recheck');
+      if (tries.length >= MAX_ATTEMPTS && tries.every(attemptFailed)) { skip('gave-up'); continue; }
+      const n = tries.filter(attemptFailed).length + 1;
+      const scanId = await stableUuid(n === 1 ? `recheck-scan:${token}` : `recheck-scan:${token}:${n}`);
+      const r = await startFullScan(env, { token, trigger: 'recheck', scanId, notes: '30-day re-check' }, { fetchImpl });
       if (r.ok) out.started.push(token);
       else skip(r.reason.split(':')[0]);
     } catch (e) {
@@ -689,7 +704,7 @@ export function planMonthDue(paidAtMs, nowMs) {
 export function readPlanPayments(env, nowMs, { fetchImpl = fetch } = {}) {
   const since = new Date(nowMs - ((PLAN_MONTHS * MONTH_DAYS) + RECHECK_WINDOW_DAYS) * 86400_000).toISOString();
   const { base, headers } = supa(env);
-  const q = `or=(tier.eq.${PLAN_TIER},amount_cents.eq.49900)&livemode=eq.true&report_token=not.is.null&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=500`;
+  const q = `or=(tier.eq.${PLAN_TIER},amount_cents.eq.49900)&livemode=eq.true&revoked_at=is.null&report_token=not.is.null&paid_at=gte.${encodeURIComponent(since)}&select=report_token,paid_at&order=paid_at.asc&limit=500`;
   return fetchImpl(`${base}/payments?${q}`, { headers, signal: AbortSignal.timeout(8000) }).then(async (res) => {
     if (!res.ok) throw new Error(`payments read failed: ${res.status}`);
     return res.json();

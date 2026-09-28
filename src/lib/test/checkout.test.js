@@ -54,7 +54,7 @@ test('session form: tier and add-ons in metadata, the report token as client_ref
   assert.equal(f.get('metadata[addons]'), 'competitor_breakdown');
   assert.equal(f.get('line_items[0][price_data][unit_amount]'), '4900');
   assert.equal(f.get('line_items[1][price_data][unit_amount]'), '2500');
-  assert.equal(f.get('success_url'), 'https://aifoundscore.com/success?tier=xray&session_id={CHECKOUT_SESSION_ID}');
+  assert.equal(f.get('success_url'), 'https://aifoundscore.com/success?tier=xray&t=real_tok&v=74&session_id={CHECKOUT_SESSION_ID}');
   // Trust on Stripe's own page: the promise under the Pay button, our image on each item.
   assert.match(f.get('custom_text[submit][message]'), /Your \$49 back/);
   assert.ok(f.get('custom_text[submit][message]').length <= 1200);
@@ -113,4 +113,16 @@ test('handleCheckout: prepay only for a token with a waiting request scan', asyn
   assert.equal(ok.status, 200);
   const none = await handleCheckout(req({ token: 'tokABCDEFGHIJKLMNOPQRS', tier: 'xray', prepay: true }), u, env, { ...base, pendingStatus: async () => null });
   assert.equal(none.status, 404);
+});
+
+test('priceCheckout: no competitor named often enough → no Competitor Breakdown, alone or as the add-on', () => {
+  const alone = { ...real, entities: (real.entities || []).filter((e) => e.isYou) };
+  const r = priceCheckout({ report: alone, payments: [pay('xray', 4900)], tier: 'competitor_breakdown' });
+  assert.equal(r.ok, false, JSON.stringify(r));
+  assert.equal(r.status, 409);
+  assert.match(r.error, /no Competitor Breakdown/);
+  if (xrayOffered(alone)) {
+    assert.match(priceCheckout({ report: alone, tier: 'xray', addons: ['competitor_breakdown'] }).error, /no Competitor Breakdown/);
+    assert.equal(priceCheckout({ report: alone, tier: 'xray' }).ok, true, 'the audit alone is still sold');
+  }
 });
