@@ -304,7 +304,7 @@
       }).then(function (res) {
         var token = reportToken(res);
         if (!res.ok || !token) {
-          fail((res.body && res.body.error ? esc(res.body.error) + ' ' : 'We couldn\'t start checkout just now. ') + 'Try again in a minute, or email ' + HELLO + '.');
+          fail(res.body && res.body.error ? esc(res.body.error) : 'We couldn\'t start checkout just now. Try again in a minute, or email ' + HELLO + '.');
           return;
         }
         push({ event: 'report_request', trade: data.trade, offer: 'full_audit' });
