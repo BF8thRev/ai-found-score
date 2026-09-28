@@ -69,3 +69,58 @@
 
 /* ?offer=… highlights that plan's buy button. */
 .r2-offer-focus { outline: 3px solid var(--amber); outline-offset: 4px; }
+
+
+/* Offer band (report.js offerV2): findings first, what $49 buys, a price card, the one email box. */
+.offer-band { margin: 56px 0 48px; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(180deg, #F4F7FB 0%, #FFFFFF 100%); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.ob-head { max-width: 640px; }
+.ob-kicker { margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--blue); }
+.offer-band h2 { font-size: clamp(26px, 3.4vw, 34px); line-height: 1.15; margin: 0 0 10px; color: var(--navy); }
+.ob-lede { margin: 0; font-size: 17px; color: var(--ink); }
+.ob-found { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
+.ob-found li { position: relative; padding: 12px 14px 12px 40px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 15.5px; color: var(--ink); }
+.ob-found li::before { content: '!'; position: absolute; left: 12px; top: 12px; width: 20px; height: 20px; border-radius: 50%; font-size: 13px; font-weight: 800; line-height: 20px; text-align: center; color: #fff; background: var(--amber); }
+.ob-found li.high::before { background: var(--red); }
+.ob-found q { font-weight: 700; }
+.ob-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; margin-top: 26px; align-items: start; }
+.ob-gets h3 { margin: 4px 0 12px; font-size: 18px; color: var(--navy); }
+.ob-buy { background: #fff; border: 2px solid var(--blue); border-radius: 16px; padding: 22px 20px 18px; text-align: center; box-shadow: var(--shadow-lg); }
+.ob-price { margin: 0; font-size: 16px; font-weight: 700; color: var(--muted); }
+.ob-price span { font-size: 48px; font-weight: 800; color: var(--navy); letter-spacing: -.02em; vertical-align: -4px; margin-right: 4px; }
+.ob-price-note { margin: 2px 0 14px; font-size: 14px; color: var(--muted); }
+.ob-addon { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 12px; margin: 0 0 14px; border: 1px dashed #C9D4E3; border-radius: 10px; cursor: pointer; font-size: 14px; color: var(--muted); }
+.ob-addon:has(input:checked) { border-style: solid; border-color: var(--blue); background: #EEF4FE; }
+.ob-addon input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--blue); }
+.ob-addon b { display: block; color: var(--ink); font-size: 15px; }
+.ob-addon em { font-style: normal; color: var(--blue); }
+.ob-btn { display: block; width: 100%; box-sizing: border-box; text-align: center; }
+.ob-secure { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--navy); }
+.ob-secure svg { width: 15px; height: 15px; color: var(--green); flex: none; }
+.ob-buy .trust-cards { margin-top: 8px; }
+.ob-promise { display: flex; gap: 10px; align-items: flex-start; text-align: left; margin-top: 16px; padding: 12px; border-radius: 10px; background: #E9F6EE; font-size: 14px; color: var(--ink); }
+.ob-promise svg { width: 22px; height: 22px; color: var(--green); flex: none; }
+.ob-promise p { margin: 0; }
+.ob-next { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+.ob-next summary { cursor: pointer; font-weight: 700; color: var(--navy); font-size: 15px; }
+.ob-next .trust-next { margin: 12px 0 0; max-width: none; }
+.ob-next .trust-foot { text-align: left; }
+.ob-keep { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.ob-keep > p { margin: 0 0 8px; color: var(--ink); }
+.ob-keep .lead-form { margin: 0; }
+.ob-keep .lead-form label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (min-width: 901px) { .ob-buy { position: sticky; top: 88px; } }
+@media (max-width: 900px) { .ob-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .offer-band { padding: 26px 18px 20px; margin: 40px 0; } }
+
+.ob-bridge { margin: 20px 0 0; font-size: 17px; font-weight: 600; color: var(--navy); }
+.ob-bridge em { font-style: normal; background: #FFE7B8; padding: 0 3px; border-radius: 3px; }
+.ob-stack { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: stk; }
+.ob-stack li { counter-increment: stk; display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.ob-stack li::before { content: counter(stk); flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+.ob-stack li > div { flex: 1; min-width: 0; }
+.ob-stack b { color: var(--ink); font-size: 16px; }
+.ob-stack p { margin: 2px 0 0; font-size: 14.5px; color: var(--muted); }
+.ob-tag { display: inline-block; vertical-align: 2px; margin-left: 6px; font-size: 11.5px; font-weight: 800; color: var(--green); background: #E2F4E8; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.ob-anchor { margin: 14px 0 0; font-size: 14.5px; color: var(--muted); }
+.ob-urgent { margin: 12px 0 0; font-size: 13.5px; color: var(--red); font-weight: 600; }
+.ob-small { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
