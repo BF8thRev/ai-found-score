@@ -935,14 +935,15 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .how-qs .how-pic-k { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 8px; }
 .how-qs .rq-list { margin: 0; }
 .how-qs .rq-list li { background: #fff; border: 1px solid var(--line); font-size: 14.5px; }
-.how-report { display: flex; gap: 14px; align-items: center; text-decoration: none; color: inherit; background: #fff; }
+.how-report { display: grid; gap: 8px; text-decoration: none; color: inherit; }
 .how-report:hover { border-color: var(--blue); }
-.how-report .hr-score { flex: 0 0 auto; width: 64px; height: 64px; border-radius: 50%; border: 5px solid var(--green); display: grid; place-content: center; text-align: center; line-height: 1; }
-.how-report .hr-score b { font-size: 22px; color: var(--navy); }
-.how-report .hr-score small { font-size: 10px; color: var(--muted); }
-.how-report .hr-text { display: grid; gap: 3px; font-size: 14px; color: var(--ink); }
-.how-report .hr-text b { font-size: 15px; color: var(--navy); }
-.how-report .hr-text small { font-size: 13px; font-weight: 600; color: var(--blue); }
+.how-report .how-pic-k { font-size: 13px; font-weight: 600; color: var(--muted); }
+.how-report .hr-row { display: flex; align-items: center; gap: 8px; background: #E2F4E8; border: 1px solid #BFE3CC; border-radius: 10px; padding: 9px 12px; }
+.how-report .hr-row::before { content: "✓"; flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-content: center; }
+.how-report .hr-row > span { display: grid; gap: 1px; }
+.how-report .hr-row b { font-size: 14.5px; color: var(--navy); }
+.how-report .hr-row em { font-style: normal; font-size: 12.5px; color: var(--green); font-weight: 600; }
+.how-report .hr-link { font-size: 13px; font-weight: 600; color: var(--blue); }
 .how-cta { margin-top: 28px; }
 @media (max-width: 860px) { .how-steps { grid-template-columns: 1fr; } }
 
@@ -950,7 +951,8 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .stats-band { background: var(--navy); padding: 64px 0; }
 .stats-band .stats-head, .stats-band .stats-after { color: #fff; }
 .stats-band .stat { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); box-shadow: none; }
-.stats-band .stat .num { color: #8DB8FF; }
+.stats-band .stat .num { color: #fff; font-size: clamp(38px, 4.4vw, 52px); white-space: nowrap; }
+.stats-band .stat .num::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 2px; background: #4D9BFF; margin-bottom: 16px; }
 .stats-band .stat p { color: #E6EDF7; }
 .stats-band .stat .src, .stats-band .stat .src a, .stats-band .stats-note { color: #A9BAD3; }
 
