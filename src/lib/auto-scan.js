@@ -35,12 +35,14 @@ import { resolveKeys } from '../../scanner/config.js';
 import { parseScanRequest } from '../admin/scan-core.js';
 import { normalizeBizName } from '../../shared/report-v2.js';
 import { FREE_QUESTION_COUNT } from '../../scanner/questions.js';
-import { rowsBefore, startOfUtcDay } from './live-preview.js';
+import { rowsBefore, startOfUtcDay, ipCode } from './live-preview.js';
 import { linkRequestToken } from './notify.js';
 
 export const DEFAULT_DAILY_MAX = 25;
 export const DEFAULT_DAILY_USD = 20;
 export const DEDUPE_DAYS = 7;
+/** Free scans one connection gets per UTC day (AUTO_SCAN_PER_IP_DAY). More are queued for /admin "Run now". */
+export const DEFAULT_PER_IP_DAY = 3;
 /** Queue reason for a request made on the way to checkout. */
 export const PAID_INTENT = 'paid-intent';
 /** Tokens this module hands out: 22 chars of base64url (128 random bits). */
@@ -69,7 +71,18 @@ export function autoScanLimits(env) {
   return {
     max: Math.floor(numEnv(env?.AUTO_SCAN_DAILY_MAX, DEFAULT_DAILY_MAX)),
     usd: numEnv(env?.AUTO_SCAN_DAILY_USD, DEFAULT_DAILY_USD),
+    perIp: Math.floor(numEnv(env?.AUTO_SCAN_PER_IP_DAY, DEFAULT_PER_IP_DAY)),
   };
+}
+
+/**
+ * Has this connection already had its free scans today? rows: today's non-queued request rows
+ * (readTodayRequestScans). A failed scan doesn't count (not the visitor's doing); ours doesn't either.
+ */
+export function ipDailyHit(rows, ownId, ipHash, max) {
+  if (!ipHash) return false;
+  const mine = (rows || []).filter((r) => r && r.id !== ownId && r.ip_hash === ipHash && r.status !== 'failed');
+  return mine.length >= Math.max(0, max);
 }
 
 /** A random, unguessable report token: 16 random bytes as base64url (22 chars, [A-Za-z0-9_-]). */
@@ -173,7 +186,7 @@ export function readByKey(env, key, sinceIso, { fetchImpl = fetch } = {}) {
 
 /** Today's request rows that are not queued (the caps count these). */
 export function readTodayRequestScans(env, sinceIso, { fetchImpl = fetch } = {}) {
-  return readRows(env, `trigger=eq.request&status=neq.queued&created_at=gte.${encodeURIComponent(sinceIso)}&select=id,created_at,status,est_cost_usd,total_cost_usd&limit=2000`, fetchImpl);
+  return readRows(env, `trigger=eq.request&status=neq.queued&created_at=gte.${encodeURIComponent(sinceIso)}&select=id,created_at,status,est_cost_usd,total_cost_usd,ip_hash&limit=2000`, fetchImpl);
 }
 
 /** Every scan row for a report token, newest first. */
@@ -268,6 +281,8 @@ export async function startRequestScan(env, req, o = {}) {
   await linkRequestToken(env, req.id, token, { fetchImpl }).catch(() => false);
   const key = requestKey(business);
   const since = new Date(now - DEDUPE_DAYS * 86400_000).toISOString();
+  // A one-way code for the visitor's connection (no address stored), for the per-connection daily limit.
+  const ipHash = o.request ? await ipCode(env, o.request.headers.get('CF-Connecting-IP') || 'unknown').catch(() => null) : null;
 
   // 1. Dedupe (checked again after our row is written).
   let prior;
@@ -280,6 +295,7 @@ export async function startRequestScan(env, req, o = {}) {
   const base = {
     id: scanId, business_name: business.name, report_token: token, trigger: 'request', engines, runs: 1,
     questions: FREE_QUESTION_COUNT, calls_total: FREE_QUESTION_COUNT * engines.length, notes: params.notes, request_key: key, business,
+    ...(ipHash ? { ip_hash: ipHash } : {}),
   };
   const dup = { token, scanId, base, notes: params.notes, fetchImpl };
   if (prior) return reuseWithNewToken(env, prior, { ...dup, rowWritten: false });
@@ -327,8 +343,10 @@ export async function startRequestScan(env, req, o = {}) {
     console.error('[auto-scan] cap read failed', String(e?.message || e).slice(0, 200));
     return queue('store');
   }
-  const stop = capDecision(rows, scanId, { ...autoScanLimits(env), estimateUsd: est });
+  const limits = autoScanLimits(env);
+  const stop = capDecision(rows, scanId, { ...limits, estimateUsd: est });
   if (stop) return queue(stop === 'count' ? 'daily-count-cap' : 'daily-spend-cap');
+  if (ipDailyHit(rows, scanId, ipHash, limits.perIp)) return queue('ip-daily');
 
   // Start.
   try {

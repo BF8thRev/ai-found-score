@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey,
+  startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey, ipDailyHit,
   newRequestToken, requestScanId, autoScanOn, autoScanLimits, estimateRequestScanUsd, REQUEST_TOKEN_RE,
   DRY_RUN_REQUESTS, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, monthlyScanId,
   pickRecoveries, PAID_INTENT, ABANDONED_CHECKOUT_MINUTES, retryFailedScans,
@@ -106,13 +106,13 @@ test('tokens: random, unguessable, 22 chars of [A-Za-z0-9_-]', async () => {
   assert.equal(await requestScanId('abc'), await requestScanId('abc'));
 });
 
-test('config: AUTO_SCAN is off unless "on"; caps default to 25 scans / $20', () => {
+test('config: AUTO_SCAN is off unless "on"; caps default to 25 scans / $20 / 3 per connection', () => {
   assert.equal(autoScanOn({}), false);
   assert.equal(autoScanOn({ AUTO_SCAN: '1' }), false);
   assert.equal(autoScanOn({ AUTO_SCAN: ' On ' }), true);
-  assert.deepEqual(autoScanLimits({}), { max: 25, usd: 20 });
-  assert.deepEqual(autoScanLimits({ AUTO_SCAN_DAILY_MAX: '3', AUTO_SCAN_DAILY_USD: '2.5' }), { max: 3, usd: 2.5 });
-  assert.deepEqual(autoScanLimits({ AUTO_SCAN_DAILY_MAX: 'x', AUTO_SCAN_DAILY_USD: '-1' }), { max: 25, usd: 20 });
+  assert.deepEqual(autoScanLimits({}), { max: 25, usd: 20, perIp: 3 });
+  assert.deepEqual(autoScanLimits({ AUTO_SCAN_DAILY_MAX: '3', AUTO_SCAN_DAILY_USD: '2.5', AUTO_SCAN_PER_IP_DAY: '5' }), { max: 3, usd: 2.5, perIp: 5 });
+  assert.deepEqual(autoScanLimits({ AUTO_SCAN_DAILY_MAX: 'x', AUTO_SCAN_DAILY_USD: '-1' }), { max: 25, usd: 20, perIp: 3 });
   assert.ok(estimateRequestScanUsd(['chatgpt', 'gemini']) > 0);
 });
 
@@ -584,4 +584,18 @@ test('pickRecoveries: retry once, paid always, abandoned checkout after an hour,
   assert.deepEqual(on, ['abandoned:D', 'paid-retry:C', 'request-retry:A']);
   const off = pickRecoveries(rows, { now, autoScan: false }).map((p) => `${p.kind}:${p.token}`);
   assert.deepEqual(off, ['paid-retry:C'], 'with AUTO_SCAN off only paid scans are retried');
+});
+
+test('ipDailyHit: 3 free scans per connection a day; failed scans and our own row do not count', () => {
+  const rows = [
+    { id: 'a', ip_hash: 'h1', status: 'done' },
+    { id: 'b', ip_hash: 'h1', status: 'running' },
+    { id: 'c', ip_hash: 'h1', status: 'failed' },
+    { id: 'd', ip_hash: 'h2', status: 'done' },
+  ];
+  assert.equal(ipDailyHit(rows, 'x', 'h1', 3), false, 'two counted: a third is fine');
+  assert.equal(ipDailyHit([...rows, { id: 'e', ip_hash: 'h1', status: 'done' }], 'x', 'h1', 3), true, 'three counted: the fourth waits');
+  assert.equal(ipDailyHit([...rows, { id: 'x', ip_hash: 'h1', status: 'running' }], 'x', 'h1', 3), false, 'our own row is not counted');
+  assert.equal(ipDailyHit(rows, 'x', null, 3), false, 'no code, no limit');
+  assert.equal(ipDailyHit(rows, 'x', 'h3', 3), false);
 });
