@@ -107,3 +107,11 @@ test('every real report the homepage links is open to everyone (and never sold)'
   assert.ok(tokens.length >= 2);
   for (const t of tokens) assert.ok(SHOWCASE_TOKENS.includes(SHOWCASE_ALIASES[t] || t), `${t} is linked but locked`);
 });
+
+test('report page (public/js/report.js) treats the same reports as showcases as the server', () => {
+  const js = readFileSync(new URL('../../../public/js/report.js', import.meta.url), 'utf8');
+  const m = /const SHOWCASE_TOKENS = (\[[^\]]*\]);/.exec(js);
+  assert.ok(m, 'SHOWCASE_TOKENS in report.js');
+  assert.deepEqual(JSON.parse(m[1].replace(/'/g, '"')), SHOWCASE_TOKENS);
+  for (const [alias, token] of Object.entries(SHOWCASE_ALIASES)) assert.ok(js.includes(`href: '/report/${alias}'`) && js.includes(`id: '${token}'`), `${alias} is in the switcher`);
+});

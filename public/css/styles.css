@@ -251,6 +251,17 @@ img { max-width: 100%; }
   background: #FFF8E6; border: 1px solid #ECD27A; border-radius: 10px;
   padding: 12px 18px; margin-bottom: 22px; font-size: 15px; color: #7A5C00;
 }
+/* Sample reports: switch between the real showcase reports (public/js/report.js samplesStrip). */
+.sample-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 22px; }
+.sample-switch-k { flex-basis: 100%; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.sample-tab {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 8px 14px; border-radius: 999px; font-size: 15px; font-weight: 700;
+  border: 1px solid var(--line); background: #fff; color: var(--navy); text-decoration: none;
+}
+.sample-tab small { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+a.sample-tab:hover { border-color: var(--blue); color: var(--blue); }
+.sample-tab.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.sample-tab.on small { color: #C8D6E8; }
 .score-card {
   background: var(--navy); color: #fff; border-radius: 18px;
   padding: 32px; margin: 32px 0; display: flex; gap: 28px; align-items: center;
