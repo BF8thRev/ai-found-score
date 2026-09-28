@@ -824,13 +824,14 @@ function renderV2(root, report) {
     report.plan ? planPanel(report) : '',
     paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
+    offerStripV2({ report, severity, xrayOk, count: issues.length }),
     nobodyTwice ? '' : whoAiNamesV2({ report, b, t, N, cw, proven }),
     gridV2({ questions, answers, engines, failedNote }),
     sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     factsV2({ report, b, aById }),
     siteV2(report),
     listingsV2({ listings, badListings }),
-    issuesV2({ issues, locked, xrayOk }),
+    issuesV2({ issues, locked, xrayOk, name: b.name, specificCount: specificFixCount }),
     xrayV2({ report, aById, cw, N }),
     report.breakdown ? breakdownV2(report) : '',
     paid && !isDemoReport(report) ? fixKitIncluded(report) : '',
@@ -1053,6 +1054,21 @@ function shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabe
       ${line ? `<p class="r2-line">${line}</p>` : ''}
       ${advice}
     </section>`;
+}
+
+// A slim offer right under the short version, so a reader who is convinced doesn't have to scroll to the
+// offer band. Only where the offer band exists (xrayOk); the promise is the real one (XRAY.promise).
+function offerStripV2({ report, severity, xrayOk, count }) {
+  if (!xrayOk || !count) return '';
+  const first = num(severity && severity.high);
+  return `
+    <aside class="r2-strip" aria-label="Get the fixes">
+      <div class="r2-strip-t">
+        <b>${count} ${plural(count, 'problem', 'problems')} found${first ? `, ${first} to fix first.` : '.'}</b>
+        <span>${escapeHtml(XRAY.promise)}</span>
+      </div>
+      <a class="btn" href="#offer" data-scroll-offer>${escapeHtml(ctaLabel(report))}</a>
+    </aside>`;
 }
 
 // 3. Who AI names: businesses named in 2+ answers. Owner always shown.
@@ -1392,7 +1408,7 @@ function copyBlocksV2(items) {
 
 // 8. What to fix: titles free; descriptions, steps and copy text locked until paid
 // (removed server-side, src/lib/lock.js).
-function issuesV2({ issues, locked, xrayOk }) {
+function issuesV2({ issues, locked, xrayOk, name = '', specificCount = null }) {
   if (!issues.length) return '';
   // Locked: how many fixes and how serious; the titles are the fix, so they're the audit's.
   if (issues.every((i) => i && i.locked && !i.title)) {
@@ -1403,8 +1419,8 @@ function issuesV2({ issues, locked, xrayOk }) {
     return `
     <section class="report-section">
       <h2>What to fix</h2>
-      <p class="sub">We found <strong>${issues.length} ${plural(issues.length, 'problem', 'problems')}</strong> you can fix.</p>
-      <p class="r2-sev">${sevs.map((k) => `<span class="badge ${escapeHtml(k)}">${num(bySev[k])} ${escapeHtml(severityLabel(k).toLowerCase())}</span>`).join(' ')}</p>
+      <p class="sub">We found <strong>${issues.length} ${plural(issues.length, 'problem', 'problems')}</strong> you can fix.${specificCount !== null && specificCount < issues.length ? ` ${specificCount} ${plural(specificCount, 'is', 'are')} specific to ${escapeHtml(name || 'your business')}. The rest are general tips.` : ''}</p>
+      <div class="r2-fixtiles">${sevs.map((k) => `<div class="r2-fixtile ${escapeHtml(k)}"><div class="n">${num(bySev[k])}</div><div class="l">${escapeHtml(severityLabel(k).toLowerCase())}</div></div>`).join('')}</div>
       <ol class="r2-locked-list" aria-label="Problems found, details in the audit">
         ${issues.slice(0, 6).map((i, n) => `<li><span class="badge ${escapeHtml(i.severity || 'low')}">${escapeHtml(severityLabel(i.severity || 'low'))}</span><span class="bar" style="width:${[78, 64, 86, 58, 72, 66][n]}%" aria-hidden="true"></span><span class="lock" aria-hidden="true">🔒</span></li>`).join('')}
       </ol>
@@ -1582,8 +1598,8 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
     : winning ? `Stay the ${trade} AI recommends in ${town}.`
       : `Be the ${trade} AI recommends in ${town}.`;
   const lede = zero ? `Right now AI sends people who ask for a ${trade} in ${town} somewhere else. The audit shows why, and exactly what to change.`
-    : winning ? `AI named you in ${t.namedYou} of ${N} searches, first in ${t.firstYou}. That’s worth protecting, because AI answers change, and whatever AI gets wrong about you, it repeats to every customer who asks. This report already found:`
-      : `AI named you in ${t.namedYou} of ${N} searches. This report already found why it picks someone else:`;
+    : winning ? `AI mentioned you in ${t.namedYou} of ${N} answers, first in ${t.firstYou}. That’s worth protecting, because AI answers change, and whatever AI gets wrong about you, it repeats to every customer who asks. This report already found:`
+      : `AI mentioned you in ${t.namedYou} of ${N} answers. This report already found why it picks someone else:`;
   const wrongPhone = (report.aiFacts || []).find((x) => x && x.status === 'differs' && x.field === 'phone');
 
   // The value stack: what each piece does for them, and how much work it is.
@@ -1626,6 +1642,7 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
           ${addon}
           <a class="btn big ob-btn" data-tier="xray" href="#" data-base-price="49">Show me every fix — $<span data-total>49</span></a>
           ${wrongPhone ? `<p class="ob-urgent">If ${escapeHtml(wrongPhone.aiSays)} isn’t a number you answer, every customer who gets it from ${escapeHtml(engineName(aById[wrongPhone.answerId]?.engine))} is a call you miss.</p>` : ''}
+          ${report.sample ? '' : '<a class="ob-sample" href="/report/sample-001">See a sample report first</a>'}
           <p class="ob-secure">${ICON.lock}Secure checkout by Stripe. We never see your card.</p>
           <p class="trust-cards" aria-label="Cards accepted"><span>VISA</span><span>MASTERCARD</span><span>AMEX</span><span>DISCOVER</span></p>
           <div class="ob-promise">${ICON.shield}<p><b>The 3-problem promise.</b> This report already found ${num(specificFixCount)} problems specific to ${name}. If the audit finds fewer than 3, email us within 30 days and you get your $49 back.</p></div>
@@ -1767,5 +1784,5 @@ function methodV2({ report, method, engines, failed, questions, N, cw, listings 
     listings.length ? '' : 'Listing consistency was not checked in this report.',
     'AI answers change; this is a snapshot.',
   ].filter(Boolean);
-  return `<div class="r2-method"><b>How we searched.</b> ${parts.join(' ')}</div>`;
+  return `<details class="r2-method"><summary>How we searched</summary><p>${parts.join(' ')}</p></details>`;
 }

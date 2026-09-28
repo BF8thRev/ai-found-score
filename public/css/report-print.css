@@ -9,7 +9,7 @@ body { font-size: 12pt; color: #000; }
 
 .site-header, .site-footer, nav, .header-cta,
 .cta-band, .offer-band, .unlock-panel, .lead-form, .r2-tools, .r2-copy-btn,
-[data-tier], .locked-note, .r2-sticky { display: none !important; }
+[data-tier], .locked-note, .r2-sticky, .r2-strip, .ob-sample { display: none !important; }
 
 .report-header { background: none !important; padding: 0 0 8pt !important; }
 .wrap { max-width: none !important; padding: 0 !important; }

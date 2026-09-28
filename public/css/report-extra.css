@@ -287,3 +287,38 @@
 .ob-head h2, .ob-kicker, .ob-head { overflow-wrap: anywhere; min-width: 0; }
 .ob-buy, .ob-gets { min-width: 0; overflow-wrap: anywhere; }
 .hdr-ctx b { min-width: 60px; }
+
+/* What to fix: big severity tiles. */
+.r2-fixtiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 14px 0 6px; }
+.r2-fixtile { border-radius: 14px; padding: 16px 12px; text-align: center; border: 2px solid; }
+.r2-fixtile .n { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+.r2-fixtile .l { margin-top: 6px; font-size: 16px; font-weight: 700; }
+.r2-fixtile.high { background: #FDECEA; border-color: #B42318; color: #8A1C13; }
+.r2-fixtile.medium { background: #FFF4E0; border-color: #B45309; color: #7A4A0B; }
+.r2-fixtile.low { background: #EEF1F6; border-color: #8A94A6; color: #2F3A4D; }
+@media (max-width: 480px) { .r2-fixtile .n { font-size: 36px; } .r2-fixtile .l { font-size: 14px; } }
+
+/* Early offer strip under the short version. */
+.r2-strip { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 26px 0 0; padding: 16px 20px; border-radius: 14px; background: #E8F0FE; border: 2px solid #1A5FD0; }
+.r2-strip-t { flex: 1 1 260px; min-width: 0; color: #14213A; font-size: 17px; }
+.r2-strip-t b { display: block; font-size: 19px; color: #0B2A5B; }
+.r2-strip-t span { font-size: 15px; }
+.r2-strip .btn { flex: none; }
+@media (max-width: 560px) { .r2-strip .btn { width: 100%; text-align: center; } }
+
+.ob-sample { display: block; margin-top: 10px; text-align: center; font-weight: 700; color: #1A5FD0; padding: 8px 0; }
+
+/* How we searched: one quiet line until opened. */
+details.r2-method { margin: 36px 0 24px; }
+details.r2-method summary { cursor: pointer; font-weight: 700; color: var(--navy); padding: 8px 0; }
+details.r2-method p { margin: 8px 0 0; }
+
+/* Page skeleton while the report loads (report.html). */
+.r2-skel { min-height: 70vh; }
+.r2-skel-band { height: 210px; background: linear-gradient(160deg, #071C40, #0B2A5B 60%, #123B7A); }
+.r2-skel-card { max-width: 820px; margin: -34px auto 0; height: 190px; border-radius: 16px; background: #fff; border: 2px solid var(--line); box-shadow: 0 10px 30px rgba(11, 42, 91, .08); }
+.r2-skel-line { max-width: 700px; height: 14px; border-radius: 7px; background: #E6EBF3; margin: 26px auto 0; }
+.r2-skel-line.s { max-width: 520px; }
+@media (prefers-reduced-motion: no-preference) { .r2-skel-card, .r2-skel-line { animation: r2-pulse 1.4s ease-in-out infinite; } }
+@keyframes r2-pulse { 50% { opacity: .55; } }
+.r2-skel .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

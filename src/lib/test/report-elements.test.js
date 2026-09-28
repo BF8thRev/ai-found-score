@@ -124,8 +124,8 @@ test('trade names read as businesses: plumbing → plumbers', () => {
 
 test('report page ships the new script and styles under fresh cache keys', () => {
   const html = readFileSync(new URL('../../../public/report.html', import.meta.url), 'utf8');
-  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 24);
-  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 13);
+  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 25);
+  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 14);
 });
 
 // ---- the top of the page: result, the search card, the short version ----

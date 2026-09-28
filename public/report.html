@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/styles.css?v=10">
-  <link rel="stylesheet" href="/css/report-extra.css?v=13">
+  <link rel="stylesheet" href="/css/report-extra.css?v=14">
   <link rel="stylesheet" href="/css/report-print.css" media="print">
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
   <!-- Google Tag Manager -->
@@ -33,7 +33,11 @@
 </header>
 
 <main id="report-root">
-  <div class="wrap"><p style="padding:60px 0">Loading your report…</p></div>
+  <div class="r2-skel" role="status">
+    <span class="sr">Loading your report…</span>
+    <div class="r2-skel-band"></div>
+    <div class="wrap"><div class="r2-skel-card"></div><div class="r2-skel-line"></div><div class="r2-skel-line s"></div></div>
+  </div>
 </main>
 
 <footer class="site-footer">
@@ -72,6 +76,6 @@
 
 <script src="/js/config.js?v=12"></script>
 <script src="/js/analytics.js?v=9"></script>
-<script src="/js/report.js?v=24"></script>
+<script src="/js/report.js?v=25"></script>
 </body>
 </html>
