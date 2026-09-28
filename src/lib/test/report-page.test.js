@@ -97,10 +97,10 @@ function loadReportJs() {
 
 test('pending copy: a real time expectation per status', () => {
   const r = loadReportJs();
-  assert.match(r.pendingCopy('running', false).p, /Usually ready within the hour, often sooner/);
+  assert.match(r.pendingCopy('running', false).p, /fills in as the answers come back/);
   assert.match(r.pendingCopy('queued', false).p, /^Ready by [A-Z][a-z]+day, [A-Z][a-z]{2} \d{1,2}\./);
   assert.match(r.pendingCopy('paid', false).h, /Your full audit is being made/);
-  assert.match(r.pendingCopy('paid', false).p, /within the hour/);
+  assert.match(r.pendingCopy('paid', false).p, /fills in as the answers come back/);
   assert.equal(r.pendingCopy('failed', true).p, 'We’ve been alerted and we’ll re-run it. You’ll get an email when it’s ready.');
   assert.doesNotMatch(r.pendingCopy('failed', false).p, /You’ll get an email/);
   assert.equal(r.pendingState({ status: 'weird' }).status, 'running');

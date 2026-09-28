@@ -99,9 +99,9 @@ function pendingCopy(status, hasEmail) {
     return { h: 'This report request was closed.', p: 'Want to see what AI says about your business? <a href="/#request">Get a free report</a>. It takes a minute.', spin: false, html: true };
   }
   if (status === 'paid') {
-    return { h: 'Your full audit is being made.', p: 'Usually ready within the hour. This page updates when it’s ready.', spin: true };
+    return { h: 'Your full audit is being made.', p: 'It fills in as the answers come back. This page updates on its own.', spin: true };
   }
-  return { h: 'We’re asking the AI assistants now.', p: 'Usually ready within the hour, often sooner. This page updates when it’s ready, so you can bookmark it.', spin: true };
+  return { h: 'We’re asking the AI assistants now.', p: 'It fills in as the answers come back. This page updates on its own, so you can bookmark it.', spin: true };
 }
 
 // The next weekday after today, New York time: "Monday, Sep 28". Holidays aren't counted.
@@ -366,7 +366,7 @@ function xrayOffer(lead = '', { breakdown = true } = {}) {
         next: [
           'Pay on Stripe’s secure page.',
           'Your report unlocks right away: every answer, every fix, your Fix Kit.',
-          'We ask every AI assistant again and email you, usually within the hour.',
+          'We ask every AI assistant again and email you when it’s done.',
           'In 30 days we re-scan for free and show you what changed.',
         ],
       })}
@@ -809,7 +809,7 @@ function fullScanNote() {
   return `
     <div class="r2-note r2-fullscan" role="status">
       <strong>Your full audit is on its way.</strong> We’re asking all 5 customer questions on every AI assistant we check.
-      This page updates with the new answers when they’re ready, usually within the hour. Everything below is already yours.
+      This page fills in with the new answers as they come back. Everything below is already yours.
     </div>`;
 }
 
@@ -1454,7 +1454,7 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
   const stack = [
     ['The Fix Plan', 'Every problem by name, most important first, with the exact steps and the text to copy and paste.', 'Copy and paste'],
     ['The Fix Kit', 'Ready-to-install files for your website: business details AI reads, an llms.txt, an FAQ page, your Google listing text and a review QR code. Hand them to whoever runs your site.', 'Done for you'],
-    ['The full scan', 'All 5 customer questions on every AI assistant we check. Every answer word for word, and every website AI cited.', 'Emailed within the hour'],
+    ['The full scan', 'All 5 customer questions on every AI assistant we check. Every answer word for word, and every website AI cited.', 'Starts the moment you pay'],
     ['The competitor gap sheet', top ? `What AI finds on ${top} and the others that it doesn’t find on you.` : 'What AI finds on the businesses it names that it doesn’t find on you.', 'Included'],
     ['The 30-day re-scan', 'We ask every AI assistant again in 30 days and show you, side by side, what changed.', 'Proof it worked'],
   ];
@@ -1501,7 +1501,7 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
         <ol class="trust-next">
           <li>You pay on Stripe’s secure page.</li>
           <li>This report unlocks right away: every answer, every fix, your Fix Kit.</li>
-          <li>We ask every AI assistant again and email you, usually within the hour.</li>
+          <li>We ask every AI assistant again and email you when it’s done.</li>
           <li>In 30 days we re-scan for free and show you what changed.</li>
         </ol>
         <p class="trust-foot">Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a> · <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>

@@ -73,7 +73,7 @@
       before_after: 'Fix it and re-check'
     };
     var TIER_NEXT = {
-      xray: 'Your report is unlocked now. We’re also asking all 5 customer questions on every AI assistant we check; your report updates with those answers when they’re ready, usually within the hour. Your Fix Kit is included: open it from your report. We re-scan free 30 days from now, so you can see what changed. Fewer than 3 problems specific to your business? Your $49 back.',
+      xray: 'Your report is unlocked now. We’re also asking all 5 customer questions on every AI assistant we check; your report fills in with those answers as they come back. Your Fix Kit is included: open it from your report. We re-scan free 30 days from now, so you can see what changed. Fewer than 3 problems specific to your business? Your $49 back.',
       fix_kit: 'Next: check your business details and download your kit.', // retired $149 standalone
       competitor_breakdown: 'It’s in your report now, below the competitor gap sheet.',
       be_the_answer: 'Next: open your plan page to add your towns and confirm your details. Your report is unlocked, with your Competitor Breakdown.'
@@ -116,7 +116,7 @@
         .then(function (rep) {
           if (rep && rep.pending) {
             // No report yet: the paid scan started when the payment landed.
-            msg.textContent = 'Payment received. We’re asking every question on every AI assistant we check now. Your full audit is usually ready within the hour, and we’ll email you the moment it is. Your report page fills in on its own.';
+            msg.textContent = 'Payment received. We’re asking every question on every AI assistant we check now. Your full audit fills in as the answers come back, and we’ll email you the moment it’s done. Your report page fills in on its own.';
             link.textContent = 'Open my report page';
             try { localStorage.removeItem('afs_checkout'); } catch (e) {}
           } else if (rep && !rep.locked) {
@@ -162,7 +162,7 @@
     </div>
     <div class="footer-bottom">
       <span>&copy; 2026 Fields Holding d/b/a GetAiFound Score</span>
-      <span><a href="/unsubscribe">Unsubscribe from emails</a> &middot; <a href="/admin" rel="nofollow">Admin</a></span>
+      <span><a href="/unsubscribe">Unsubscribe from emails</a></span>
     </div>
   </div>
 </footer>
