@@ -942,3 +942,12 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .stats-band .stat .num { color: #8DB8FF; }
 .stats-band .stat p { color: #E6EDF7; }
 .stats-band .stat .src, .stats-band .stat .src a, .stats-band .stats-note { color: #A9BAD3; }
+
+/* "What you're blind to" button row, and the closing button after the FAQ (Sep 2026) */
+.what-cta { margin-top: 28px; align-items: center; gap: 18px; flex-wrap: wrap; }
+.what-sample { color: var(--blue); font-weight: 600; text-decoration: none; }
+.what-sample:hover { text-decoration: underline; }
+.final-cta { background: var(--navy); color: #fff; }
+.final-cta h2 { color: #fff; margin: 0 0 10px; }
+.final-cta .intro { color: #C8D6E8; margin: 0 auto 24px; }
+.final-cta .fine { color: #A9BAD3; margin: 12px 0 0; font-size: 14px; }
