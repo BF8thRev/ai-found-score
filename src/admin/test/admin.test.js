@@ -513,3 +513,24 @@ test('routes: /admin/scan/paid re-runs a paid audit by token; gated, CSRF-checke
   assert.match(await r.text(), /no-store/);
   assert.equal((await call(env, '/admin/scan/paid', { headers: bearer })).status, 303, 'GET goes back to the page');
 });
+
+test('fixed plans: charged monthly from the start date; break-even from unit costs', async () => {
+  const { chargeDates, fixedCosts, unitEconomics, stripeFee } = await import('../metrics.js');
+  const plan = { name: 'Workers Paid', usdPerMonth: 5, since: '2026-09-28' };
+  assert.deepEqual(chargeDates(plan, '2026-09-27'), []);
+  assert.deepEqual(chargeDates(plan, '2026-11-28'), ['2026-09-28', '2026-10-28', '2026-11-28']);
+  assert.deepEqual(chargeDates({ ...plan, since: '2026-01-31' }, '2026-03-31'), ['2026-01-31', '2026-02-28', '2026-03-31'], 'short months clamp');
+  assert.deepEqual(chargeDates({ ...plan, until: '2026-10-30' }, '2026-12-31'), ['2026-09-28', '2026-10-28']);
+  const f = fixedCosts([plan], new Date('2026-10-29T15:00:00Z'));
+  assert.deepEqual(f, { week: 5, month: 5, all: 10, perMonth: 5 }, 'the Oct 28 charge is in the week of Oct 26');
+  assert.equal(stripeFee(49), 1.72);
+  const est = unitEconomics({ scans: [], est: { free: 0.57, paid: 0.9 }, fixedPerMonth: 5 });
+  assert.equal(est.free.real, false);
+  assert.equal(Math.round(est.keepAudit * 100), 4638);
+  assert.equal(est.auditsForFixed, 1);
+  const real = unitEconomics({ scans: [{ trigger: 'request', total_cost_usd: '0.40' }, { trigger: 'request', total_cost_usd: 0.6 }, { trigger: 'paid', total_cost_usd: 1.2 }], est: { free: 9, paid: 9 } });
+  assert.equal(real.free.real, true);
+  assert.equal(real.free.n, 2);
+  assert.equal(Math.round(real.free.usd * 100), 50);
+  assert.equal(real.paid.usd, 1.2);
+});

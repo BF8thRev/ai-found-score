@@ -225,3 +225,71 @@ export function shortTime(iso) {
   return new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     .format(d).replace(/[\s\u202f]*(AM|PM)/, (_, x) => x.toLowerCase());
 }
+
+
+// ---------------------------------------------------------------------------
+// Fixed plans and break-even (the "Costs and break-even" section)
+// ---------------------------------------------------------------------------
+
+/**
+ * Plans billed every month from `since` (YYYY-MM-DD, the day it started). Add a row when a plan
+ * starts; set `until` (YYYY-MM-DD) when it's cancelled. Charged on the same day each month.
+ */
+export const FIXED_COSTS = Object.freeze([
+  { name: 'Cloudflare Workers Paid', vendor: 'Cloudflare', usdPerMonth: 5, since: '2026-09-28', why: 'Runs the scans: automatic free reports and paid audits' },
+]);
+
+/** Stripe's standard US card fee: 2.9% + 30¢ per successful charge. */
+export const STRIPE_FEE = Object.freeze({ pct: 0.029, fixedUsd: 0.3 });
+export const stripeFee = (usd) => Math.round((usd * STRIPE_FEE.pct + STRIPE_FEE.fixedUsd) * 100) / 100;
+
+function addMonths(ymd, n) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + n, Math.min(d, last))).toISOString().slice(0, 10);
+}
+
+/** A plan's charge dates up to `today` (YYYY-MM-DD), oldest first. */
+export function chargeDates(plan, today) {
+  const out = [];
+  for (let i = 0; i < 600; i++) {
+    const day = addMonths(plan.since, i);
+    if (day > today || (plan.until && day > plan.until)) break;
+    out.push(day);
+  }
+  return out;
+}
+
+/** What the fixed plans have charged this week / this month / all time (New York dates), and per month now. */
+export function fixedCosts(plans = FIXED_COSTS, now = new Date()) {
+  const p = periodStarts(now);
+  const sum = (from) => plans.reduce((s, c) => s + chargeDates(c, p.day).filter((d) => d >= from).length * c.usdPerMonth, 0);
+  return {
+    week: sum(p.week),
+    month: sum(p.month),
+    all: sum('0000-00-00'),
+    perMonth: plans.filter((c) => c.since <= p.day && (!c.until || c.until >= p.day)).reduce((s, c) => s + c.usdPerMonth, 0),
+  };
+}
+
+/**
+ * Unit costs and break-even. scans: [{ trigger, total_cost_usd }] of finished scans (real averages
+ * win once there are any); est: { free, paid } price-table estimates per scan.
+ */
+export function unitEconomics({ scans = [], est = {}, fixedPerMonth = 0, auditUsd = 49, addonUsd = 25 } = {}) {
+  const avg = (trigger) => {
+    const xs = scans.filter((s) => s && s.trigger === trigger).map((s) => num(s.total_cost_usd)).filter((v) => v > 0);
+    return xs.length ? { usd: xs.reduce((a, b) => a + b, 0) / xs.length, n: xs.length, real: true } : { usd: Number(est[trigger === 'request' ? 'free' : 'paid']) || 0, n: 0, real: false };
+  };
+  const free = avg('request');
+  const paid = avg('paid');
+  const keepAudit = auditUsd - stripeFee(auditUsd) - paid.usd;
+  const keepWithAddon = auditUsd + addonUsd - stripeFee(auditUsd + addonUsd) - paid.usd;
+  return {
+    free, paid,
+    feeAudit: stripeFee(auditUsd), feeWithAddon: stripeFee(auditUsd + addonUsd),
+    keepAudit, keepWithAddon,
+    freePerAudit: free.usd > 0 ? Math.floor(keepAudit / free.usd) : null,
+    auditsForFixed: keepAudit > 0 ? Math.ceil(fixedPerMonth / keepAudit) : null,
+  };
+}

@@ -38,6 +38,8 @@ const QUERIES = {
   gates: 'v_mvp_gates?select=*&order=sort.asc',
   expenses: 'expenses?select=*&order=spent_on.desc,created_at.desc&limit=10',
   requests: 'report_requests?select=business_name,town,trade,email,requested_at&order=requested_at.desc&limit=10',
+  // Finished free (request) and paid scans: real cost per report for "Costs and break-even".
+  unitScans: 'scans?select=trigger,total_cost_usd&status=eq.done&trigger=in.(request,paid)&total_cost_usd=gt.0&order=created_at.desc&limit=200',
   leads: 'leads?select=arm,status,created_at&order=created_at.desc&limit=10',
   payments: 'payments?select=tier,amount_cents,arm,livemode,paid_at,refunded_cents,revoked_at&order=paid_at.desc&limit=10',
   // Free-report request scans still waiting (queued), in progress (running) or needing a person (failed).
