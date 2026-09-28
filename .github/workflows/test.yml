@@ -1,0 +1,21 @@
+# Runs every test on each PR (and on master after a merge). A red check means don't merge:
+# merges into master deploy to aifoundscore.com automatically.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test

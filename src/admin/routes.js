@@ -108,7 +108,7 @@ export async function handleAdminRequest(request, url, env) {
     return redirect(url, '/admin', { 'Set-Cookie': clearSessionCookie() });
   }
 
-  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/paid') return notFound();
+  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/cancel' && path !== '/admin/scan/paid') return notFound();
 
   const who = await adminAuth(request, adminToken);
   if (!who) {
@@ -189,5 +189,6 @@ export async function handleAdminRequest(request, url, env) {
   const flash = {};
   if (watch.length) flash.run = { ok: true, text: 'Scan started. Progress updates below every few seconds.' };
   if (url.searchParams.get('expense') === 'saved') flash.expense = { ok: true, text: 'Expense saved.' };
+  if (url.searchParams.get('cancelled') === '1') flash.requests = { ok: true, text: 'Request cancelled. It will not run.' };
   return render({ flash, watch });
 }
