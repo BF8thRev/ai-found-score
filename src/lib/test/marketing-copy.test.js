@@ -19,7 +19,7 @@ const read = (f) => readFileSync(new URL(f, PUBLIC), 'utf8');
 // (owner decision, site copy v2): that one list item may.
 const withoutStats = (html) => html
   .replace(/<section class="stats-band"[\s\S]*?<\/section>/, '')
-  .replace(/<div class="real-answer" data-(?:real-quote|sample-quote|showcase)>[\s\S]*?<\/figure>[\s\S]*?<\/p>\s*<\/div>/, '')
+  .replace(/<div class="real-answer" data-(?:real-quote|sample-quote|showcase)>[\s\S]*?<\/figure>\s*<\/div>/, '')
   .replace(/<li data-assistant-list>[\s\S]*?<\/li>/g, '');
 const visible = (html) => html
   .replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ')
@@ -81,7 +81,9 @@ test('hero shows who got the call and who did not; nav and card link the real re
   const index = read('index.html');
   assert.match(index, /class="sc-names"><li>Mega Wash &amp; Dry<\/li><li>One Hour Laundry<\/li><\/ul>/);
   assert.match(index, /class="sc-lost"><b>Every other laundromat in North Babylon<\/b>/);
-  assert.match(index, /class="sc-link">See real reports: <a href="\/report\/mega-wash-and-dry">Mega Wash &amp; Dry<\/a> &middot; <a href="\/report\/glenn-wayne-bakery">Glenn Wayne Bakery<\/a>/);
+  assert.match(index, /class="sc-ask"><b>Would it give yours\?<\/b> <a href="#request" data-sc-check>/);
+  assert.match(index, /class="sc-intro-line">This is what your free report shows, for your business and your town\.</);
+  assert.match(index, /See real ones: <a href="\/report\/mega-wash-and-dry"[^>]*>Mega Wash &amp; Dry<\/a> &middot; <a href="\/report\/glenn-wayne-bakery"/);
   assert.match(index, /href="\/report\/mega-wash-and-dry">Sample report</);
   assert.ok(!/lost-band|stopped Googling/.test(index), 'the made-up lost-call strip and the "stopped Googling" claim are gone');
 });

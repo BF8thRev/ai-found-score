@@ -76,7 +76,7 @@
           <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
           <button class="btn big" type="submit">Show me who&rsquo;s getting my calls</button>
           <p class="status" id="request-status" role="status"></p>
-          <p class="hero-micro">Free &middot; No email to start &middot; No sales call &middot; Based in Plainview, NY</p>
+          <p class="hero-micro">Free &middot; No email to start &middot; Based in Plainview, NY</p>
         </form>
         <!-- Turnstile bot check (invisible unless Cloudflare needs a click). The Worker fills in the site key;
              empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
@@ -91,6 +91,7 @@
            Mega Wash & Dry answer (asked Sep 24, 2026; the date is on the linked report), published with the owner's permission; the text is verbatim (the
            hyphens in "all‑around" and "24‑hour" are U+2011, as in the original answer). -->
       <div class="real-answer" data-showcase>
+        <p class="sc-intro-line">This is what your free report shows, for your business and your town.</p>
         <figure class="sc-card">
           <div class="sc-head"><figcaption class="sc-label">ChatGPT&rsquo;s answer &middot; asked Sep 24, 2026</figcaption></div>
           <p class="sc-q">What's the best laundromat in North Babylon, NY?</p>
@@ -98,7 +99,7 @@
           <p class="sc-k">AI sent this customer to</p>
           <ul class="sc-names"><li>Mega Wash &amp; Dry</li><li>One Hour Laundry</li></ul>
           <p class="sc-lost"><b>Every other laundromat in North Babylon</b><span>Not mentioned. ChatGPT didn&rsquo;t give this customer their name.</span></p>
-          <p class="sc-link">See real reports: <a href="/report/mega-wash-and-dry">Mega Wash &amp; Dry</a> &middot; <a href="/report/glenn-wayne-bakery">Glenn Wayne Bakery</a></p>
+          <p class="sc-ask"><b>Would it give yours?</b> <a href="#request" data-sc-check>Check my business free &uarr;</a></p>
         </figure>
       </div>
     </div>
@@ -858,6 +859,16 @@
     window.addEventListener('resize', fits);
     full.addEventListener('sc-changed', fits);
   })();
+
+  // "Check my business free": up to the form, cursor in the first empty field.
+  var scCheck = document.querySelector('[data-sc-check]');
+  if (scCheck) scCheck.addEventListener('click', function (e) {
+    e.preventDefault();
+    el('request').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var f = !form.elements.business_name.value ? form.elements.business_name : form.elements.website;
+    try { f.focus({ preventScroll: true }); } catch (err) { f.focus(); }
+    push({ event: 'showcase_check_click' });
+  });
 
   // Hero card (src/lib/showcase.js): the picker swaps in that trade's stored answer for the same town.
   (function () {

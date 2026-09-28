@@ -633,6 +633,10 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .sc-lost b { font-size: 16.5px; color: var(--red); }
 .sc-lost span { font-size: 14.5px; color: var(--ink); }
 .sc-full { margin: 0 0 14px; }
+.sc-intro-line { margin: 0 4px 10px; font-size: 14.5px; font-weight: 600; color: var(--muted); }
+.sc-ask { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 15.5px; color: var(--navy); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.sc-ask a { color: var(--blue); font-weight: 700; text-decoration: none; }
+.sc-ask a:hover { text-decoration: underline; }
 /* Two lines of the verbatim answer, from the sentence that names someone; the button opens the rest. */
 .sc-full:not(.open) .sc-a { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .sc-full:not(.open) .sc-intro { display: none; }
