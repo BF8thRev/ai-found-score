@@ -566,6 +566,7 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .hero-form input {
   font: inherit; font-size: 16px; font-weight: 400; color: var(--ink); background: #fff; border: 1px solid #C9D3E1; border-radius: 10px; padding: 12px 13px; width: 100%; box-sizing: border-box;
 }
+.hero-form input::placeholder { color: #8A96A8; }
 .hero-form input:focus { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
 .hero-form .full, .hero-form fieldset { grid-column: 1 / -1; }
 .hero-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }

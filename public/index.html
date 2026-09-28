@@ -64,8 +64,8 @@
              site, so the ZIP box only appears when the site doesn't show one (or is a Facebook/Yelp page). -->
         <div class="hero-start" id="request">
         <form class="hero-form" id="request-form" method="post" action="/api/request" novalidate>
-          <label>Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="Harborview Plumbing"></label>
-          <label>Website <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="yourbusiness.com"></label>
+          <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="e.g. Joe’s Plumbing"></label>
+          <label class="full">Your website <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
           <label class="full" id="zip-field" hidden>Your ZIP code <input name="zip" type="text" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
           <p class="full field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
           <label class="full" id="town-field" hidden>Town <input name="town" type="text" maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
