@@ -37,7 +37,8 @@
     // Free-report requests (src/lib/auto-scan.js): "on" scans each verified request at once (Workers
     // Paid + supabase/v4_ladder.sql first); anything else queues it for Run now in /admin. Optional caps:
     // AUTO_SCAN_DAILY_MAX (default 25), AUTO_SCAN_DAILY_USD (default 20). Set here, not in the dashboard.
-    "AUTO_SCAN": "off",
+    // On since Sep 28 2026 (hands-off: free reports run within minutes, not on "Run now").
+    "AUTO_SCAN": "on",
     // Who gets "engine credits are low / out" emails (src/lib/alerts.js), comma-separated.
     // Optional per-engine budgets for low warnings: CREDIT_BUDGET_GEMINI / _OPENAI / _ANTHROPIC /
     // _PERPLEXITY = "<usd>@<YYYY-MM-DD>" (README "Credit alerts").

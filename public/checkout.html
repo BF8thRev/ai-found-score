@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=13">
+  <link rel="stylesheet" href="/css/styles.css?v=14">
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
   <!-- Google Tag Manager -->
   <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-K58KFVJC');</script>
@@ -43,6 +43,14 @@
       <section class="co-card co-form-card" aria-labelledby="co-title">
         <h1 id="co-title">Get your AI Visibility Audit</h1>
         <p class="co-sub">Tell us which business to audit. Next you&rsquo;ll pay on Stripe&rsquo;s secure page, and we start right away.</p>
+        <!-- Back from Stripe without paying (cancel_url, src/lib/checkout.js): their details are kept, nothing is started. -->
+        <div class="co-back" id="co-back" hidden role="status">
+          <p><strong>No charge was made.</strong> Your details are saved below, ready when you are.</p>
+          <div class="co-back-free">
+            <p><strong>Not ready to pay?</strong> Get your free snapshot instead: whether AI names you, who it names in your place, and your AI Found Score. No card.</p>
+            <a class="btn-secondary" id="co-free-btn" href="/#request">Get my free snapshot</a>
+          </div>
+        </div>
 
         <form id="co-form" novalidate>
           <label>Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="Harborview Plumbing &amp; Heating"></label>
@@ -153,6 +161,35 @@
   });
   paintTotal();
   push({ event: 'view_checkout', tier: 'xray' });
+
+  // ---- Back from Stripe without paying: fill the form back in and offer the free snapshot ----
+  // The details are saved just before the redirect to Stripe (SAVE_KEY). The request made then is
+  // reused if they pay now (same details); the free button starts that request's free report.
+  var SAVE_KEY = 'afs_checkout_form';
+  var TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (err) {}
+  if (saved && (!TOKEN_RE.test(String(saved.token || '')) || Date.now() - Number(saved.at || 0) > 3 * 86400000)) saved = null;
+  var params = new URLSearchParams(location.search);
+  if (params.get('cancelled') === '1') {
+    if (saved && params.get('t') === saved.token) {
+      form.elements.business_name.value = saved.business_name || '';
+      form.elements.website.value = saved.website || '';
+      form.elements.zip.value = saved.zip || '';
+      form.elements.town.value = saved.town || '';
+      form.elements.state.value = saved.state || form.elements.state.value;
+      if (saved.town) { el('zip-town').textContent = saved.town + ', ' + (saved.state || '') + ' \u2713'; el('zip-found').hidden = false; }
+      bump.checked = (saved.addons || []).indexOf('competitor_breakdown') >= 0;
+      paintTotal();
+      el('co-free-btn').href = '/api/checkout/cancel?t=' + encodeURIComponent(saved.token);
+    }
+    el('co-back').hidden = false;
+    push({ event: 'checkout_cancelled', tier: 'xray' });
+    el('co-free-btn').addEventListener('click', function () { push({ event: 'checkout_cancel_free', tier: 'xray' }); });
+  }
+  function sameAsSaved(d) {
+    return !!saved && saved.business_name === d.business_name && saved.website === d.website && saved.zip === d.zip && saved.town === d.town;
+  }
 
   // Back from Stripe with the browser's Back button: the page may come back from the cache with the
   // button still saying "Taking you…". Make it usable again.
@@ -287,36 +324,51 @@
     payBtn.textContent = 'One moment…';
     var extras = addons();
     function fail(html) { busy = false; resetPay(); show('error', html); }
-
-    fetchKind(data).then(function (res) {
-      if ((res && res.needKind) || !((res && res.ok && res.trade) || data.trade || presetKind)) {
-        el('kind-field').hidden = false;
-        form.elements.trade_other.focus();
-        fail((res && res.limited ? esc(res.limited) + ' Meanwhile: ' : 'One quick thing: ') + 'what kind of business is it? Type it above, like bakery or dentist.');
-        return;
-      }
-      data.trade = (res && res.ok && res.trade) || data.trade || presetKind;
-      data.intent = 'xray';
+    // Stripe's hosted page for this request. Resolves true when the browser is on its way there.
+    function openStripe(token) {
+      return postJson('/api/checkout', { token: token, tier: 'xray', addons: extras, prepay: true }).then(function (co) {
+        if (!(co.ok && co.body.url)) return co;
+        try { localStorage.setItem('afs_checkout', JSON.stringify({ token: token, tier: 'xray', addons: extras, prepay: true })); } catch (err) {}
+        try { localStorage.setItem(SAVE_KEY, JSON.stringify({ token: token, business_name: data.business_name, website: data.website, zip: data.zip, town: data.town, state: data.state, addons: extras, at: Date.now() })); } catch (err) {}
+        push({ event: 'begin_checkout', tier: 'xray', path: 'prepay', addons: extras.join(','), value: total(), currency: 'USD' });
+        location.href = co.body.url;
+        return true;
+      });
+    }
+    // Same details as before they left Stripe: their request is already saved, go straight to payment.
+    var again = Promise.resolve(null);
+    if (sameAsSaved(data)) {
       payBtn.textContent = 'Taking you to secure payment…';
-      return tsTake(30000).then(function (token) {
-        if (token) data['cf-turnstile-response'] = token;
-        return postJson('/api/request', data);
-      }).then(function (res) {
-        var token = reportToken(res);
-        if (!res.ok || !token) {
-          fail(res.body && res.body.error ? esc(res.body.error) : 'We couldn\'t start checkout just now. Try again in a minute, or email ' + HELLO + '.');
+      again = openStripe(saved.token);
+    }
+
+    again.then(function (r) {
+      if (r === true) return;
+      return fetchKind(data).then(function (res) {
+        if ((res && res.needKind) || !((res && res.ok && res.trade) || data.trade || presetKind)) {
+          el('kind-field').hidden = false;
+          form.elements.trade_other.focus();
+          fail((res && res.limited ? esc(res.limited) + ' Meanwhile: ' : 'One quick thing: ') + 'what kind of business is it? Type it above, like bakery or dentist.');
           return;
         }
-        push({ event: 'report_request', trade: data.trade, offer: 'full_audit' });
-        return postJson('/api/checkout', { token: token, tier: 'xray', addons: extras, prepay: true }).then(function (co) {
-          if (co.ok && co.body.url) {
-            try { localStorage.setItem('afs_checkout', JSON.stringify({ token: token, tier: 'xray', addons: extras, prepay: true })); } catch (err) {}
-            push({ event: 'begin_checkout', tier: 'xray', path: 'prepay', addons: extras.join(','), value: total(), currency: 'USD' });
-            location.href = co.body.url;
+        data.trade = (res && res.ok && res.trade) || data.trade || presetKind;
+        data.intent = 'xray';
+        payBtn.textContent = 'Taking you to secure payment…';
+        return tsTake(30000).then(function (token) {
+          if (token) data['cf-turnstile-response'] = token;
+          return postJson('/api/request', data);
+        }).then(function (res) {
+          var token = reportToken(res);
+          if (!res.ok || !token) {
+            fail(res.body && res.body.error ? esc(res.body.error) : 'We couldn\'t start checkout just now. Try again in a minute, or email ' + HELLO + '.');
             return;
           }
-          fail((co.body && co.body.error ? esc(co.body.error) + ' ' : 'We couldn\'t open payment just now. ')
-            + '<a href="/api/checkout/cancel?t=' + encodeURIComponent(token) + '">Get your free report instead</a>.');
+          push({ event: 'report_request', trade: data.trade, offer: 'full_audit' });
+          return openStripe(token).then(function (co) {
+            if (co === true) return;
+            fail((co.body && co.body.error ? esc(co.body.error) + ' ' : 'We couldn\'t open payment just now. ')
+              + '<a href="/api/checkout/cancel?t=' + encodeURIComponent(token) + '">Get your free report instead</a>.');
+          });
         });
       });
     });

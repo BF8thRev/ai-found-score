@@ -121,8 +121,9 @@ export function sessionForm({ items, credit, token, tier, addons, origin, prepay
   // (items are already net of any credit: priceCheckout takes it off the plan's line.)
   const charged = (items || []).reduce((sum, i) => sum + (Number(i.cents) || 0), 0) / 100;
   f.set('success_url', `${origin}/success?tier=${encodeURIComponent(tier)}&t=${encodeURIComponent(token)}&v=${charged}${prepay ? '&prepay=1' : ''}&session_id={CHECKOUT_SESSION_ID}`);
-  // Left checkout before a report existed: /api/checkout/cancel starts the free report, then shows it.
-  f.set('cancel_url', prepay ? `${origin}/api/checkout/cancel?t=${encodeURIComponent(token)}` : `${origin}/report/${encodeURIComponent(token)}`);
+  // Left Stripe without paying before a report existed: back to /checkout with their details filled in
+  // and nothing started. The free snapshot is offered there (/api/checkout/cancel starts it).
+  f.set('cancel_url', prepay ? `${origin}/checkout?cancelled=1&t=${encodeURIComponent(token)}` : `${origin}/report/${encodeURIComponent(token)}`);
   if (prepay) f.set('metadata[prepay]', '1');
   f.set('metadata[tier]', tier);
   f.set('metadata[report_id]', token);
