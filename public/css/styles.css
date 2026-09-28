@@ -561,8 +561,9 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .hero-cta { display: inline-flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .hero-micro { margin: 0; font-size: 14px; color: var(--muted); text-align: center; letter-spacing: .01em; }
 /* Hero form: name + website side by side, ZIP + button under them. */
-.hero-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 560px; }
-.hero-form label { display: grid; gap: 4px; font-size: 13.5px; font-weight: 600; color: var(--navy); }
+.hero-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 560px; }
+.hero-form label { display: grid; gap: 6px; font-size: 15px; font-weight: 600; color: var(--navy); }
+.hero-form .hint { font-size: 14px; font-weight: 400; color: var(--muted); }
 .hero-form input {
   font: inherit; font-size: 16px; font-weight: 400; color: var(--ink); background: #fff; border: 1px solid #C9D3E1; border-radius: 10px; padding: 12px 13px; width: 100%; box-sizing: border-box;
 }
@@ -631,10 +632,14 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 }
 .sc-lost b { font-size: 16.5px; color: var(--red); }
 .sc-lost span { font-size: 14.5px; color: var(--ink); }
-.sc-full { margin: 14px 0 0; }
-.sc-full summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); }
-.sc-full summary:hover { color: var(--navy); }
-.sc-full .sc-a { margin-top: 10px; font-size: 15px; }
+.sc-full { margin: 0 0 14px; }
+/* Two lines of the verbatim answer, from the sentence that names someone; the button opens the rest. */
+.sc-full:not(.open) .sc-a { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.sc-full:not(.open) .sc-intro { display: none; }
+.sc-full:not(.open) .sc-a.has-intro::before { content: "\2026 "; color: var(--muted); }
+.sc-expand { margin: 6px 0 0; padding: 0; border: 0; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--blue); cursor: pointer; }
+.sc-expand:hover { text-decoration: underline; }
+.sc-expand[hidden] { display: none; }
 .sc-caption { font-size: 16px; font-weight: 700; color: var(--navy); margin: 16px 4px 0; line-height: 1.4; }
 .sc-note { font-size: 12.5px; color: var(--muted); margin: 6px 4px 0; }
 .sc-note a { color: var(--muted); }

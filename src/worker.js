@@ -68,7 +68,7 @@ import { handleProof } from './lib/proof.js';
 import { handleZip } from './lib/zip.js';
 import { handleFixKit } from './lib/fix-kit-route.js';
 import { handlePlan } from './lib/plan-route.js';
-import { handleCheckout, SHOWCASE_TOKENS } from './lib/checkout.js';
+import { handleCheckout, SHOWCASE_TOKENS, SHOWCASE_ALIASES } from './lib/checkout.js';
 import { handleRefundEvent, REFUND_EVENTS } from './lib/refunds.js';
 import { loadShowcaseRows, pickShowcase, showcaseTag, addShowcaseHandler } from './lib/showcase.js';
 import { dryRunEnabled, isLocalRequest, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
@@ -300,6 +300,7 @@ async function pendingInfo(env, token) {
 }
 
 async function handleGetReport(id, url, env, dryRun = false) {
+  if (Object.hasOwn(SHOWCASE_ALIASES, id)) id = SHOWCASE_ALIASES[id];
   const isSample = id.startsWith('sample-');
   let report;
   let unlocked = true;

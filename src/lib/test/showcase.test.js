@@ -2,8 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { pickShowcase, renderShowcase, tradeParam, validRow, showcaseTag, loadShowcaseRows, answerHtml, namedIn, namesHtml } from '../showcase.js';
-import { SHOWCASE_TOKENS } from '../checkout.js';
+import { pickShowcase, renderShowcase, tradeParam, validRow, showcaseTag, loadShowcaseRows, answerHtml, namedIn, namesHtml, previewStart, answerBlockHtml } from '../showcase.js';
+import { SHOWCASE_TOKENS, SHOWCASE_ALIASES } from '../checkout.js';
 
 const row = (o = {}) => ({
   trade: 'plumbing', town: 'Massapequa', state: 'NY', question: "What's the best plumber in Massapequa, NY?",
@@ -73,12 +73,20 @@ test('loadShowcaseRows: read failure is [] (static card stays), cached briefly',
   assert.equal(puts[1], 'public, max-age=3600');
 });
 
-test('renderShowcase: names who got the call, then everyone else in town; full answer behind a tap', () => {
-  const html = renderShowcase(pickShowcase([row()], null, null));
+test('renderShowcase: two-line answer, then who got the call and everyone else in town', () => {
+  const html = renderShowcase(pickShowcase([row({ engine: 'chatgpt' })], null, null));
+  assert.match(html, /<div class="sc-full"><p class="sc-a" data-sc-a>Many people recommend <b>Acme/);
+  assert.match(html, /<button type="button" class="sc-expand" data-sc-expand aria-expanded="false">Read the full answer, word for word<\/button><\/div>\s*<p class="sc-k">/);
   assert.match(html, /<ul class="sc-names" data-sc-names><li>Acme Plumbing &amp; Heating<\/li><li>Bolt Plumbing<\/li><\/ul>/);
-  assert.match(html, /<b data-sc-lost>Every other plumber in Massapequa<\/b><span>Not mentioned\. Never got the call\.<\/span>/);
-  assert.match(html, /<details class="sc-full"><summary>[^<]+<\/summary><p class="sc-a" data-sc-a>/);
+  assert.match(html, /<b data-sc-lost>Every other plumber in Massapequa<\/b><span data-sc-why>Not mentioned\. ChatGPT didn&rsquo;t give this customer their name\.<\/span>/);
   assert.match(html, /"town":"Massapequa"/);
+});
+
+test('previewStart: the preview starts at the sentence naming the first business, not the filler', () => {
+  const a = { excerpt: 'Here are some good options near you:\n\n1. Acme Plumbing is great. Bolt Plumbing too.', spans: [[41, 54], [65, 78]], truncated: false };
+  assert.equal(previewStart(a), 41);
+  assert.equal(answerBlockHtml(a), '<p class="sc-a has-intro" data-sc-a><span class="sc-intro">Here are some good options near you:\n1. </span><b>Acme Plumbing</b> is great. <b>Bolt Plumbing</b> too.</p>');
+  assert.equal(previewStart({ excerpt: 'Try Acme Co. Or Bolt.', spans: [[4, 11]] }), 0, 'a short lead-in is kept');
 });
 
 test('renderShowcase: the label names the assistant that answered, else "Real AI answer"', () => {
@@ -97,5 +105,5 @@ test('every real report the homepage links is open to everyone (and never sold)'
   const index = readFileSync(new URL('../../../public/index.html', import.meta.url), 'utf8');
   const tokens = [...index.matchAll(/href="\/report\/([^"#?]+)"/g)].map((m) => m[1]).filter((t) => !t.startsWith('sample-'));
   assert.ok(tokens.length >= 2);
-  for (const t of tokens) assert.ok(SHOWCASE_TOKENS.includes(t), `${t} is linked but locked`);
+  for (const t of tokens) assert.ok(SHOWCASE_TOKENS.includes(SHOWCASE_ALIASES[t] || t), `${t} is linked but locked`);
 });

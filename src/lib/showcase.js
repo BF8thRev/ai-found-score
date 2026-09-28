@@ -34,7 +34,7 @@ export const TRADE_NOUNS = {
 /** The real reports the homepage links to (open to everyone; see SHOWCASE_TOKENS in checkout.js). */
 export const SAMPLE_REPORTS = [
   { name: 'Mega Wash & Dry', href: '/report/mega-wash-and-dry' },
-  { name: 'Glenn Wayne Bakery', href: '/report/vbeonkpiYROpBEiAi74kVQ' },
+  { name: 'Glenn Wayne Bakery', href: '/report/glenn-wayne-bakery' },
 ];
 
 /** Most names the card lists; the rest are "+N more" (all of them are in the full answer). */
@@ -107,6 +107,35 @@ export function answerHtml(a) {
   return out + (a.truncated ? '<span class="sc-more"> &hellip;</span>' : '');
 }
 
+/** Skipped only when the naming sentence starts at least this far in (else the preview starts at 0). */
+export const MIN_INTRO = 25;
+
+/**
+ * Where the card's two-line preview starts: the sentence (or line) that names the first business,
+ * so the preview shows who AI picked, not "Here are some options". 0 when that is the start anyway.
+ */
+export function previewStart(a) {
+  const first = a.spans[0][0];
+  const before = a.excerpt.slice(0, first);
+  let at = 0;
+  for (const m of before.matchAll(/[.!?:]\s+|\n+/g)) at = m.index + m[0].length;
+  return at >= MIN_INTRO ? at : 0;
+}
+
+/** The excerpt as { intro, main } HTML: intro = before the preview start (no names in it). */
+export function answerParts(a) {
+  const at = previewStart(a);
+  const intro = at ? escapeHtml(a.excerpt.slice(0, at).replace(/\n{2,}/g, '\n')) : '';
+  const main = answerHtml({ ...a, excerpt: a.excerpt.slice(at), spans: a.spans.map(([x, y]) => [x - at, y - at]) });
+  return { intro, main };
+}
+
+/** The answer paragraph: the intro folds away while the card shows two lines. */
+export function answerBlockHtml(a) {
+  const { intro, main } = answerParts(a);
+  return `<p class="sc-a${intro ? ' has-intro' : ''}" data-sc-a>${intro ? `<span class="sc-intro">${intro}</span>` : ''}${main}</p>`;
+}
+
 /** The businesses the answer names, in order, each once (from the stored spans). */
 export function namedIn(a) {
   const seen = new Set();
@@ -131,6 +160,11 @@ export function sourceLabel(a) {
   return a.engine && ENGINE_NAMES[a.engine] ? `${ENGINE_NAMES[a.engine]}&rsquo;s answer` : 'Real AI answer';
 }
 
+/** "ChatGPT didn't give this customer their name." */
+export function lostWhy(a) {
+  return `Not mentioned. ${a.engine && ENGINE_NAMES[a.engine] ? ENGINE_NAMES[a.engine] : 'AI'} didn&rsquo;t give this customer their name.`;
+}
+
 /** "Every other plumber in Massapequa" */
 export function lostLine(trade, town) {
   return `Every other ${TRADE_NOUNS[trade] || 'business'} in ${town}`;
@@ -139,9 +173,10 @@ export function lostLine(trade, town) {
 export const sampleLinksHtml = () => SAMPLE_REPORTS.map((r) => `<a href="${r.href}">${escapeHtml(r.name)}</a>`).join(' &middot; ');
 
 /**
- * Inner HTML of <div data-showcase> for picked data `p`. The card leads with who the answer sent
- * the customer to, and everyone it left out (the visitor, most likely); the verbatim answer is one
- * tap away. Same markup as the static fallback in index.html.
+ * Inner HTML of <div data-showcase> for picked data `p`: the question, two lines of the verbatim
+ * answer (from the sentence that names someone; the rest one tap away), then who it sent the
+ * customer to and everyone it left out (the visitor, most likely). Same markup as the static
+ * fallback in index.html.
  */
 export function renderShowcase(p) {
   const a = p.answers[p.trade];
@@ -154,13 +189,12 @@ export function renderShowcase(p) {
     <label class="sc-pick"><span class="sr-only">Show the answer for</span><select data-sc-trade>${options}</select></label>
   </div>
   <p class="sc-q" data-sc-q>${escapeHtml(a.question)}</p>
+  <div class="sc-full">${answerBlockHtml(a)}<button type="button" class="sc-expand" data-sc-expand aria-expanded="false">Read the full answer, word for word</button></div>
   <p class="sc-k">AI sent this customer to</p>
   <ul class="sc-names" data-sc-names>${namesHtml(a)}</ul>
-  <p class="sc-lost"><b data-sc-lost>${escapeHtml(lostLine(p.trade, p.town))}</b><span>Not mentioned. Never got the call.</span></p>
-  <details class="sc-full"><summary>Read the full answer, word for word</summary><p class="sc-a" data-sc-a>${answerHtml(a)}</p></details>
+  <p class="sc-lost"><b data-sc-lost>${escapeHtml(lostLine(p.trade, p.town))}</b><span data-sc-why>${lostWhy(a)}</span></p>
   <p class="sc-link">See real reports: ${sampleLinksHtml()}</p>
 </figure>
-<p class="sc-caption">Is your business on that list? If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
 <p class="sc-note">Businesses shown are named by AI, not by us. <a href="mailto:hello@aifoundscore.com?subject=Remove%20from%20homepage%20answer">Ask us to remove one</a>.</p>
 <script type="application/json" id="sc-data">${data}</script>`;
 }

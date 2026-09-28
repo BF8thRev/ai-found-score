@@ -47,7 +47,7 @@
       <a href="/report/mega-wash-and-dry">Sample report</a>
       <a href="/#faq">FAQ</a>
     </nav>
-    <a class="header-cta" href="/#request">Get my free report</a>
+    <a class="header-cta" href="/#request">Who&rsquo;s getting my calls?</a>
   </div>
 </header>
 
@@ -65,7 +65,7 @@
         <div class="hero-start" id="request">
         <form class="hero-form" id="request-form" method="post" action="/api/request" novalidate>
           <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="e.g. Joe’s Plumbing"></label>
-          <label class="full">Your website <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
+          <label class="full"><span>Your website <small class="hint">(or Facebook page)</small></span> <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
           <label class="full" id="zip-field" hidden>Your ZIP code <input name="zip" type="text" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
           <p class="full field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
           <label class="full" id="town-field" hidden>Town <input name="town" type="text" maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
@@ -76,7 +76,7 @@
           <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
           <button class="btn big" type="submit">Show me who&rsquo;s getting my calls</button>
           <p class="status" id="request-status" role="status"></p>
-          <p class="hero-micro">Free &middot; No email to start &middot; No sales call &middot; <a href="/privacy">Privacy</a></p>
+          <p class="hero-micro">Free &middot; No email to start &middot; No sales call &middot; Based in Plainview, NY</p>
         </form>
         <!-- Turnstile bot check (invisible unless Cloudflare needs a click). The Worker fills in the site key;
              empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
@@ -94,13 +94,12 @@
         <figure class="sc-card">
           <div class="sc-head"><figcaption class="sc-label">ChatGPT&rsquo;s answer &middot; asked Sep 24, 2026</figcaption></div>
           <p class="sc-q">What's the best laundromat in North Babylon, NY?</p>
+          <div class="sc-full"><p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p><button type="button" class="sc-expand" data-sc-expand aria-expanded="false">Read the full answer, word for word</button></div>
           <p class="sc-k">AI sent this customer to</p>
           <ul class="sc-names"><li>Mega Wash &amp; Dry</li><li>One Hour Laundry</li></ul>
-          <p class="sc-lost"><b>Every other laundromat in North Babylon</b><span>Not mentioned. Never got the call.</span></p>
-          <details class="sc-full"><summary>Read the full answer, word for word</summary><p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p></details>
-          <p class="sc-link">See real reports: <a href="/report/mega-wash-and-dry">Mega Wash &amp; Dry</a> &middot; <a href="/report/vbeonkpiYROpBEiAi74kVQ">Glenn Wayne Bakery</a></p>
+          <p class="sc-lost"><b>Every other laundromat in North Babylon</b><span>Not mentioned. ChatGPT didn&rsquo;t give this customer their name.</span></p>
+          <p class="sc-link">See real reports: <a href="/report/mega-wash-and-dry">Mega Wash &amp; Dry</a> &middot; <a href="/report/glenn-wayne-bakery">Glenn Wayne Bakery</a></p>
         </figure>
-        <p class="sc-caption">Is your business on that list? If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
       </div>
     </div>
   </div>
@@ -212,7 +211,7 @@
           <li>A free re-check in 30 days, so you see what your fixes changed</li>
         </ul>
         <p class="tier-foot">*Being added now. Your report lists exactly which assistants we asked.</p>
-        <p class="tier-when">Usually ready within the hour. See real ones: <a href="/report/mega-wash-and-dry" target="_blank" rel="noopener">Mega Wash &amp; Dry</a> &middot; <a href="/report/vbeonkpiYROpBEiAi74kVQ" target="_blank" rel="noopener">Glenn Wayne Bakery</a></p>
+        <p class="tier-when">Usually ready within the hour. See real ones: <a href="/report/mega-wash-and-dry" target="_blank" rel="noopener">Mega Wash &amp; Dry</a> &middot; <a href="/report/glenn-wayne-bakery" target="_blank" rel="noopener">Glenn Wayne Bakery</a></p>
         <p class="tier-promise">Fewer than 3 problems specific to your business? Your $49 back.</p>
         <a class="btn" data-offer="full_audit" href="/checkout">Get my audit</a>
       </div>
@@ -361,7 +360,7 @@
         <a href="/#how">How it works</a>
         <a href="/#pricing">Pricing</a>
         <a href="/report/mega-wash-and-dry">Sample: Mega Wash &amp; Dry</a>
-        <a href="/report/vbeonkpiYROpBEiAi74kVQ">Sample: Glenn Wayne Bakery</a>
+        <a href="/report/glenn-wayne-bakery">Sample: Glenn Wayne Bakery</a>
       </div>
       <div class="col">
         <h4>Contact</h4>
@@ -839,6 +838,27 @@
   });
   el('zip-change').addEventListener('click', function () { showTownField(); townInput.focus(); townInput.select(); });
 
+  // Hero card: the answer shows two lines (from the sentence that names someone); the button opens
+  // the whole answer, and hides itself when the answer already fits.
+  (function () {
+    var btn = document.querySelector('[data-sc-expand]');
+    if (!btn) return;
+    var full = btn.parentNode;
+    function fits() {
+      var a = full.querySelector('.sc-a');
+      btn.hidden = !full.classList.contains('open') && !a.querySelector('.sc-intro') && a.scrollHeight <= a.clientHeight + 2;
+    }
+    btn.addEventListener('click', function () {
+      var open = full.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.textContent = open ? 'Show less' : 'Read the full answer, word for word';
+      push({ event: 'showcase_expand', open: open });
+    });
+    fits();
+    window.addEventListener('resize', fits);
+    full.addEventListener('sc-changed', fits);
+  })();
+
   // Hero card (src/lib/showcase.js): the picker swaps in that trade's stored answer for the same town.
   (function () {
     var pick = document.querySelector('[data-sc-trade]');
@@ -854,9 +874,18 @@
       var src = document.querySelector('[data-sc-src]');
       if (src) src.textContent = a.engine && sc.engines && sc.engines[a.engine] ? sc.engines[a.engine] + '’s answer' : 'Real AI answer';
       document.querySelector('[data-sc-date]').textContent = new Date(a.askedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+      // Same preview split as previewStart / answerBlockHtml in src/lib/showcase.js.
       var box = document.querySelector('[data-sc-a]');
       box.textContent = '';
-      var at = 0;
+      var start = 0;
+      if (a.spans && a.spans.length) {
+        var re = /[.!?:]\s+|\n+/g, m, before = a.excerpt.slice(0, a.spans[0][0]);
+        while ((m = re.exec(before))) start = m.index + m[0].length;
+        if (start < 25) start = 0;
+      }
+      box.className = 'sc-a' + (start ? ' has-intro' : '');
+      if (start) { var intro = document.createElement('span'); intro.className = 'sc-intro'; intro.textContent = a.excerpt.slice(0, start).replace(/\n{2,}/g, '\n'); box.appendChild(intro); }
+      var at = start;
       (a.spans || []).forEach(function (s) {
         if (!(s[0] >= at && s[1] > s[0] && s[1] <= a.excerpt.length)) return;
         box.appendChild(document.createTextNode(a.excerpt.slice(at, s[0]).replace(/\n{2,}/g, '\n')));
@@ -867,6 +896,10 @@
       });
       box.appendChild(document.createTextNode(a.excerpt.slice(at).replace(/\n{2,}/g, '\n')));
       if (a.truncated) { var more = document.createElement('span'); more.className = 'sc-more'; more.textContent = ' …'; box.appendChild(more); }
+      var why = document.querySelector('[data-sc-why]');
+      if (why) why.textContent = 'Not mentioned. ' + (a.engine && sc.engines && sc.engines[a.engine] ? sc.engines[a.engine] : 'AI') + ' didn’t give this customer their name.';
+      var full = document.querySelector('.sc-full');
+      if (full) full.dispatchEvent(new Event('sc-changed'));
       // Same list and "every other" line as namesHtml / lostLine in src/lib/showcase.js.
       var list = document.querySelector('[data-sc-names]');
       var seen = {}, names = [];

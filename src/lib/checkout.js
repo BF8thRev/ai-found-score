@@ -47,6 +47,8 @@ const AUDIT_TIERS = ['xray', 'fix_kit', 'be_the_answer'];
 export const PREPAY_TIERS = ['xray'];
 /** Real reports shown in full to everyone (homepage "See what you get"); never sold. */
 export const SHOWCASE_TOKENS = ['mega-wash-and-dry', 'vbeonkpiYROpBEiAi74kVQ']; // Glenn Wayne Bakery
+/** Readable links for showcase reports whose token is random: /report/<alias> shows that report. */
+export const SHOWCASE_ALIASES = { 'glenn-wayne-bakery': 'vbeonkpiYROpBEiAi74kVQ' };
 const TOKEN_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const json = (body, status = 200) => Response.json(body, { status, headers: NO_STORE });
