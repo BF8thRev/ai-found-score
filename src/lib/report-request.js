@@ -10,6 +10,8 @@
 //          and the business fields are present, a fresh row is saved with the email instead,
 //          so the email is never lost. That fallback creates a row, so it needs a valid token
 //          just like a first submit.
+// Before the bot check, a new row passes the gate in src/lib/site-check.js (a real website, a real
+// business name): 422 {ok:false, error, field} otherwise, so no scan runs on garbage.
 // Turnstile is skipped (with one logged warning) until it is configured: see src/lib/turnstile.js.
 // A new row that passed Turnstile also gets {preview_token} when live previews are on
 // (src/lib/live-preview.js): the page uses it to ask one question live without a second check.
@@ -26,6 +28,7 @@ import { guessKind } from '../../scanner/kind.js';
 import { turnstileConfigured, verifyTurnstile, warnUnconfiguredOnce, REQUEST_ACTION } from './turnstile.js';
 import { livePreviewStatus, signPreviewToken } from './live-preview.js';
 import { startRequestScan } from './auto-scan.js';
+import { checkSubmission } from './site-check.js';
 
 /** Plans a visitor can head straight to checkout for (the form's `intent`). */
 export const PAID_INTENTS = ['xray'];
@@ -121,6 +124,16 @@ export async function handleReportRequest(request, url, env, deps = {}) {
     return fail(422, requestId ? 'Could not save your email. Try again.' : 'Please fill in your business name and town.');
   }
   if (zip && !/^\d{5}$/.test(zip)) return fail(422, 'Please enter a 5-digit ZIP.');
+
+  // The gate: no row, no scan, for a made-up website or a keyboard-mash name. Checked before
+  // Turnstile so the visitor's bot-check token isn't spent on a request we'd turn away.
+  const gate = await (deps.checkSubmission || checkSubmission)({ name: req.businessName, website: req.website }, { fetchImpl: deps.siteFetchImpl });
+  if (!gate.ok) {
+    return isJson
+      ? Response.json({ ok: false, error: gate.error, field: gate.field, reason: gate.reason }, { status: 422 })
+      : fail(422, gate.error);
+  }
+  if (gate.url) req.website = gate.url;
 
   // Every new row is bot-checked (first submit, and the attach fallback above).
   let verified = false;
