@@ -16,13 +16,16 @@
 //
 // Added by supabase/setup.sql: page_visits.arm, payments.report_token, payments.livemode,
 // report_links, leads, unsubscribes, report_requests, report_unlocked().
+// Added by supabase/v12_email_tracking.sql: email_events is one row per event (token, campaign, event
+// sent|opened|clicked|unsubscribed, occurred_at, email, town, report_token, detail; no anon insert:
+// log_email_event() RPC), report_requests.ref_token, businesses.town. See src/lib/email-tracking.js.
 // Added by supabase/scan_v2.sql: scan_results.report jsonb + scan_results.version int
 // (the v2 report document), and scan_raw (one row per API call; no anon access).
 //
 // RLS is enabled on all tables. The anon key used by this Worker may:
 //   SELECT businesses, scan_results, report_links
-//   INSERT page_visits, email_events, payments, leads, unsubscribes, report_requests
-//   EXECUTE report_unlocked(token), attach_report_request_email(id, email)
+//   INSERT page_visits, payments, leads, unsubscribes, report_requests
+//   EXECUTE report_unlocked(token), attach_report_request_email(id, email), log_email_event(...)
 // (see "worker read/insert" policies in Supabase). Env vars SUPABASE_URL and
 // SUPABASE_ANON_KEY are stored as Worker secrets, never in the repo.
 // The Fix Kit helpers at the bottom (getPaidTiers, getFixKitDetails, saveFixKitDetails) use
@@ -118,7 +121,7 @@ export async function recordLead(env, l) {
  * page, which uses it to attach an email later via attachReportRequestEmail.
  *
  * @param {object} env - Worker env (SUPABASE_URL, SUPABASE_ANON_KEY)
- * @param {object} r - {id?, businessName, town, zip, email?, trade, website, phone, userAgent}
+ * @param {object} r - {id?, businessName, town, zip, email?, trade, website, phone, userAgent, refToken?}
  */
 export async function recordReportRequest(env, r) {
   const row = {
@@ -134,12 +137,21 @@ export async function recordReportRequest(env, r) {
     user_agent: r.userAgent ?? null,
     requested_at: new Date().toISOString(),
     status: 'new',
+    ...(r.refToken ? { ref_token: r.refToken } : {}),
   };
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${TABLES.REPORT_REQUESTS}`, {
+  const post = (body) => fetch(`${env.SUPABASE_URL}/rest/v1/${TABLES.REPORT_REQUESTS}`, {
     method: 'POST',
     headers: { ...supaHeaders(env), Prefer: 'return=minimal' },
-    body: JSON.stringify(row),
+    body: JSON.stringify(body),
   });
+  let res = await post(row);
+  // Attribution must never cost a request: if the row with ref_token is refused (say the column
+  // isn't there yet, supabase/v12_email_tracking.sql), save it without.
+  if (!res.ok && row.ref_token) {
+    console.warn('[request] saved without ref_token', res.status, (await res.text().catch(() => '')).slice(0, 200));
+    delete row.ref_token;
+    res = await post(row);
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Supabase report_requests insert failed: ${res.status} ${text}`);

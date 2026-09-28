@@ -20,6 +20,8 @@
 // the same business name + ZIP within 7 days gets its OWN new link, never the earlier one), or null when no link could
 // be made (bot check not configured, no service key, a database error). The request is saved either
 // way. A no-JS form post is redirected to the report link when there is one.
+// Attribution: the request keeps the afs_ref cookie (set by a tracked email link, src/lib/email-tracking.js)
+// or a posted `ref` as report_requests.ref_token. Never required; see recordReportRequest.
 
 import { notifyRequestEmail } from './notify.js';
 import { recordReportRequest, attachReportRequestEmail } from './db.js';
@@ -29,6 +31,7 @@ import { turnstileConfigured, verifyTurnstile, warnUnconfiguredOnce, REQUEST_ACT
 import { livePreviewStatus, signPreviewToken } from './live-preview.js';
 import { startRequestScan } from './auto-scan.js';
 import { checkSubmission } from './site-check.js';
+import { readRefToken } from './email-tracking.js';
 
 /** Plans a visitor can head straight to checkout for (the form's `intent`). */
 export const PAID_INTENTS = ['xray'];
@@ -119,6 +122,9 @@ export async function handleReportRequest(request, url, env, deps = {}) {
     website: clean(data.website, 160) || null,
     phone: clean(data.phone, 30) || null,
     userAgent: request.headers.get('User-Agent') || null,
+    // Attribution (a tracked cold-email click, later postcards): the afs_ref cookie or a posted `ref`.
+    // Optional: a request without one, or with a bad one, is saved exactly the same.
+    refToken: readRefToken(request, data),
   };
   if (!req.businessName || !req.town) {
     return fail(422, requestId ? 'Could not save your email. Try again.' : 'Please fill in your business name and town.');

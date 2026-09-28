@@ -22,12 +22,21 @@ async function get(env, s, path) {
     // PostgREST's "relation does not exist" → the SQL hasn't been applied yet.
     if (res.status === 404 || /does not exist|PGRST205|schema cache/i.test(text)) {
       const table = path.split('?')[0];
-      throw new Error(`${table} not found — apply ${table === 'refund_requests' ? 'supabase/v4_ladder.sql' : table === 'v_gemini_searches' ? 'supabase/v11_gemini_free_tier.sql' : 'supabase/admin_v3.sql'}`);
+      throw new Error(`${table} not found — apply ${MIGRATION_FOR[table] || 'supabase/admin_v3.sql'}`);
     }
     throw new Error(`${path.split('?')[0]}: HTTP ${res.status} ${redact(env, text, 200)}`);
   }
   return res.json();
 }
+
+// Which SQL file creates a table/view, for the "not found" message (default admin_v3.sql).
+const MIGRATION_FOR = {
+  refund_requests: 'supabase/v4_ladder.sql',
+  v_gemini_searches: 'supabase/v11_gemini_free_tier.sql',
+  v_email_funnel: 'supabase/v12_email_tracking.sql',
+  v_email_prospects: 'supabase/v12_email_tracking.sql',
+  v_email_timeline: 'supabase/v12_email_tracking.sql',
+};
 
 const QUERIES = {
   money: 'v_money?select=*',
@@ -49,6 +58,12 @@ const QUERIES = {
   requestScans: 'scans?select=id,business_name,report_token,status,created_at,started_at,notes,errors&trigger=eq.request&status=in.(queued,running,failed)&order=created_at.desc&limit=30',
   // Refund requests (supabase/v4_ladder.sql). Refunds themselves are done by a person in Stripe.
   refunds: 'refund_requests?select=id,report_token,email,reason,status,created_at&order=created_at.desc&limit=30',
+  // The cold-email arm (supabase/v12_email_tracking.sql, src/admin/outreach.js).
+  emailFunnel: 'v_email_funnel?select=*&order=arm.asc',
+  prospects: 'v_email_prospects?select=*&order=last_event_at.desc.nullslast&limit=1000',
+  timeline: 'v_email_timeline?select=token,kind,at,detail&order=at.asc&limit=20000',
+  // Businesses to pick from in "Log a sent email" (select=*: businesses.town only exists from v12).
+  prospectBusinesses: 'businesses?select=*&order=name.asc&limit=2000',
 };
 
 /**
@@ -102,4 +117,30 @@ export async function insertExpense(env, row) {
   if (!s) throw new Error('SUPABASE_SERVICE_KEY is not set');
   const res = await fetch(`${s.base}/expenses`, { method: 'POST', headers: { ...s.headers, Prefer: 'return=minimal' }, body: JSON.stringify(row) });
   if (!res.ok) throw new Error(`expenses insert failed: HTTP ${res.status} ${redact(env, await res.text().catch(() => ''), 200)}`);
+}
+
+/** Add a prospect to businesses (parseProspectForm row). The exact name already there → that one, not a copy. */
+export async function insertProspect(env, row) {
+  const s = supa(env);
+  if (!s) throw new Error('SUPABASE_SERVICE_KEY is not set');
+  // Exact name, like scanner/store.js ensureBusiness (a scan of the same business finds this row).
+  const found = await get(env, s, `businesses?select=id,name&name=eq.${encodeURIComponent(row.name)}&limit=1`);
+  if (found[0]) return { id: found[0].id, existing: true };
+  const res = await fetch(`${s.base}/businesses`, { method: 'POST', headers: { ...s.headers, Prefer: 'return=representation' }, body: JSON.stringify(row) });
+  if (!res.ok) throw new Error(`businesses insert failed: HTTP ${res.status} ${redact(env, await res.text().catch(() => ''), 200)}`);
+  const [saved] = await res.json();
+  return { id: saved?.id, existing: false };
+}
+
+/** A business's town (businesses.town, v12) and its latest saved report token, for a 'sent' row. */
+export async function prospectDetails(env, businessId) {
+  const s = supa(env);
+  if (!s) throw new Error('SUPABASE_SERVICE_KEY is not set');
+  const id = encodeURIComponent(businessId);
+  const [biz, rep] = await Promise.all([
+    get(env, s, `businesses?select=*&id=eq.${id}&limit=1`),
+    get(env, s, `scan_results?select=report_token&business_id=eq.${id}&report=not.is.null&report_token=not.is.null&order=scanned_at.desc&limit=1`),
+  ]);
+  if (!biz[0]) return null;
+  return { name: biz[0].name, town: biz[0].town || null, reportToken: rep[0]?.report_token || null };
 }
