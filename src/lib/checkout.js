@@ -6,9 +6,9 @@
 // payment is never recorded as 'unknown'. The buyer still pays on Stripe's own hosted page.
 //
 //   POST /api/checkout { token, tier, addons?, prepay? } → { ok, url } (redirect the browser to url)
-//     prepay true: the visitor clicked a paid plan on the homepage, so there's no report yet, only the
-//     request's queued scan (src/lib/auto-scan.js PAID_INTENT). xray / be_the_answer at full price;
-//     the paid scan starts when the webhook records the payment.
+//     prepay true: the visitor bought from /checkout, so there's no report yet, only the request's
+//     queued scan (src/lib/auto-scan.js PAID_INTENT). The $49 audit at full price, optionally with the
+//     $25 Competitor Breakdown ticked; the paid scan starts when the webhook records the payment.
 //     tier   'xray' ($49 audit, Fix Kit included) | 'competitor_breakdown' ($25) | 'be_the_answer' ($499)
 //     addons ['competitor_breakdown'], with 'xray' only
 //
@@ -43,8 +43,8 @@ export const SUBMIT_MESSAGES = Object.freeze({
 /** Never charge less than this for Be the Answer after credits (Stripe's floor is $0.50). */
 export const MIN_CENTS = 100;
 const AUDIT_TIERS = ['xray', 'fix_kit', 'be_the_answer'];
-/** Plans that can be bought before the report exists (the paid path from the pricing buttons). */
-export const PREPAY_TIERS = ['xray', 'be_the_answer'];
+/** Plans that can be bought before the report exists (public/checkout.html). Be the Answer is off sale. */
+export const PREPAY_TIERS = ['xray'];
 const SHOWCASE_TOKENS = ['mega-wash-and-dry'];
 const TOKEN_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -67,16 +67,17 @@ export function paidTiers(payments) {
  */
 export function priceCheckout({ report, payments = [], tier, addons = [], livemode = true, prepay = false }) {
   if (!PRICES[tier]) return { ok: false, status: 400, error: 'Unknown plan.' };
-  // Paying up front (the visitor clicked "Get my audit" / "Be the answer"): no report exists yet,
-  // only the request's queued scan. The audit is made after payment; the refund promise on Stripe's
-  // page ("fewer than 3 problems, your $49 back") covers what xrayOffered checks on a finished report.
+  // Paying up front (/checkout): no report exists yet, only the request's queued scan. The audit is
+  // made after payment; the refund promise on Stripe's page ("fewer than 3 problems, your $49 back")
+  // covers what xrayOffered checks on a finished report. The Competitor Breakdown can ride along.
   if (!report && prepay) {
     if (!PREPAY_TIERS.includes(tier)) return { ok: false, status: 409, error: 'Get your free report first.' };
-    if ((Array.isArray(addons) ? addons : []).length) return { ok: false, status: 400, error: 'Add-ons come after your report is made.' };
+    const extras = [...new Set((Array.isArray(addons) ? addons : []).map(String))];
+    if (extras.some((a) => a !== 'competitor_breakdown')) return { ok: false, status: 400, error: 'Unknown add-on.' };
     const mine = payments.filter((p) => (p.livemode !== false) === livemode);
     if (paidTiers(mine).has(tier)) return { ok: false, status: 409, error: 'That’s already paid for. Open your report.' };
-    const items = [{ tier, cents: PRICES[tier], ...PRODUCTS[tier] }];
-    return { ok: true, items, credit: 0, total: items[0].cents, prepay: true };
+    const items = [tier, ...extras].map((t) => ({ tier: t, cents: PRICES[t], ...PRODUCTS[t] }));
+    return { ok: true, items, credit: 0, total: items.reduce((n, i) => n + i.cents, 0), prepay: true };
   }
   if (!report || report.version !== 2) return { ok: false, status: 404, error: 'Report not found' };
   if (report.sample || SHOWCASE_TOKENS.includes(String(report.id || ''))) return { ok: false, status: 400, error: 'This is an example report. Get your own free report first.' };

@@ -2,7 +2,7 @@
 // form post (no-JS fallback). Email is optional: the page asks for it only after the owner has
 // seen the questions.
 //   {business_name, trade, town, zip, state?, website?, phone?, email?, intent?, cf-turnstile-response}
-//       -> Turnstile check, then a new row; returns {ok, id}. intent 'xray' | 'be_the_answer': the
+//       -> Turnstile check, then a new row; returns {ok, id}. intent 'xray' (public/checkout.html): the
 //          visitor is on the way to checkout, so the free scan is queued, not started (auto-scan.js).
 //   {request_id, email}
 //       -> attaches the email to that row (the row came from a Turnstile-checked first submit,
@@ -28,7 +28,7 @@ import { livePreviewStatus, signPreviewToken } from './live-preview.js';
 import { startRequestScan } from './auto-scan.js';
 
 /** Plans a visitor can head straight to checkout for (the form's `intent`). */
-export const PAID_INTENTS = ['xray', 'be_the_answer'];
+export const PAID_INTENTS = ['xray'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
