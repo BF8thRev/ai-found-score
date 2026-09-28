@@ -581,6 +581,33 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .sc-a { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
 .sc-a b { font-weight: 700; background: #FFF1C2; border-radius: 3px; padding: 0 2px; }
 .sc-more { color: var(--muted); }
+/* Who got the call (green) vs. everyone left out (red): the card's point at a glance. */
+.sc-k { margin: 4px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.sc-names { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sc-names li {
+  position: relative; padding: 9px 12px 9px 38px; border-radius: 10px; background: #EAF6EF; border: 1px solid #CBE8D7;
+  font-weight: 700; font-size: 16.5px; color: var(--navy); overflow-wrap: anywhere;
+}
+.sc-names li::before {
+  content: "✓"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border-radius: 50%;
+  background: var(--green); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-content: center;
+}
+.sc-names li.sc-more-names { background: transparent; border: 0; padding: 0 0 0 38px; font-weight: 600; font-size: 14px; color: var(--muted); }
+.sc-names li.sc-more-names::before { content: none; }
+.sc-lost {
+  position: relative; margin: 10px 0 0; padding: 11px 12px 11px 38px; border-radius: 10px; background: #FDEDEB; border: 1px dashed #EDB5AE;
+  display: grid; gap: 2px;
+}
+.sc-lost::before {
+  content: "✕"; position: absolute; left: 12px; top: 13px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 800; display: grid; place-content: center;
+}
+.sc-lost b { font-size: 16.5px; color: var(--red); }
+.sc-lost span { font-size: 14.5px; color: var(--ink); }
+.sc-full { margin: 14px 0 0; }
+.sc-full summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); }
+.sc-full summary:hover { color: var(--navy); }
+.sc-full .sc-a { margin-top: 10px; font-size: 15px; }
 .sc-caption { font-size: 16px; font-weight: 700; color: var(--navy); margin: 16px 4px 0; line-height: 1.4; }
 .sc-note { font-size: 12.5px; color: var(--muted); margin: 6px 4px 0; }
 .sc-note a { color: var(--muted); }

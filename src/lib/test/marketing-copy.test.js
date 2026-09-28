@@ -76,9 +76,11 @@ test('no banned words in page copy', () => {
   }
 });
 
-test('hero links the real report; the sample stays reachable from the nav', () => {
+test('hero shows who got the call and who did not; nav and card link the real reports', () => {
   const index = read('index.html');
-  assert.match(index, /class="sc-link"><a href="\/report\/mega-wash-and-dry">See what you get/);
-  assert.match(index, /href="\/report\/sample-001">Sample report</);
+  assert.match(index, /class="sc-names"><li>Mega Wash &amp; Dry<\/li><li>One Hour Laundry<\/li><\/ul>/);
+  assert.match(index, /class="sc-lost"><b>Every other laundromat in North Babylon<\/b>/);
+  assert.match(index, /class="sc-link">See real reports: <a href="\/report\/mega-wash-and-dry">Mega Wash &amp; Dry<\/a> &middot; <a href="\/report\/vbeonkpiYROpBEiAi74kVQ">Glenn Wayne Bakery<\/a>/);
+  assert.match(index, /href="\/report\/mega-wash-and-dry">Sample report</);
   assert.ok(!/lost-band|stopped Googling/.test(index), 'the made-up lost-call strip and the "stopped Googling" claim are gone');
 });

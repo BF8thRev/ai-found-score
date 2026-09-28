@@ -44,7 +44,7 @@
     <nav class="nav" aria-label="Main">
       <a href="/#how">How it works</a>
       <a href="/#pricing">Pricing</a>
-      <a href="/report/sample-001">Sample report</a>
+      <a href="/report/mega-wash-and-dry">Sample report</a>
       <a href="/#faq">FAQ</a>
     </nav>
     <a class="header-cta" href="/#request">Get my free report</a>
@@ -71,12 +71,15 @@
            hyphens in "all‑around" and "24‑hour" are U+2011, as in the original answer). -->
       <div class="real-answer" data-showcase>
         <figure class="sc-card">
-          <div class="sc-head"><figcaption class="sc-label">Real AI answer</figcaption></div>
+          <div class="sc-head"><figcaption class="sc-label">Real AI answer &middot; asked Sep 24, 2026</figcaption></div>
           <p class="sc-q">What's the best laundromat in North Babylon, NY?</p>
-          <p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p>
-          <p class="sc-link"><a href="/report/mega-wash-and-dry">See what you get: the full Mega Wash &amp; Dry report &rarr;</a></p>
+          <p class="sc-k">AI sent this customer to</p>
+          <ul class="sc-names"><li>Mega Wash &amp; Dry</li><li>One Hour Laundry</li></ul>
+          <p class="sc-lost"><b>Every other laundromat in North Babylon</b><span>Not mentioned. Never got the call.</span></p>
+          <details class="sc-full"><summary>Read the full answer, word for word</summary><p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p></details>
+          <p class="sc-link">See real reports: <a href="/report/mega-wash-and-dry">Mega Wash &amp; Dry</a> &middot; <a href="/report/vbeonkpiYROpBEiAi74kVQ">Glenn Wayne Bakery</a></p>
         </figure>
-        <p class="sc-caption">If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
+        <p class="sc-caption">Is your business on that list? If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
       </div>
     </div>
   </div>
@@ -188,7 +191,7 @@
           <li>A free re-check in 30 days, so you see what your fixes changed</li>
         </ul>
         <p class="tier-foot">*Being added now. Your report lists exactly which assistants we asked.</p>
-        <p class="tier-when">Usually ready within the hour. <a href="/report/mega-wash-and-dry" target="_blank" rel="noopener">See a real one: Mega Wash &amp; Dry &rarr;</a></p>
+        <p class="tier-when">Usually ready within the hour. See real ones: <a href="/report/mega-wash-and-dry" target="_blank" rel="noopener">Mega Wash &amp; Dry</a> &middot; <a href="/report/vbeonkpiYROpBEiAi74kVQ" target="_blank" rel="noopener">Glenn Wayne Bakery</a></p>
         <p class="tier-promise">Fewer than 3 problems specific to your business? Your $49 back.</p>
         <a class="btn" data-offer="full_audit" href="/checkout">Get my audit</a>
       </div>
@@ -366,7 +369,8 @@
         <h4>Report</h4>
         <a href="/#how">How it works</a>
         <a href="/#pricing">Pricing</a>
-        <a href="/report/sample-001">Sample report</a>
+        <a href="/report/mega-wash-and-dry">Sample: Mega Wash &amp; Dry</a>
+        <a href="/report/vbeonkpiYROpBEiAi74kVQ">Sample: Glenn Wayne Bakery</a>
       </div>
       <div class="col">
         <h4>Contact</h4>
@@ -856,6 +860,17 @@
       });
       box.appendChild(document.createTextNode(a.excerpt.slice(at).replace(/\n{2,}/g, '\n')));
       if (a.truncated) { var more = document.createElement('span'); more.className = 'sc-more'; more.textContent = ' …'; box.appendChild(more); }
+      // Same list and "every other" line as namesHtml / lostLine in src/lib/showcase.js.
+      var list = document.querySelector('[data-sc-names]');
+      var seen = {}, names = [];
+      list.textContent = '';
+      (a.spans || []).forEach(function (s) {
+        var n = a.excerpt.slice(s[0], s[1]).trim();
+        if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; names.push(n); }
+      });
+      names.slice(0, 4).forEach(function (n) { var li = document.createElement('li'); li.textContent = n; list.appendChild(li); });
+      if (names.length > 4) { var li = document.createElement('li'); li.className = 'sc-more-names'; li.textContent = '+' + (names.length - 4) + ' more in the answer'; list.appendChild(li); }
+      document.querySelector('[data-sc-lost]').textContent = 'Every other ' + ((sc.nouns && sc.nouns[pick.value]) || 'business') + ' in ' + sc.town;
       presetTrade(pick.value);
       push({ event: 'showcase_trade', trade: pick.value });
     });

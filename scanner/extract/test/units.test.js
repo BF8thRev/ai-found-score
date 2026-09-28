@@ -463,3 +463,22 @@ test('parseScanRequest keeps the owner facts and aliases', async () => {
   const none = parseScanRequest({ business: { name: 'X', trade: 'laundromat', town: 'Y', facts: 'nope' } });
   assert.equal(none.params.business.facts, undefined);
 });
+
+test('buildReport: a near-name confirmed as the owner in one answer counts in the others (Glenn Wayne Bakery Outlet)', async () => {
+  const bakery = { name: 'Glenn Wayne Bakery', website: 'https://www.glennwayne.com/' };
+  const scan = {
+    questions: [{ id: 'q1', intent: 'best', text: 'Best bakery in Bohemia, NY?' }, { id: 'q2', intent: 'urgent', text: 'Bakery open now near Bohemia NY' }],
+    engines: ['chatgpt'],
+    calls: [
+      { engine: 'chatgpt', questionId: 'q1', run: 1, ok: true, text: 'Glenn Wayne Bakery Outlet is the top pick.', citations: [{ url: 'https://www.glennwayne.com/' }], askedAt: '2026-09-28T16:26:00Z', model: 'gpt-x' },
+      { engine: 'chatgpt', questionId: 'q2', run: 1, ok: true, text: 'Glenn Wayne Bakery Outlet and La Roma are open.', citations: [{ url: 'https://www.tripadvisor.com/x' }], askedAt: '2026-09-28T16:27:00Z', model: 'gpt-x' },
+    ],
+  };
+  const proposalsByAnswer = {
+    'chatgpt:q1:1': { businesses: [{ name: 'Glenn Wayne Bakery Outlet', pos: 0 }], ownerFacts: [] },
+    'chatgpt:q2:1': { businesses: [{ name: 'Glenn Wayne Bakery Outlet', pos: 0 }, { name: 'La Roma', pos: 31 }], ownerFacts: [] },
+  };
+  const { report } = await buildReport({ scan, business: bakery, proposalsByAnswer, env: {}, fetchImpl: async () => new Response('', { status: 404 }), id: 't' });
+  assert.deepEqual(report.totals, { answers: 2, namedYou: 2, firstYou: 2 });
+  assert.ok(report.answers.every((a) => a.namedYou && !a.ownerMatch));
+});

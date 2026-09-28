@@ -24,6 +24,21 @@ export const TRADE_LABELS = {
   landscaping: 'Landscapers', cleaning: 'House cleaners', auto_repair: 'Auto repair', laundromat: 'Laundromats',
 };
 
+/** "Every other ___ in <town>": one business of each trade. */
+export const TRADE_NOUNS = {
+  plumbing: 'plumber', hvac: 'heating & AC company', electrical: 'electrician', roofing: 'roofer',
+  landscaping: 'landscaper', cleaning: 'house cleaner', auto_repair: 'auto repair shop', laundromat: 'laundromat',
+};
+
+/** The real reports the homepage links to (open to everyone; see SHOWCASE_TOKENS in checkout.js). */
+export const SAMPLE_REPORTS = [
+  { name: 'Mega Wash & Dry', href: '/report/mega-wash-and-dry' },
+  { name: 'Glenn Wayne Bakery', href: '/report/vbeonkpiYROpBEiAi74kVQ' },
+];
+
+/** Most names the card lists; the rest are "+N more" (all of them are in the full answer). */
+export const MAX_NAMES = 4;
+
 /** ?trade= → a TRADES key, or '' (anything else is ignored, never echoed). */
 export function tradeParam(v) {
   if (typeof v !== 'string' || v.length > 40) return '';
@@ -91,22 +106,55 @@ export function answerHtml(a) {
   return out + (a.truncated ? '<span class="sc-more"> &hellip;</span>' : '');
 }
 
-/** Inner HTML of <div data-showcase> for picked data `p`. */
+/** The businesses the answer names, in order, each once (from the stored spans). */
+export function namedIn(a) {
+  const seen = new Set();
+  const out = [];
+  for (const [s, e] of a.spans) {
+    const n = a.excerpt.slice(s, e).trim();
+    if (n && !seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); out.push(n); }
+  }
+  return out;
+}
+
+/** The "got the call" list: up to MAX_NAMES names, then "+N more". */
+export function namesHtml(a) {
+  const names = namedIn(a);
+  const li = names.slice(0, MAX_NAMES).map((n) => `<li>${escapeHtml(n)}</li>`).join('');
+  const more = names.length > MAX_NAMES ? `<li class="sc-more-names">+${names.length - MAX_NAMES} more in the answer</li>` : '';
+  return li + more;
+}
+
+/** "Every other plumber in Massapequa" */
+export function lostLine(trade, town) {
+  return `Every other ${TRADE_NOUNS[trade] || 'business'} in ${town}`;
+}
+
+export const sampleLinksHtml = () => SAMPLE_REPORTS.map((r) => `<a href="${r.href}">${escapeHtml(r.name)}</a>`).join(' &middot; ');
+
+/**
+ * Inner HTML of <div data-showcase> for picked data `p`. The card leads with who the answer sent
+ * the customer to, and everyone it left out (the visitor, most likely); the verbatim answer is one
+ * tap away. Same markup as the static fallback in index.html.
+ */
 export function renderShowcase(p) {
   const a = p.answers[p.trade];
   const options = p.order.map((k) => `<option value="${k}"${k === p.trade ? ' selected' : ''}>${escapeHtml(TRADE_LABELS[k] || k)}</option>`).join('');
   // JSON inside <script>: escape "<" so no string can close the tag.
-  const data = JSON.stringify({ answers: p.answers }).replace(/</g, '\\u003c');
+  const data = JSON.stringify({ town: p.town, nouns: TRADE_NOUNS, answers: p.answers }).replace(/</g, '\\u003c');
   return `<figure class="sc-card">
   <div class="sc-head">
     <figcaption class="sc-label">Real AI answer &middot; asked <span data-sc-date>${escapeHtml(formatDate(a.askedAt))}</span></figcaption>
     <label class="sc-pick"><span class="sr-only">Show the answer for</span><select data-sc-trade>${options}</select></label>
   </div>
   <p class="sc-q" data-sc-q>${escapeHtml(a.question)}</p>
-  <p class="sc-a" data-sc-a>${answerHtml(a)}</p>
-  <p class="sc-link"><a href="/report/mega-wash-and-dry">See what you get: a real full report &rarr;</a></p>
+  <p class="sc-k">AI sent this customer to</p>
+  <ul class="sc-names" data-sc-names>${namesHtml(a)}</ul>
+  <p class="sc-lost"><b data-sc-lost>${escapeHtml(lostLine(p.trade, p.town))}</b><span>Not mentioned. Never got the call.</span></p>
+  <details class="sc-full"><summary>Read the full answer, word for word</summary><p class="sc-a" data-sc-a>${answerHtml(a)}</p></details>
+  <p class="sc-link">See real reports: ${sampleLinksHtml()}</p>
 </figure>
-<p class="sc-caption">Is your name in it? These businesses are. If AI doesn&rsquo;t say your name, the call goes to them.</p>
+<p class="sc-caption">Is your business on that list? If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
 <p class="sc-note">Businesses shown are named by AI, not by us. <a href="mailto:hello@aifoundscore.com?subject=Remove%20from%20homepage%20answer">Ask us to remove one</a>.</p>
 <script type="application/json" id="sc-data">${data}</script>`;
 }

@@ -46,7 +46,7 @@ const AUDIT_TIERS = ['xray', 'fix_kit', 'be_the_answer'];
 /** Plans that can be bought before the report exists (public/checkout.html). Be the Answer is off sale. */
 export const PREPAY_TIERS = ['xray'];
 /** Real reports shown in full to everyone (homepage "See what you get"); never sold. */
-export const SHOWCASE_TOKENS = ['mega-wash-and-dry'];
+export const SHOWCASE_TOKENS = ['mega-wash-and-dry', 'vbeonkpiYROpBEiAi74kVQ']; // Glenn Wayne Bakery
 const TOKEN_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const json = (body, status = 200) => Response.json(body, { status, headers: NO_STORE });
