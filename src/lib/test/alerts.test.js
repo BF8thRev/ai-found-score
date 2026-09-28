@@ -96,6 +96,8 @@ test('creditStatus: out from a recent billing error, recovered after a success, 
       { provider: 'openai', ok: true, error: null, created_at: at(40), cost_usd: 16 },
     ],
     scan_raw: [{ engine: 'chatgpt', ok: true, error: null, created_at: at(30), cost_usd: 1.5 }],
+    // Spend reads the billed view (Gemini's free searches taken off); the errors still come from scan_raw.
+    v_scan_raw_billed: [{ engine: 'chatgpt', ok: true, error: null, created_at: at(30), cost_usd: 1.5 }],
     scans: [],
   });
   const env = { ...ENV, CREDIT_BUDGET_OPENAI: `20@${at(48).slice(0, 10)}` };

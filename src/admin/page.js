@@ -382,7 +382,20 @@ function enginesSection(d, errors) {
       <td class="verdict">${toneBadge(r.tone, r.tone === 'good' ? 'keep' : r.tone === 'bad' ? 'review' : r.tone === 'warn' ? 'watch' : 'info')} ${esc(r.verdict)}</td>
     </tr>`).join('')}</tbody>
   </table></div>` : (errors.engines ? '' : '<p class="small">No engine calls recorded yet.</p>')}
+  ${geminiSearchesLine(d, errors)}
 </section>`;
+}
+
+// Gemini searches this month against Google's 5,000 free (v_gemini_searches). Costs above already leave the
+// free ones out; past 5,000 each search costs $0.014, so the line turns amber at 80% and red past it.
+function geminiSearchesLine(d, errors) {
+  if (errors.gemini) return sectionError(errors, 'gemini');
+  const g = (d.gemini || [])[0];
+  const monthStart = new Date().toISOString().slice(0, 7);
+  const q = g && String(g.month).slice(0, 7) === monthStart ? Number(g.queries) || 0 : 0;
+  const tone = q > 5000 ? 'bad' : q >= 4000 ? 'warn' : 'good';
+  const saved = g && String(g.month).slice(0, 7) === monthStart ? Number(g.saved_usd) || 0 : 0;
+  return `<p class="small">${toneBadge(tone, q > 5000 ? 'over' : q >= 4000 ? 'near' : 'free')} <b>Gemini searches this month: ${esc(q.toLocaleString('en-US'))} of 5,000 free</b> (UTC month). ${q > 5000 ? `${esc((q - 5000).toLocaleString('en-US'))} paid at $0.014 each.` : `${esc((5000 - q).toLocaleString('en-US'))} left.`} Free searches are left out of every cost on this page${saved ? ` (${usd(saved)} this month)` : ''}.</p>`;
 }
 
 function funnelSection(d, errors) {
