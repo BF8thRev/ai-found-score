@@ -175,7 +175,7 @@ export function renderShowcase(p) {
   const options = p.order.map((k) => `<option value="${k}"${k === p.trade ? ' selected' : ''}>${escapeHtml(TRADE_LABELS[k] || k)}</option>`).join('');
   // JSON inside <script>: escape "<" so no string can close the tag.
   const data = JSON.stringify({ town: p.town, nouns: TRADE_NOUNS, engines: ENGINE_NAMES, answers: p.answers }).replace(/</g, '\\u003c');
-  return `<p class="sc-intro-line">Your free report shows you this, for your business and your town:</p>
+  return `<p class="sc-intro-line">Your free report shows this for your business and your town:</p>
 <figure class="sc-card">
   <div class="sc-head">
     <figcaption class="sc-label"><span data-sc-src>${sourceLabel(a)}</span> &middot; asked <span data-sc-date>${escapeHtml(formatDate(a.askedAt))}</span></figcaption>

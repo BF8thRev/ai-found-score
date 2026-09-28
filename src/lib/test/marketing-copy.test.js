@@ -82,7 +82,7 @@ test('hero shows who got the call and who did not; nav and card link the real re
   assert.match(index, /class="sc-names"><li>Mega Wash &amp; Dry<\/li><li>One Hour Laundry<\/li><\/ul>/);
   assert.match(index, /class="sc-lost"><b>Every other laundromat in North Babylon<\/b>/);
   assert.match(index, /class="sc-ask"><b>Would it give yours\?<\/b> <a href="#request" data-sc-check>/);
-  assert.match(index, /class="sc-intro-line">Your free report shows you this, for your business and your town:</);
+  assert.match(index, /class="sc-intro-line">Your free report shows this for your business and your town:</);
   assert.match(index, /See real ones: <a href="\/report\/mega-wash-and-dry"[^>]*>Mega Wash &amp; Dry<\/a> &middot; <a href="\/report\/glenn-wayne-bakery"/);
   assert.match(index, /href="\/report\/mega-wash-and-dry">Sample report</);
   assert.ok(!/lost-band|stopped Googling/.test(index), 'the made-up lost-call strip and the "stopped Googling" claim are gone');
