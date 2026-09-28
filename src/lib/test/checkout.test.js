@@ -99,7 +99,7 @@ test('pay up front (/checkout): the audit at full price, the breakdown can ride 
   assert.equal(priceCheckout({ report: null, tier: 'xray', prepay: true, payments: [pay('xray', 4900)] }).status, 409);
   assert.equal(priceCheckout({ report: null, tier: 'xray' }).status, 404, 'no report and not prepay: nothing to sell');
   const f = sessionForm({ ...a, token: 'tokABCDEFGHIJKLMNOPQRS', tier: 'xray', addons: [], origin: 'https://aifoundscore.com', prepay: true });
-  assert.equal(f.get('cancel_url'), 'https://aifoundscore.com/api/checkout/cancel?t=tokABCDEFGHIJKLMNOPQRS');
+  assert.equal(f.get('cancel_url'), 'https://aifoundscore.com/checkout?cancelled=1&t=tokABCDEFGHIJKLMNOPQRS');
   assert.equal(f.get('metadata[prepay]'), '1');
 });
 
