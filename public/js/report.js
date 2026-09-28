@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.wireCheckout?.(root, report.sample ? null : report.id);
   root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', (e) => submitLead(e, report.id)));
   wireOfferScroll(root);
+  wireStickyCta(root);
   wireOfferTotal(root);
   focusOffer(root, new URLSearchParams(window.location.search).get('offer'));
 
@@ -284,6 +285,30 @@ function unlockPanel() {
       <p><strong>Every problem, by name, with the exact fix.</strong> Step by step, with text you can copy and paste, in the ${XRAY.name}. ${XRAY.promise}</p>
       <a class="btn" href="#offer" data-scroll-offer>Show me the fixes</a>
     </div>`;
+}
+
+// Phones only (CSS): a bottom bar that scrolls to the offer band, shown once the reader is past the
+// first screen and hidden while the offer band itself is on screen.
+function stickyCtaV2() {
+  const price = XRAY.price.split(' ')[0];
+  return `<div class="r2-sticky" data-sticky-cta hidden><a class="btn ob-btn" href="#offer" data-scroll-offer>Show me the fixes — ${escapeHtml(price)}</a></div>`;
+}
+
+function wireStickyCta(root) {
+  const bar = root.querySelector('[data-sticky-cta]');
+  const band = root.querySelector('[data-offer-band]');
+  if (!bar || !band || typeof IntersectionObserver === 'undefined') return;
+  let past = false;
+  let inBand = false;
+  const sync = () => {
+    const show = past && !inBand;
+    bar.hidden = !show;
+    document.body.classList.toggle('has-sticky', show);
+  };
+  const onScroll = () => { past = window.scrollY > 500; sync(); };
+  new IntersectionObserver((e) => { inBand = e[0].isIntersecting; sync(); }, { threshold: 0.1 }).observe(band);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 }
 
 // "See what the audit includes" and similar links: scroll to the offer band instead of a second checkout.
@@ -617,8 +642,12 @@ function plural(n, one, many) { return n === 1 ? one : many; }
 // Numbers from the report go into HTML unescaped, so force them to be numbers.
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
+// A trade is stored as the work ("plumbing"); this is the businesses that do it ("plumbers").
+const TRADE_PEOPLE = { plumbing: 'plumbers', roofing: 'roofers', painting: 'painters', landscaping: 'landscapers', cleaning: 'cleaners', moving: 'movers', electrical: 'electricians', electric: 'electricians' };
+
 function tradePlural(trade) {
   const t = String(trade || 'business').toLowerCase();
+  if (TRADE_PEOPLE[t]) return TRADE_PEOPLE[t];
   if (/(s|sh|ch|x)$/.test(t)) return t + 'es';
   if (/[^aeiou]y$/.test(t)) return t.slice(0, -1) + 'ies';
   return t + 's';
@@ -755,7 +784,7 @@ function renderV2(root, report) {
     report.plan ? planPanel(report) : '',
     paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
-    nobodyTwice ? '' : whoAiNamesV2({ b, t, N, cw, proven }),
+    nobodyTwice ? '' : whoAiNamesV2({ report, b, t, N, cw, proven }),
     gridV2({ questions, answers, engines, failedNote }),
     sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     factsV2({ report, b, aById }),
@@ -770,6 +799,7 @@ function renderV2(root, report) {
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
     xrayOk ? '' : bottomLead(report),
     reportTools(),
+    xrayOk ? stickyCtaV2() : '',
     '</div>',
   ].join('');
 
@@ -956,22 +986,26 @@ function shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabe
 }
 
 // 3. Who AI names: businesses named in 2+ answers. Owner always shown.
-function whoAiNamesV2({ b, t, N, cw, proven }) {
+function whoAiNamesV2({ report, b, t, N, cw, proven }) {
   const pct = (n) => (N ? Math.round((n / N) * 1000) / 10 : 0);
   const row = (name, named, first, you) => `
-    <div class="r2-row${you ? ' you' : ''}">
+    <div class="r2-row${you ? ' you' : ''}${you && !named ? ' none' : ''}">
       <span class="nm">${escapeHtml(name)}${you ? ' (you)' : ''}</span>
       <span class="c">${named} named${first ? ` · ${first} first` : ''}</span>
       <div class="t" aria-hidden="true"><i class="first" style="width:${pct(first)}%"></i><i class="named" style="width:${pct(named - first)}%"></i></div>
     </div>`;
+  // Businesses named only once are left out of the bars (a one-off may be noise) but still counted.
+  const provenIds = new Set(proven.map((e) => e.id));
+  const once = (report.entities || []).filter((e) => !e.isYou && !provenIds.has(e.id)).length;
   return `
     <section class="report-section">
-      <h2>Who AI names for ${escapeHtml(tradePlural(b.trade))} near ${escapeHtml(b.town || b.city || 'you')}</h2>
+      <h2>Who got the call instead</h2>
       <p class="sub">Every business named in at least 2 of the ${N} ${cw.unit}. Dark bar = named first.</p>
       <div class="r2-bars">
         ${row(b.name, t.namedYou, t.firstYou, true)}
         ${proven.map((e) => row(e.name, num(e.named), num(e.first), false)).join('')}
       </div>
+      ${once ? `<p class="r2-once">+ ${once} other ${plural(once, 'business', 'businesses')} named once each.</p>` : ''}
       <div class="r2-legend"><span>Named first</span><span class="n">Named, not first</span></div>
     </section>`;
 }
@@ -1017,6 +1051,27 @@ function safeHref(u) {
 }
 
 // 5. Why they got named instead: sources cited in answers the owner lost.
+// The sites cited in answers a locked report still shows in full (the headline answer keeps its citations).
+function citedDomainsV2(answers, ownDomain) {
+  const seen = new Set();
+  const engs = new Set();
+  const domains = [];
+  for (const a of answers || []) {
+    for (const c of a.citations || []) {
+      const d = String((c && c.domain) || '').replace(/^www\./, '').toLowerCase();
+      if (!d || d === ownDomain || seen.has(d)) continue;
+      seen.add(d);
+      engs.add(a.engine);
+      domains.push(d);
+    }
+  }
+  if (!domains.length) return '';
+  const label = engs.size === 1 ? `Cited in ${engineName([...engs][0])}’s answer above` : 'Cited in the answers above';
+  return `
+      <p class="r2-cited-k">${escapeHtml(label)}</p>
+      <ul class="r2-cited">${domains.slice(0, 4).map((d) => `<li>${escapeHtml(d)}</li>`).join('')}</ul>`;
+}
+
 function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
   // Locked: the cited sites are the audit's; only the tally is sent (src/lib/lock.js).
   const sum = report.sourcesSummary;
@@ -1026,7 +1081,8 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
     <section class="report-section">
       <h2>Why they got named instead</h2>
       <p class="sub">AI cited ${num(sum.cited)} ${plural(num(sum.cited), 'website', 'websites')} in the ${cw.unit} that didn’t name you.${num(sum.missingYou) ? ` <strong>${num(sum.missingYou)} of them list other ${escapeHtml(tradePlural(b.trade))} and not you.</strong>` : ''}</p>
-      <div class="listing-card">${blurred('Each site AI cited, who it lists first, and whether you’re on it, with the link.')}</div>
+      ${citedDomainsV2(report.answers, ownDomain)}
+      <div class="listing-card">${blurred('Which sites leave you out, who each lists first, and the link to each.')}</div>
     </section>`;
   }
   const order = (s) => (s.youListed === false ? 0 : s.youListed == null ? 1 : 2);
@@ -1060,6 +1116,14 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
       <p class="sub">The sites the AI cited in the ${cw.unit} that didn’t name you, and whether you’re on them.</p>
       ${cards}
     </section>`;
+}
+
+// One segment per check: green passed, red failed. Says nothing about which checks (locked).
+function siteMeterV2(total, passed) {
+  const n = Math.min(Math.max(total, 0), 30);
+  const ok = Math.min(Math.max(passed, 0), n);
+  const segs = Array.from({ length: n }, (_, i) => `<i${i < ok ? '' : ' class="f"'}></i>`).join('');
+  return `<div class="r2-meter" style="--n:${n}" role="img" aria-label="${ok} of ${n} checks passed">${segs}</div>`;
 }
 
 // 6b. How AI describes you: short phrases quoted exactly from answers that named you.
@@ -1144,7 +1208,9 @@ function siteV2(report) {
     <section class="report-section r2-site">
       <h2>Can AI read your website?</h2>
       <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI crawler would.</p>
+      ${sc.reachable && num(sc.checks) > 0 ? siteMeterV2(num(sc.checks), num(sc.passed)) : ''}
       <ul class="r2-site-list">${verdict}</ul>
+      ${sc.reachable && failedN ? `<p class="r2-site-lock">🔒 Which ${failedN === 1 ? 'one' : failedN} failed, and the exact fix for ${failedN === 1 ? 'it' : 'each'}, is in the audit.</p>` : ''}
     </section>`;
   }
   const row = (ok, text) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span> ${text}</li>`;

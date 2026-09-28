@@ -132,3 +132,28 @@
 .r2-locked-list .bar { height: 12px; border-radius: 6px; background: linear-gradient(90deg, #CBD5E3, #E3E9F1); filter: blur(2px); max-width: 70%; }
 .r2-locked-list .lock { margin-left: auto; font-size: 14px; }
 .r2-locked-more { margin: 8px 0 0; }
+
+
+/* Who got the call instead: the owner's own row is an empty, hatched bar when nobody named them. */
+.r2-row.you.none .t { background: repeating-linear-gradient(45deg, #FDF1EF, #FDF1EF 6px, #fff 6px, #fff 12px); border: 1.5px dashed var(--red); }
+.r2-row.you.none { color: var(--red); }
+.r2-once { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
+
+/* Why they got named instead: the sites AI cited. */
+.r2-cited-k { margin: 14px 0 4px; font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.r2-cited { list-style: none; margin: 0 0 12px; padding: 0; }
+.r2-cited li { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 15.5px; font-weight: 600; overflow-wrap: anywhere; }
+.r2-cited li:last-child { border-bottom: 0; }
+
+/* Can AI read your website: one segment per check. */
+.r2-meter { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 4px; margin: 14px 0 4px; }
+.r2-meter i { height: 14px; border-radius: 4px; background: var(--green); }
+.r2-meter i.f { background: var(--red); }
+.r2-site-lock { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: var(--navy); }
+
+/* Phones: bottom bar to the offer (report.js stickyCtaV2). */
+.r2-sticky { display: none; }
+@media (max-width: 820px) {
+  .r2-sticky:not([hidden]) { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(11, 42, 91, .12); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
+  body.has-sticky .site-footer { padding-bottom: 88px; }
+}
