@@ -514,6 +514,23 @@ test('routes: /admin/scan/paid re-runs a paid audit by token; gated, CSRF-checke
   assert.equal((await call(env, '/admin/scan/paid', { headers: bearer })).status, 303, 'GET goes back to the page');
 });
 
+test('routes: /admin/scan/cancel is reachable (not the 404 allow-list); gated, validated', async () => {
+  const bearer = { Authorization: `Bearer ${SECRET}` };
+  const post = (env, id, headers = bearer) => call(env, '/admin/scan/cancel', {
+    method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ id }).toString(),
+  });
+  const id = '11111111-1111-4111-8111-111111111111';
+  assert.equal((await post({ ADMIN_TOKEN: '  ' }, id)).status, 404, 'no ADMIN_TOKEN');
+  const { env } = mockEnv();
+  assert.equal((await post(env, id, {})).status, 303, 'unauthenticated → the login page');
+  assert.equal((await post(env, 'not-a-uuid')).status, 422);
+  // With no database configured it answers the reason (503), never "Not found".
+  const r = await post(env, id);
+  assert.equal(r.status, 503);
+  assert.match(await r.text(), /Database not configured/);
+  assert.equal((await call(env, '/admin/scan/cancel', { headers: bearer })).status, 303, 'GET goes back to the page');
+});
+
 test('fixed plans: charged monthly from the start date; break-even from unit costs', async () => {
   const { chargeDates, fixedCosts, unitEconomics, stripeFee } = await import('../metrics.js');
   const plan = { name: 'Workers Paid', usdPerMonth: 5, since: '2026-09-28' };
