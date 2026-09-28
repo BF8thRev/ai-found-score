@@ -616,7 +616,7 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
   background-repeat: no-repeat; background-position: right 11px center;
 }
 .sc-pick select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.sc-q { margin: 0 0 12px auto; width: fit-content; max-width: 92%; padding: 10px 14px; background: var(--wash-2); color: var(--navy); font-weight: 600; font-size: 15.5px; line-height: 1.45; border-radius: 14px 14px 4px 14px; }
+.sc-q { margin: 0 0 12px auto; width: fit-content; max-width: 100%; padding: 10px 14px; background: var(--wash-2); color: var(--navy); font-weight: 600; font-size: 15px; line-height: 1.45; border-radius: 14px 14px 4px 14px; }
 .sc-a { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
 .sc-a b { font-weight: 700; background: #FFF1C2; border-radius: 3px; padding: 0 2px; }
 .sc-more { color: var(--muted); }
