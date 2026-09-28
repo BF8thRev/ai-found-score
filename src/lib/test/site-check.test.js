@@ -85,3 +85,30 @@ test('POST /api/request turns away a made-up website before saving anything', as
   assert.equal(j.error, MESSAGES.unreachable);
   assert.equal(saved, false);
 });
+
+test('findZip: schema postalCode first, else the most frequent "Town, ST 12345"', async () => {
+  const { findZip } = await import('../site-check.js');
+  assert.equal(findZip('<script type="application/ld+json">{"postalCode": "11703"}</script><p>Deer Park, NY 11729</p>'), '11703');
+  assert.equal(findZip('<p>Near Deer Park, NY 11729</p><footer>1800 Arctic Ave, Bohemia, NY 11716</footer><p>Bohemia, NY 11716</p>'), '11716');
+  assert.equal(findZip('<p>Call 631-256-5140. Est. 12345 customers served</p>'), '');
+  assert.deepEqual(await checkWebsite('glennwayne.com', { fetchImpl: page(200, '<footer>Bohemia, NY 11716</footer>') }), { ok: true, url: 'https://glennwayne.com/', zip: '11716' });
+});
+
+test('zipFromPlaces: only a Google listing with this same website counts; no key → no call', async () => {
+  const { zipFromPlaces } = await import('../site-check.js');
+  const calls = [];
+  const placesFetch = async (u, init) => {
+    calls.push(JSON.parse(init.body).textQuery);
+    return Response.json({ places: [
+      { formattedAddress: '12 Main St, Springfield, IL 62701, USA', websiteUri: 'https://otherbakery.com/' },
+      { formattedAddress: '1800 Arctic Ave, Bohemia, NY 11716, USA', websiteUri: 'https://www.glennwayne.com/' },
+    ] });
+  };
+  const env = { GOOGLE_PLACES_API_KEY: 'k' };
+  assert.equal(await zipFromPlaces('Glenn Wayne Bakery', 'https://glennwayne.com/', env, { placesFetch }), '11716');
+  assert.equal(await zipFromPlaces('Glenn Wayne Bakery', 'https://nomatch.com/', env, { placesFetch }), '');
+  assert.equal(await zipFromPlaces('Glenn Wayne Bakery', 'https://www.facebook.com/gw', env, { placesFetch }), '');
+  assert.equal(calls.length, 2);
+  assert.equal(await zipFromPlaces('Glenn Wayne Bakery', 'https://glennwayne.com/', {}, { placesFetch }), '');
+  assert.equal(calls.length, 2);
+});

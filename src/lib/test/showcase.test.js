@@ -43,7 +43,7 @@ test('pickShowcase: visitor town first, else the default town; ?trade= when that
 test('renderShowcase: exact question, escaped verbatim excerpt, names in bold, dated label', () => {
   const p = pickShowcase([row({ excerpt: 'Try <Acme> Plumbing now.', spans: [[4, 19]] })], null, null);
   const html = renderShowcase(p);
-  assert.match(html, /Real AI answer &middot; asked <span data-sc-date>Sep 24, 2026<\/span>/);
+  assert.match(html, /<span data-sc-src>Real AI answer<\/span> &middot; asked <span data-sc-date>Sep 24, 2026<\/span>/);
   assert.match(html, /What&#39;s the best plumber in Massapequa, NY\?/);
   assert.match(html, /Try <b>&lt;Acme&gt; Plumbing<\/b> now\.<span class="sc-more"> &hellip;<\/span>/);
   assert.ok(!/<script type="application\/json" id="sc-data">[^]*<Acme/.test(html), 'JSON cannot close its <script>');
@@ -79,6 +79,11 @@ test('renderShowcase: names who got the call, then everyone else in town; full a
   assert.match(html, /<b data-sc-lost>Every other plumber in Massapequa<\/b><span>Not mentioned\. Never got the call\.<\/span>/);
   assert.match(html, /<details class="sc-full"><summary>[^<]+<\/summary><p class="sc-a" data-sc-a>/);
   assert.match(html, /"town":"Massapequa"/);
+});
+
+test('renderShowcase: the label names the assistant that answered, else "Real AI answer"', () => {
+  assert.match(renderShowcase(pickShowcase([row({ engine: 'chatgpt' })], null, null)), /<span data-sc-src>ChatGPT&rsquo;s answer<\/span> &middot; asked/);
+  assert.match(renderShowcase(pickShowcase([row({ engine: 'nope' })], null, null)), /<span data-sc-src>Real AI answer<\/span>/);
 });
 
 test('namedIn / namesHtml: each business once, in order; capped with "+N more"', () => {

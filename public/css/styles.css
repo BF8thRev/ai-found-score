@@ -560,6 +560,32 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .hero-cta { display: inline-flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .hero-micro { margin: 0; font-size: 14px; color: var(--muted); text-align: center; letter-spacing: .01em; }
+/* Hero form: name + website side by side, ZIP + button under them. */
+.hero-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 560px; }
+.hero-form label { display: grid; gap: 4px; font-size: 13.5px; font-weight: 600; color: var(--navy); }
+.hero-form input {
+  font: inherit; font-size: 16px; font-weight: 400; color: var(--ink); background: #fff; border: 1px solid #C9D3E1; border-radius: 10px; padding: 12px 13px; width: 100%; box-sizing: border-box;
+}
+.hero-form input:focus { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
+.hero-form .full, .hero-form fieldset { grid-column: 1 / -1; }
+.hero-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.hero-form #zip-field { max-width: 180px; }
+.hero-form .field-found { margin: 0; font-size: 15px; font-weight: 600; color: var(--green); }
+.hero-form .link-btn { font: inherit; font-size: 14px; font-weight: 500; color: var(--blue); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.hero-micro a { color: var(--muted); }
+.hero-done { margin: 0; padding: 14px 16px; border-radius: 12px; background: #EAF6EF; border: 1px solid #CBE8D7; font-weight: 600; color: var(--navy); max-width: 560px; }
+.hero-done a { color: var(--blue); }
+.hero-start .ts-help { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.hero-start { scroll-margin-top: 90px; }
+.hero-form .btn.big { grid-column: 1 / -1; width: 100%; text-align: center; }
+.hero-form .status, .hero-form .hero-micro { grid-column: 1 / -1; }
+.hero-form[hidden], .hero-form .status:empty, .hero-form [hidden] { display: none; }
+.hero-form .status { margin: 0; font-size: 15px; }
+.hero-form .status.error { color: var(--red); font-weight: 600; }
+@media (max-width: 520px) {
+  .hero-form { grid-template-columns: 1fr; }
+  .hero-form #zip-field { max-width: none; }
+}
 .sc-link { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14.5px; }
 .sc-link a { color: var(--blue); font-weight: 600; text-decoration: none; }
 .sc-link a:hover { text-decoration: underline; }

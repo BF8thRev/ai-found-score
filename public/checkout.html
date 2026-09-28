@@ -55,7 +55,8 @@
         <form id="co-form" novalidate>
           <label>Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="Harborview Plumbing &amp; Heating"></label>
           <label>Website <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="yourbusiness.com or your Facebook page"></label>
-          <label>ZIP code <input name="zip" type="text" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
+          <!-- The ZIP comes from the business's website (/api/site-check); this box shows only when it doesn't have one. -->
+          <label id="zip-field" hidden>Your ZIP code <input name="zip" type="text" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
           <p class="field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
           <label id="town-field" hidden>Town <input name="town" type="text" maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
           <input name="state" type="hidden" value="NY" data-geo-value="state">
@@ -306,30 +307,42 @@
     delete data.addon_breakdown;
     var ts2 = /^(.+?)\s*,\s*([A-Za-z]{2})$/.exec(data.town || '');
     if (ts2 && STATES.indexOf(ts2[2].toUpperCase()) >= 0) { data.town = ts2[1]; data.state = ts2[2].toUpperCase(); }
-    // The town comes from the ZIP; if that lookup is still running, finish it first.
-    if (!data.town && /^\d{5}$/.test(data.zip)) {
-      lookupZip();
-      if (zipBusy) { zipPending.then(function () { form.requestSubmit(); }); return; }
-    }
     var missing = [];
     if (!data.business_name) missing.push('your business name');
     if (!/^\S+\.\S+$/.test(data.website || '')) missing.push('your website (or your Facebook or Yelp page)');
-    if (!/^\d{5}$/.test(data.zip)) missing.push('a 5-digit ZIP');
-    else if (!data.town) { missing.push('your town'); showTownField(); }
-    data.trade = kindText();
-    delete data.trade_other;
-    if (missing.length) { show('error', 'Please add ' + missing.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'); return; }
+    if (missing.length) { show('error', 'Please add ' + missing.join(' and ') + '.'); return; }
     // The gate: a real website and a real business name before anything is saved or scanned
-    // (/js/site-gate.js; the popup says what to fix). Checked once per name + website.
+    // (/js/site-gate.js; the popup says what to fix). Checked once per name + website. It also
+    // brings back the ZIP from the business's own site, so the owner doesn't type one.
     var gateKey = data.business_name + '|' + data.website;
-    if (window.siteGate && gateKey !== gatedKey) {
-      var gBtn = payBtn; var gLabel = gBtn.textContent; gBtn.disabled = true; gBtn.textContent = 'Checking your website…';
+    if (gateKey !== gatedKey) {
+      if (!window.siteGate) { gatedKey = gateKey; form.requestSubmit(); return; }
+      payBtn.disabled = true; payBtn.textContent = 'Checking your website…';
       window.siteGate(form, data).then(function (go) {
-        gBtn.disabled = false; gBtn.textContent = gLabel;
-        if (go) { gatedKey = gateKey; form.requestSubmit(); }
+        resetPay();
+        if (!go) return;
+        gatedKey = gateKey;
+        if (data.siteZip && !/^\d{5}$/.test(zipInput.value)) { zipInput.value = data.siteZip; lookupZip(); }
+        form.requestSubmit();
       });
       return;
     }
+    // No ZIP on the website (or a Facebook/Yelp page): ask for it.
+    if (!/^\d{5}$/.test(data.zip)) {
+      el('zip-field').hidden = false;
+      show('error', 'We couldn&rsquo;t find your ZIP code on your website. What&rsquo;s your ZIP?');
+      zipInput.focus();
+      return;
+    }
+    // The town comes from the ZIP; if that lookup is still running, finish it first.
+    if (!data.town) {
+      lookupZip();
+      if (zipBusy) { zipPending.then(function () { form.requestSubmit(); }); return; }
+      showTownField();
+      show('error', 'Please add your town.'); return;
+    }
+    data.trade = kindText();
+    delete data.trade_other;
     clearStatus();
 
     busy = true;

@@ -13,6 +13,7 @@
 
 import { TRADES, normalizeTrade } from '../../scanner/questions.js';
 import { DEFAULT_GEO } from './geo.js';
+import { ENGINE_NAMES } from '../../shared/report-v2.js';
 
 export const CACHE_SECONDS = 3600;
 export const FAIL_CACHE_SECONDS = 300;
@@ -71,7 +72,7 @@ export function pickShowcase(rows, geo, trade) {
     if (!validRow(r)) continue;
     const key = `${r.town.toLowerCase()}|${r.state}`;
     if (!byTown.has(key)) byTown.set(key, { town: r.town, state: r.state, answers: {} });
-    byTown.get(key).answers[r.trade] = { question: r.question, excerpt: r.excerpt, spans: r.spans, truncated: r.truncated !== false, askedAt: r.asked_at };
+    byTown.get(key).answers[r.trade] = { question: r.question, excerpt: r.excerpt, spans: r.spans, truncated: r.truncated !== false, askedAt: r.asked_at, engine: ENGINE_NAMES[r.engine] ? r.engine : null };
   }
   const g = geo || DEFAULT_GEO;
   const want = tradeParam(trade) || DEFAULT_TRADE;
@@ -125,6 +126,11 @@ export function namesHtml(a) {
   return li + more;
 }
 
+/** Who answered: "ChatGPT's answer", else "Real AI answer". */
+export function sourceLabel(a) {
+  return a.engine && ENGINE_NAMES[a.engine] ? `${ENGINE_NAMES[a.engine]}&rsquo;s answer` : 'Real AI answer';
+}
+
 /** "Every other plumber in Massapequa" */
 export function lostLine(trade, town) {
   return `Every other ${TRADE_NOUNS[trade] || 'business'} in ${town}`;
@@ -141,10 +147,10 @@ export function renderShowcase(p) {
   const a = p.answers[p.trade];
   const options = p.order.map((k) => `<option value="${k}"${k === p.trade ? ' selected' : ''}>${escapeHtml(TRADE_LABELS[k] || k)}</option>`).join('');
   // JSON inside <script>: escape "<" so no string can close the tag.
-  const data = JSON.stringify({ town: p.town, nouns: TRADE_NOUNS, answers: p.answers }).replace(/</g, '\\u003c');
+  const data = JSON.stringify({ town: p.town, nouns: TRADE_NOUNS, engines: ENGINE_NAMES, answers: p.answers }).replace(/</g, '\\u003c');
   return `<figure class="sc-card">
   <div class="sc-head">
-    <figcaption class="sc-label">Real AI answer &middot; asked <span data-sc-date>${escapeHtml(formatDate(a.askedAt))}</span></figcaption>
+    <figcaption class="sc-label"><span data-sc-src>${sourceLabel(a)}</span> &middot; asked <span data-sc-date>${escapeHtml(formatDate(a.askedAt))}</span></figcaption>
     <label class="sc-pick"><span class="sr-only">Show the answer for</span><select data-sc-trade>${options}</select></label>
   </div>
   <p class="sc-q" data-sc-q>${escapeHtml(a.question)}</p>
@@ -172,7 +178,7 @@ export async function readShowcaseRows(env, { fetchImpl = fetch } = {}) {
   const key = String(env?.SUPABASE_ANON_KEY || '').trim();
   const base = String(env?.SUPABASE_URL || '').replace(/\/+$/, '');
   if (!base || !key) throw new Error('supabase not configured');
-  const q = 'active=eq.true&select=trade,town,state,question,excerpt,spans,truncated,asked_at&limit=5000';
+  const q = 'active=eq.true&select=trade,town,state,engine,question,excerpt,spans,truncated,asked_at&limit=5000';
   const res = await fetchImpl(`${base}/rest/v1/showcase_answers?${q}`, {
     headers: { apikey: key, Authorization: `Bearer ${key}` },
     signal: AbortSignal.timeout(2500),

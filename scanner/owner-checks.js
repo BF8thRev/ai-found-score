@@ -466,7 +466,7 @@ export function pickPlace(places, business) {
 }
 
 /** One Places Text Search call → { ok, places: [...], error }. */
-async function placesSearch(textQuery, key, fieldMask, fetchImpl) {
+export async function placesSearch(textQuery, key, fieldMask, fetchImpl) {
   try {
     const res = await fetchImpl(PLACES_URL, {
       method: 'POST',

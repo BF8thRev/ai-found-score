@@ -119,7 +119,7 @@ export default {
       return (await rateLimit(env, request, 'zip')) || handleZip(url);
     }
     if (url.pathname === '/api/site-check' && request.method === 'GET') {
-      return (await rateLimit(env, request, 'site')) || handleSiteCheck(url);
+      return (await rateLimit(env, request, 'site')) || handleSiteCheck(url, { env });
     }
     if (url.pathname === '/api/questions' && request.method === 'GET') {
       return (await rateLimit(env, request, 'questions')) || handleQuestions(url);

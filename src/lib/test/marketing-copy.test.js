@@ -14,11 +14,12 @@ const PAGES = ['index.html', 'checkout.html', 'about.html', 'terms.html', 'refun
 const read = (f) => readFileSync(new URL(f, PUBLIC), 'utf8');
 
 // index.html quotes third-party usage figures (a cited stats band); that band is not our claim.
-// The hero's sample card is a labelled verbatim quote from the sample report. The Full Audit
-// tier names the assistants it asks (owner decision, site copy v2): that one list item may.
+// The hero's answer card is a labelled verbatim quote and says which assistant gave it (owner
+// decision, Sep 28 2026: "ChatGPT's answer"). The Full Audit tier names the assistants it asks
+// (owner decision, site copy v2): that one list item may.
 const withoutStats = (html) => html
   .replace(/<section class="stats-band"[\s\S]*?<\/section>/, '')
-  .replace(/<div class="real-answer" data-(?:real|sample)-quote>[\s\S]*?<\/figure>[\s\S]*?<\/p>\s*<\/div>/, '')
+  .replace(/<div class="real-answer" data-(?:real-quote|sample-quote|showcase)>[\s\S]*?<\/figure>[\s\S]*?<\/p>\s*<\/div>/, '')
   .replace(/<li data-assistant-list>[\s\S]*?<\/li>/g, '');
 const visible = (html) => html
   .replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ')
