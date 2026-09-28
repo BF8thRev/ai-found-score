@@ -410,7 +410,20 @@ function planPanel(report) {
 }
 
 // Real reports linked from the public pages as examples ("See a real report"): never sold from.
-const SHOWCASE_TOKENS = ['mega-wash-and-dry'];
+// Same list as SHOWCASE_TOKENS in src/lib/checkout.js (the server refuses checkout for these too).
+const SHOWCASE_TOKENS = ['mega-wash-and-dry', 'vbeonkpiYROpBEiAi74kVQ'];
+// The sample reports a visitor can switch between (href is the readable link; SHOWCASE_ALIASES there).
+const SAMPLE_REPORTS = [
+  { id: 'mega-wash-and-dry', name: 'Mega Wash & Dry', kind: 'Laundromat', href: '/report/mega-wash-and-dry' },
+  { id: 'vbeonkpiYROpBEiAi74kVQ', name: 'Glenn Wayne Bakery', kind: 'Bakery', href: '/report/glenn-wayne-bakery' },
+];
+function samplesStrip(report) {
+  if (!SHOWCASE_TOKENS.includes(String(report.id || ''))) return '';
+  const tabs = SAMPLE_REPORTS.map((r) => r.id === report.id
+    ? `<span class="sample-tab on" aria-current="page">${escapeHtml(r.name)} <small>${escapeHtml(r.kind)}</small></span>`
+    : `<a class="sample-tab" href="${r.href}">${escapeHtml(r.name)} <small>${escapeHtml(r.kind)}</small></a>`).join('');
+  return `<nav class="sample-switch" aria-label="Sample reports"><span class="sample-switch-k">Real sample reports, shown with each owner&rsquo;s permission:</span>${tabs}</nav>`;
+}
 function isDemoReport(report) {
   return !!report.sample || SHOWCASE_TOKENS.includes(String(report.id || ''));
 }
@@ -783,6 +796,7 @@ function headerV2(report, b, meta, keepLink = false) {
     <section class="report-header">
       <div class="wrap r2">
         ${report.sample ? '<div class="sample-banner"><strong>Sample report.</strong> A fictional business, fictional competitors and made-up answers. Yours shows your real searches, word for word.</div>' : ''}
+        ${samplesStrip(report)}
         <h1>${escapeHtml(b.name)}</h1>
         <p class="biz-meta">${meta}</p>
         <p class="fine">Checked ${escapeHtml(fmtDate(report.generatedAt))}${keepLink ? ' · <a href="#keep" data-scroll-keep>Email me this report</a>' : ''}</p>
