@@ -1,9 +1,11 @@
 // src/admin/page.js — HTML for /admin (server-rendered; every dynamic value goes through esc()).
 
-import { ENGINE_NAMES, ACTIVE_ENGINES, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
+import { ENGINE_NAMES, ACTIVE_ENGINES, FREE_ENGINES, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
+import { estimateRequestScanUsd } from '../lib/auto-scan.js';
 import { TRADES } from '../../scanner/questions.js';
 import {
   esc, usd, pct, moneySummary, engineVerdicts, activityFeed, shortTime, nyDate, EXPENSE_CATEGORIES,
+  FIXED_COSTS, STRIPE_FEE, chargeDates, fixedCosts, unitEconomics,
 } from './metrics.js';
 
 const engineName = (id) => ENGINE_NAMES[id] || id;
@@ -102,16 +104,24 @@ const signed = (n) => `<span class="${n > 0 ? 'pos' : n < 0 ? 'neg' : ''}">${usd
 
 function moneySection(d, errors, now) {
   const m = moneySummary(d.money || [], now);
+  // Fixed plans (FIXED_COSTS) aren't in the database: add their charges to spent and net here.
+  const fixed = fixedCosts(FIXED_COSTS, now);
+  for (const p of ['week', 'month', 'all']) {
+    m[p].plans = fixed[p];
+    m[p].spent += fixed[p];
+    m[p].net -= fixed[p];
+  }
   const k = d.kpis || {};
   const col = (key, f) => ['week', 'month', 'all'].map((p) => `<td class="n">${f(m[p][key])}</td>`).join('');
   return `<section id="money">
   <h2>Money</h2>
-  <p class="sub">Spent = metered API cost (every engine and extractor call) + expenses entered below. Earned = live Stripe payments only. Weeks start Monday, New York time.</p>
+  <p class="sub">Spent = metered API cost (every engine and extractor call) + fixed plans (see Costs and break-even) + expenses entered below. Earned = live Stripe payments only. Weeks start Monday, New York time.</p>
   ${sectionError(errors, 'money', 'kpis')}
   <div class="tw"><table class="money-grid">
     <thead><tr><th></th><th class="n">This week</th><th class="n">This month</th><th class="n">All time</th></tr></thead>
     <tbody>
       <tr><td>API spend</td>${col('apiSpend', usd)}</tr>
+      <tr><td>Plans (fixed)</td>${col('plans', usd)}</tr>
       <tr><td>Other expenses</td>${col('expenses', usd)}</tr>
       <tr><td><b>Spent</b></td>${col('spent', usd)}</tr>
       <tr><td><b>Earned</b></td>${col('revenue', usd)}</tr>
@@ -123,6 +133,47 @@ function moneySection(d, errors, now) {
     <div class="tile"><b>${usd(k.avg_cost_per_scan_usd)}</b><span>Average cost per scan</span></div>
     <div class="tile"><b>${esc(k.scans ?? '—')}</b><span>Scans run (${esc(k.reports_saved ?? 0)} reports saved)</span></div>
     <div class="tile"><b>${usd(m.all.topups)}</b><span>API credits bought (cash; not added to spent)</span></div>
+  </div>
+</section>`;
+}
+
+// Costs and break-even: fixed plans with their start dates, what one free report and one paid audit
+// cost (real averages once scans have run, else the price table), and what a sale keeps.
+function costsSection(d, errors, { now, activeIds = ACTIVE_ENGINES }) {
+  const today = nyDate(now);
+  const fixed = fixedCosts(FIXED_COSTS, now);
+  const freeIds = activeIds.filter((e) => FREE_ENGINES.includes(e));
+  const est = {
+    free: estimateRequestScanUsd(freeIds.length ? freeIds : FREE_ENGINES),
+    paid: estimateScanCost({ engines: activeIds, questions: 5, runs: 1 }).total,
+  };
+  const u = unitEconomics({ scans: d.unitScans || [], est, fixedPerMonth: fixed.perMonth });
+  const basis = (x) => (x.real ? `average of ${x.n} finished scan${x.n === 1 ? '' : 's'}` : 'estimate from the price table (no finished scans yet)');
+  const plans = FIXED_COSTS.map((c) => {
+    const charges = chargeDates(c, today);
+    const live = c.since <= today && (!c.until || c.until >= today);
+    return `<tr><td><b>${esc(c.name)}</b><div class="small">${esc(c.why || '')}</div></td>
+      <td class="n">${usd(c.usdPerMonth)}/mo</td>
+      <td>${esc(c.since)}${c.until ? ` to ${esc(c.until)}` : ''}</td>
+      <td>${live ? toneBadge('good', 'Active') : toneBadge('neutral', c.since > today ? 'Starts later' : 'Ended')}</td>
+      <td class="n">${usd(charges.length * c.usdPerMonth)}<div class="small">${charges.length} charge${charges.length === 1 ? '' : 's'}</div></td></tr>`;
+  }).join('');
+  return `<section id="costs">
+  <h2>Costs and break-even</h2>
+  <p class="sub">Fixed plans are charged monthly from their start date and counted in Money above. To add or end a plan, edit <code>FIXED_COSTS</code> in <code>src/admin/metrics.js</code>. Stripe fee: ${esc((STRIPE_FEE.pct * 100).toFixed(1))}% + ${esc(Math.round(STRIPE_FEE.fixedUsd * 100))}¢ per charge.</p>
+  ${sectionError(errors, 'unitScans')}
+  <div class="tw"><table>
+    <thead><tr><th>Plan</th><th class="n">Cost</th><th>Since</th><th>Status</th><th class="n">Paid so far</th></tr></thead>
+    <tbody>${plans}</tbody>
+  </table></div>
+  <div class="tiles">
+    <div class="tile"><b>${usd(fixed.perMonth)}</b><span>Fixed plans per month</span></div>
+    <div class="tile"><b>${usd(u.free.usd)}</b><span>Cost of one free report (${esc(basis(u.free))})</span></div>
+    <div class="tile"><b>${usd(u.paid.usd)}</b><span>Cost of one $49 audit scan (${esc(basis(u.paid))})</span></div>
+    <div class="tile"><b>${usd(u.keepAudit)}</b><span>Kept per $49 audit, after ${usd(u.feeAudit)} Stripe fee and the scan</span></div>
+    <div class="tile"><b>${usd(u.keepWithAddon)}</b><span>Kept per $74 order (audit + Breakdown), after ${usd(u.feeWithAddon)} fee</span></div>
+    <div class="tile"><b>${esc(u.auditsForFixed ?? '—')}</b><span>Audits a month to cover the fixed plans</span></div>
+    <div class="tile"><b>${esc(u.freePerAudit ?? '—')}</b><span>Free reports one audit sale pays for</span></div>
   </div>
 </section>`;
 }
@@ -416,12 +467,13 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
 </div></header>
 <main class="adm wrap">
   <nav class="adm-nav" aria-label="Sections">
-    <a href="#money">Money</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
+    <a href="#money">Money</a><a href="#costs">Costs</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
     <a href="#funnel">Funnel</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
   </nav>
   ${creditBanner(d.credits)}
   ${notConfigured}
   ${moneySection(d, errors, now)}
+  ${costsSection(d, errors, { now, activeIds })}
   ${requestsSection(d, errors, { flash: flashHtml(flash.requests) })}
   ${runSection(d, { watch, engineIds, flash: flashHtml(flash.run), activeIds })}
   ${scansSection(d, errors)}
