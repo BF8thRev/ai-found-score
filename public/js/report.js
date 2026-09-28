@@ -278,8 +278,8 @@ const XRAY = {
 function unlockPanel() {
   return `
     <div class="unlock-panel">
-      <p><strong>The fix steps are in the ${XRAY.name}.</strong> Every problem by name, in order, with the exact steps and text you can copy and paste. ${XRAY.promise}</p>
-      <a class="btn-secondary" href="#offer" data-scroll-offer>See what the audit includes</a>
+      <p><strong>Every problem, by name, with the exact fix.</strong> Step by step, with text you can copy and paste, in the ${XRAY.name}. ${XRAY.promise}</p>
+      <a class="btn" href="#offer" data-scroll-offer>Show me the fixes</a>
     </div>`;
 }
 
@@ -1105,9 +1105,7 @@ function listingsV2({ listings, badListings }) {
         <div class="listing-card">
           <span class="badge ${l.status === 'match' ? 'match' : l.status === 'unchecked' ? 'found' : 'mismatch'}">${l.status === 'match' ? '✓ Correct' : l.status === 'unchecked' ? 'Found' : '✗ Needs a fix'}</span>
           <h3>${escapeHtml(l.platform)}</h3>
-          ${l.locked
-            ? blurred('What this listing shows, what it should say, and where to change it.')
-            : `${l.details ? `<p>${escapeHtml(l.details)}</p>` : ''}${fields(l.fields)}`}
+          ${l.locked ? '' : `${l.details ? `<p>${escapeHtml(l.details)}</p>` : ''}${fields(l.fields)}`}
         </div>`).join('')}
     </section>`;
 }
@@ -1130,7 +1128,6 @@ function siteV2(report) {
       <h2>Can AI read your website?</h2>
       <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI crawler would.</p>
       <ul class="r2-site-list">${verdict}</ul>
-      ${failedN ? `<div class="listing-card">${blurred('Which checks failed, what each one means, and the exact fix.')}</div>` : ''}
     </section>`;
   }
   const row = (ok, text) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span> ${text}</li>`;
@@ -1255,8 +1252,11 @@ function issuesV2({ issues, locked, xrayOk }) {
       <h2>What to fix</h2>
       <p class="sub">We found <strong>${issues.length} ${plural(issues.length, 'problem', 'problems')}</strong> you can fix.</p>
       <p class="r2-sev">${sevs.map((k) => `<span class="badge ${escapeHtml(k)}">${num(bySev[k])} ${escapeHtml(severityLabel(k).toLowerCase())}</span>`).join(' ')}</p>
-      <div class="issue-card">${blurred('Each problem by name, in order, with the exact steps to fix it and text you can copy and paste.')}</div>
-      ${xrayOk ? unlockPanel() : ''}
+      <ol class="r2-locked-list" aria-label="Problems found, details in the audit">
+        ${issues.slice(0, 6).map((i, n) => `<li><span class="badge ${escapeHtml(i.severity || 'low')}">${escapeHtml(severityLabel(i.severity || 'low'))}</span><span class="bar" style="width:${[78, 64, 86, 58, 72, 66][n]}%" aria-hidden="true"></span><span class="lock" aria-hidden="true">🔒</span></li>`).join('')}
+      </ol>
+      ${issues.length > 6 ? `<p class="r2-muted r2-locked-more">and ${issues.length - 6} more.</p>` : ''}
+      ${xrayOk ? unlockPanel() : '<p class="r2-muted">Each problem by name, with the exact steps to fix it, is in the full report.</p>'}
     </section>`;
   }
   return `
@@ -1279,19 +1279,12 @@ function issuesV2({ issues, locked, xrayOk }) {
 
 // 8b. The X-Ray sections: competitor gap sheet + fix checklist. Built by the Worker from this
 // report's own data (shared/report-v2.js xraySections) and sent only when unlocked; a locked
-// report carries just `xray: {locked: true}`, so only the titles and a blurred stand-in show.
+// report carries just `xray: {locked: true}`, and nothing is shown.
 function xrayV2({ report, aById, cw, N }) {
   const x = report.xray;
   if (!x) return '';
-  if (x.locked) {
-    return `
-    <section class="report-section r2-xray">
-      <h2>Competitor gap sheet</h2>
-      <div class="issue-card">${blurred('Each business AI named over you, how often it was named and named first, their Google reviews next to yours, and the sites AI cited that list them and not you.')}</div>
-      <h2 class="r2-xray-h2">Your fix checklist</h2>
-      <div class="issue-card">${blurred('Every fix in this report as a checklist you can tick off as you go.')}</div>
-    </section>`;
-  }
+  // Locked: the gap sheet and checklist are listed in the offer band, not shown as blurred stand-ins.
+  if (x.locked) return '';
   const gap = x.gapSheet || { competitors: [] };
   const comps = (gap.competitors || []).filter((c) => c && c.name);
   const proof = (ids) => {
