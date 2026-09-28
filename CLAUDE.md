@@ -9,7 +9,7 @@ test by hand, so nothing is "done" until it has been tested and verified here.
    `call(env, '/admin/...')` in `src/admin/test/admin.test.js`), not just a unit test of the handler.
    A handler that the router never reaches (a missing allow-list entry, a wrong path) must fail a test.
 2. **Prove the test catches the bug**: it fails without the change and passes with it.
-3. **`npm test` and `npm run check` both pass** (run `npm ci` first in a fresh worktree). Report the
+3. **`npm test` and `npm run check` both pass** (the "Tests" GitHub check runs both on every PR; never merge on red) (run `npm ci` first in a fresh worktree). Report the
    pass/fail counts in the PR description.
 4. **Click through the change on the PR preview build** before merge when it's something a person
    sees or clicks (a page, a button, an admin action). Say in the PR what was checked and how.
