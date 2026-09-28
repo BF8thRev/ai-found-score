@@ -31,3 +31,8 @@ details .body { display: block !important; }
 /* Links: show where cited sources point. */
 .r2-src a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #555; overflow-wrap: anywhere; }
 a { color: #000; text-decoration: none; }
+
+/* The dark top band prints as plain black on white. */
+.report-header.r2-band { background: none !important; }
+.r2-band h1, .r2-band .biz-meta, .r2-band .fine, .r2-band .fine a, .r2-band-k { color: #000 !important; }
+.r2-band .r2-score { box-shadow: none !important; border: 1px solid #ccc !important; }
