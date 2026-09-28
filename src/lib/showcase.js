@@ -175,7 +175,7 @@ export function renderShowcase(p) {
   const options = p.order.map((k) => `<option value="${k}"${k === p.trade ? ' selected' : ''}>${escapeHtml(TRADE_LABELS[k] || k)}</option>`).join('');
   // JSON inside <script>: escape "<" so no string can close the tag.
   const data = JSON.stringify({ town: p.town, nouns: TRADE_NOUNS, engines: ENGINE_NAMES, answers: p.answers }).replace(/</g, '\\u003c');
-  return `<p class="sc-intro-line">This is what your free report shows, for your business and your town.</p>
+  return `<p class="sc-intro-line">Your free report shows you this, for your business and your town:</p>
 <figure class="sc-card">
   <div class="sc-head">
     <figcaption class="sc-label"><span data-sc-src>${sourceLabel(a)}</span> &middot; asked <span data-sc-date>${escapeHtml(formatDate(a.askedAt))}</span></figcaption>
@@ -186,7 +186,7 @@ export function renderShowcase(p) {
   <p class="sc-k">AI sent this customer to</p>
   <ul class="sc-names" data-sc-names>${namesHtml(a)}</ul>
   <p class="sc-lost"><b data-sc-lost>${escapeHtml(lostLine(p.trade, p.town))}</b><span data-sc-why>${lostWhy(a)}</span></p>
-  <p class="sc-ask"><b>Would it give yours?</b> <a href="#request" data-sc-check>Check my business free &uarr;</a></p>
+  <p class="sc-ask"><b>Would it give yours?</b> <a href="#request" data-sc-check>Check my business free<span class="sc-arrow" aria-hidden="true"></span></a></p>
 </figure>
 <p class="sc-note">Businesses shown are named by AI, not by us. <a href="mailto:hello@aifoundscore.com?subject=Remove%20from%20homepage%20answer">Ask us to remove one</a>.</p>
 <script type="application/json" id="sc-data">${data}</script>`;

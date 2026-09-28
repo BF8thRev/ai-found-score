@@ -637,6 +637,9 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .sc-ask { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 15.5px; color: var(--navy); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .sc-ask a { color: var(--blue); font-weight: 700; text-decoration: none; }
 .sc-ask a:hover { text-decoration: underline; }
+/* Points at the form: left of the card on desktop, above it once they stack. */
+.sc-arrow::before { content: " \2190"; }
+@media (max-width: 900px) { .sc-arrow::before { content: " \2191"; } }
 /* Two lines of the verbatim answer, from the sentence that names someone; the button opens the rest. */
 .sc-full:not(.open) .sc-a { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .sc-full:not(.open) .sc-intro { display: none; }
