@@ -21,7 +21,7 @@ import { handleAdminPing, handleAdminScanStart, handleAdminScanStatus, startScan
 import { dryRunEnabled, isLocalRequest } from './dry-run.js';
 import { redact } from './redact.js';
 import { defaultScanEngines } from '../../scanner/config.js';
-import { runQueuedScan, startFullScan } from '../lib/auto-scan.js';
+import { runQueuedScan, cancelRequestScan, startFullScan } from '../lib/auto-scan.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -148,6 +148,16 @@ export async function handleAdminRequest(request, url, env) {
     const r = await runQueuedScan(env, id);
     if (!r.ok) return render({ flash: { requests: { ok: false, text: redact(env, r.error, 300) } }, status: r.status || 500 });
     return redirect(url, `/admin?started=${r.scanId}#run`);
+  }
+
+  if (path === '/admin/scan/cancel') {
+    if (method !== 'POST') return redirect(url, '/admin#requests');
+    const f = await form(request);
+    const id = String(f?.get('id') || '').trim().toLowerCase();
+    if (!UUID_RE.test(id)) return render({ flash: { requests: { ok: false, text: 'Bad scan id.' } }, status: 422 });
+    const r = await cancelRequestScan(env, id).catch((e) => ({ ok: false, status: 500, error: String(e?.message || e) }));
+    if (!r.ok) return render({ flash: { requests: { ok: false, text: redact(env, r.error, 300) } }, status: r.status || 500 });
+    return redirect(url, '/admin?cancelled=1#requests');
   }
 
   // Re-run a paid audit by report token (a paid scan that failed twice, or never started). A fresh id

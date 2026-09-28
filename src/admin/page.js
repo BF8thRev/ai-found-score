@@ -1,7 +1,7 @@
 // src/admin/page.js — HTML for /admin (server-rendered; every dynamic value goes through esc()).
 
 import { ENGINE_NAMES, ACTIVE_ENGINES, FREE_ENGINES, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
-import { estimateRequestScanUsd } from '../lib/auto-scan.js';
+import { isCheckoutRow, estimateRequestScanUsd } from '../lib/auto-scan.js';
 import { TRADES } from '../../scanner/questions.js';
 import {
   esc, usd, pct, moneySummary, engineVerdicts, activityFeed, shortTime, nyDate, EXPENSE_CATEGORIES,
@@ -34,6 +34,7 @@ const CSS = `
 .adm .small{font-size:12px;color:var(--muted)}
 .money-grid td.n{font-size:16px;font-weight:600}
 .money-grid tr.net td{font-weight:800;border-bottom:0}
+.acts form{display:inline-block;margin:0 6px 4px 0}
 .pos{color:var(--green)}.neg{color:var(--red)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
 .tile{background:var(--wash);border-radius:10px;padding:10px 12px}
@@ -234,28 +235,36 @@ function runSection(d, { watch = [], engineIds, flash, activeIds = ACTIVE_ENGINE
 // Free-report requests (src/lib/auto-scan.js): queued ones wait for "Run now" (AUTO_SCAN off, a cap
 // was hit, or the start failed); failed ones need a person. The owner's link shows "in progress" meanwhile.
 function requestsSection(d, errors, { flash = '' } = {}) {
-  const rows = d.requestScans || [];
+  const all = d.requestScans || [];
   const why = (notes) => { const m = String(notes || '').match(/queued: ([\w-]+)/); return m ? m[1] : ''; };
-  return `<section id="requests">
-  <h2>Free-report requests waiting</h2>
-  <p class="sub">Queued, running or failed request scans. “Run now” starts one scan (every engine with a key, 1 run); the daily caps don’t apply to it. The owner’s report link keeps working throughout.</p>
-  ${flash}
-  ${sectionError(errors, 'requestScans')}
-  ${rows.length ? `<div class="tw"><table>
+  const checkouts = all.filter(isCheckoutRow);
+  const free = all.filter((s) => !isCheckoutRow(s));
+  const cancelBtn = (s) => `<form method="post" action="/admin/scan/cancel" data-confirm="Cancel this request? It will never run, and its link will say the request was closed."><input type="hidden" name="id" value="${esc(s.id)}"><button type="submit">Cancel</button></form>`;
+  const table = (rows, { run }) => `<div class="tw"><table>
     <thead><tr><th>Business</th><th>Requested</th><th>Status</th><th>Report link</th><th></th></tr></thead>
     <tbody>${rows.map((s) => {
       const tone = s.status === 'running' ? 'neutral' : s.status === 'failed' ? 'bad' : 'warn';
-      const reason = s.status === 'queued' ? why(s.notes) : '';
+      const reason = s.status === 'queued' && run ? why(s.notes) : '';
       const err = s.status === 'failed' && Array.isArray(s.errors) && s.errors[0] ? `<div class="small">${esc(String(s.errors[0].error || '').slice(0, 160))}</div>` : '';
+      const label = run ? s.status : s.status === 'queued' ? 'not paid' : s.status;
       return `<tr>
         <td>${esc(s.business_name || '—')}</td>
         <td class="small">${esc(shortTime(s.created_at))}</td>
-        <td>${toneBadge(tone, s.status)}${reason ? `<div class="small">${esc(reason)}</div>` : ''}${err}</td>
+        <td>${toneBadge(tone, label)}${reason ? `<div class="small">${esc(reason)}</div>` : ''}${err}</td>
         <td>${s.report_token ? `<a href="/report/${esc(encodeURIComponent(s.report_token))}" target="_blank" rel="noopener">Open</a>` : '—'}</td>
-        <td>${s.status === 'running' ? '' : `<form method="post" action="/admin/scan/run"><input type="hidden" name="id" value="${esc(s.id)}"><button type="submit">Run now</button></form>`}</td>
+        <td class="acts">${s.status === 'running' ? '' : `${run ? `<form method="post" action="/admin/scan/run"><input type="hidden" name="id" value="${esc(s.id)}"><button type="submit">Run now</button></form>` : ''}${cancelBtn(s)}`}</td>
       </tr>`;
     }).join('')}</tbody>
-  </table></div>` : (errors.requestScans ? '' : '<p class="small">Nothing waiting.</p>')}
+  </table></div>`;
+  return `<section id="requests">
+  <h2>Free-report requests waiting</h2>
+  <p class="sub">Queued, running or failed free-report scans. “Run now” starts one scan (every engine with a key, 1 run); the daily caps don’t apply to it. “Cancel” closes the request: it never runs, and its link says so.</p>
+  ${flash}
+  ${sectionError(errors, 'requestScans')}
+  ${free.length ? table(free, { run: true }) : (errors.requestScans ? '' : '<p class="small">Nothing waiting.</p>')}
+  <h3>Checkouts started, not paid</h3>
+  <p class="sub">Someone pressed pay on /checkout and hasn’t paid. No scan runs for these. If they pay, the audit starts; if they click “Get my free snapshot”, their free report starts. “Cancel” clears one you don’t need (like a test).</p>
+  ${checkouts.length ? table(checkouts, { run: false }) : '<p class="small">None.</p>'}
 </section>`;
 }
 
@@ -492,6 +501,8 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
 
 /** Served at /admin/admin.js (CSP allows scripts from 'self' only). Uses textContent only. */
 export const ADMIN_JS = `(() => {
+  // Ask first on a form marked data-confirm (Cancel).
+  document.addEventListener('submit', (e) => { const m = e.target.getAttribute && e.target.getAttribute('data-confirm'); if (m && !confirm(m)) e.preventDefault(); });
   const DONE = new Set(['complete', 'errored', 'terminated', 'done', 'failed']);
   const money = (n) => (n == null ? '—' : '$' + Number(n).toFixed(4));
   const set = (el, f, text) => { const x = el.querySelector('[data-f="' + f + '"]'); if (x) x.textContent = text; };

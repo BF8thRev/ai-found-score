@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // it) | 'paid' (a paid full audit is being made). Anything else is treated as 'running'.
 // Re-checks every 30 seconds and reloads once the report (or anything other than 202) is there.
 const PENDING_POLL_MS = 30000;
-const PENDING_STATUSES = ['running', 'queued', 'failed', 'paid'];
+const PENDING_STATUSES = ['running', 'queued', 'failed', 'paid', 'cancelled'];
 
 function pendingCopy(status, hasEmail) {
   if (status === 'queued') {
@@ -93,6 +93,9 @@ function pendingCopy(status, hasEmail) {
         : 'We’ve been alerted and we’ll re-run it. Leave your email below and we’ll send it when it’s ready.',
       spin: false,
     };
+  }
+  if (status === 'cancelled') {
+    return { h: 'This report request was closed.', p: 'Want to see what AI says about your business? <a href="/#request">Get a free report</a>. It takes a minute.', spin: false, html: true };
   }
   if (status === 'paid') {
     return { h: 'Your full audit is being made.', p: 'Usually ready within the hour. This page updates when it’s ready.', spin: true };
@@ -132,9 +135,9 @@ function renderPending(root, token, j, prev = null) {
       ${b ? `<p class="r2-pending-biz">${escapeHtml(b.name)}${where ? ` · ${escapeHtml(where)}` : ''}</p>` : ''}
       ${c.spin ? '<p class="r2-pending-mark" aria-hidden="true"></p>' : ''}
       <h1>${escapeHtml(c.h)}</h1>
-      <p>${escapeHtml(c.p)}</p>
-      <p class="fine" role="status">We check again every 30 seconds. You can close this page and come back to the same link.</p>
-      ${st.hasEmail ? '' : leadForm('pending')}
+      <p>${c.html ? c.p : escapeHtml(c.p)}</p>
+      ${st.status === 'cancelled' ? '' : `<p class="fine" role="status">We check again every 30 seconds. You can close this page and come back to the same link.</p>
+      ${st.hasEmail ? '' : leadForm('pending')}`}
     </div>`;
   root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', async (e) => {
     if (await submitLead(e, token, { pending: true })) st.hasEmail = true;

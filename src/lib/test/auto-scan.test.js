@@ -566,7 +566,7 @@ test('statusFromRows: paid scan running, retry pending after one failure, failed
   assert.equal(statusFromRows([{ status: 'failed', trigger: 'request' }, { status: 'done', report_valid: false, trigger: 'request' }]), 'failed');
 });
 
-test('pickRecoveries: retry once, paid always, abandoned checkout after an hour, never over a paid scan', () => {
+test('pickRecoveries: retry once, paid always, checkout free scan only when asked, never over a paid scan or a cancel', () => {
   const now = Date.parse('2026-09-27T12:00:00Z');
   const ago = (min) => new Date(now - min * 60_000).toISOString();
   const rows = [
@@ -581,7 +581,11 @@ test('pickRecoveries: retry once, paid always, abandoned checkout after an hour,
     { id: 'g1', report_token: 'G', trigger: 'request', status: 'queued', notes: 'x · queued: auto-scan-off', created_at: ago(120) },
   ];
   const on = pickRecoveries(rows, { now, autoScan: true }).map((p) => `${p.kind}:${p.token}`).sort();
-  assert.deepEqual(on, ['abandoned:D', 'paid-retry:C', 'request-retry:A']);
+  assert.deepEqual(on, ['paid-retry:C', 'request-retry:A'], 'the cron never turns a checkout into a free scan');
+  const asked = pickRecoveries(rows, { now, autoScan: true, abandoned: true }).map((p) => `${p.kind}:${p.token}`).sort();
+  assert.deepEqual(asked, ['abandoned:D', 'paid-retry:C', 'request-retry:A'], 'only when the visitor asks (Get my free snapshot)');
+  const closed = pickRecoveries([...rows, { id: 'a2', report_token: 'A', trigger: 'request', status: 'cancelled', created_at: ago(1) }], { now, autoScan: true }).map((p) => p.token);
+  assert.ok(!closed.includes('A'), 'a cancelled request is never retried');
   const off = pickRecoveries(rows, { now, autoScan: false }).map((p) => `${p.kind}:${p.token}`);
   assert.deepEqual(off, ['paid-retry:C'], 'with AUTO_SCAN off only paid scans are retried');
 });
@@ -598,4 +602,15 @@ test('ipDailyHit: 3 free scans per connection a day; failed scans and our own ro
   assert.equal(ipDailyHit([...rows, { id: 'x', ip_hash: 'h1', status: 'running' }], 'x', 'h1', 3), false, 'our own row is not counted');
   assert.equal(ipDailyHit(rows, 'x', null, 3), false, 'no code, no limit');
   assert.equal(ipDailyHit(rows, 'x', 'h3', 3), false);
+});
+
+test('cancelled: the report page says closed; caps, the per-connection limit and dedupe ignore it', async () => {
+  const { isCheckoutRow, CHECKOUT_NOTE } = await import('../auto-scan.js');
+  assert.equal(statusFromRows([{ status: 'cancelled', trigger: 'request' }]), 'cancelled');
+  assert.equal(statusFromRows([{ status: 'cancelled', trigger: 'request' }, { status: 'running', trigger: 'paid' }]), 'paid');
+  assert.equal(ipDailyHit([{ id: 'a', ip_hash: 'h', status: 'cancelled' }], 'x', 'h', 1), false);
+  assert.equal(capDecision([{ id: 'a', status: 'cancelled', created_at: '2026-01-01T00:00:00Z' }], 'b', { max: 1, usd: 100, estimateUsd: 1 }), null);
+  assert.equal(isCheckoutRow({ notes: `${CHECKOUT_NOTE} 123 · queued: duplicate` }), true);
+  assert.equal(isCheckoutRow({ notes: 'free-report request 1 · queued: paid-intent' }), true, 'older rows');
+  assert.equal(isCheckoutRow({ notes: 'free-report request 1 · queued: ip-daily' }), false);
 });
