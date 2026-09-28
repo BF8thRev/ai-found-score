@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Checkout: AI Visibility Audit — AI Found Score</title>
+  <meta name="description" content="Get your AI Visibility Audit: every answer word for word, every fix with the text to paste, and your Fix Kit. $49, one-time.">
+  <link rel="icon" type="image/svg+xml" href="/img/mark.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css?v=12">
+  <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-K58KFVJC');</script>
+  <!-- End Google Tag Manager -->
+</head>
+<body class="co-page">
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-K58KFVJC" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+
+<!-- Checkout: a focused page, no site nav. Step 1 here (the business), step 2 on Stripe's hosted page,
+     step 3 is /success and the report. POST /api/request (intent xray: the free scan waits) then
+     POST /api/checkout { prepay: true, addons } (src/lib/checkout.js). -->
+<header class="co-header">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/img/logo.svg" alt="AI Found Score" width="199" height="32"></a>
+    <span class="co-secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</span>
+  </div>
+</header>
+
+<main class="co-main">
+  <div class="wrap">
+    <ol class="co-steps" aria-label="Checkout steps">
+      <li class="on" aria-current="step"><span>1</span>Your business</li>
+      <li><span>2</span>Payment</li>
+      <li><span>3</span>Your audit</li>
+    </ol>
+
+    <div class="co-grid">
+      <section class="co-card co-form-card" aria-labelledby="co-title">
+        <h1 id="co-title">Get your AI Visibility Audit</h1>
+        <p class="co-sub">Tell us which business to audit. Next you&rsquo;ll pay on Stripe&rsquo;s secure page, and we start right away.</p>
+
+        <form id="co-form" novalidate>
+          <label>Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="Harborview Plumbing &amp; Heating"></label>
+          <label>Website <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="yourbusiness.com or your Facebook page"></label>
+          <label>ZIP code <input name="zip" type="text" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
+          <p class="field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
+          <label id="town-field" hidden>Town <input name="town" type="text" maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
+          <input name="state" type="hidden" value="NY" data-geo-value="state">
+          <label id="kind-field" hidden>What kind of business is it? <input name="trade_other" type="text" maxlength="40" autocomplete="off" placeholder="bakery, dentist, plumber, salon…"></label>
+          <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+
+          <!-- The add-on, offered where the buying decision is made (not on the homepage). -->
+          <label class="co-bump" id="co-bump">
+            <input type="checkbox" name="addon_breakdown" id="addon-breakdown">
+            <span class="co-bump-body">
+              <strong>Yes, add the Competitor Breakdown <em>+$25</em></strong>
+              <span>See why AI picks them. The top 3 businesses AI names instead of you, side by side with you: what AI said about them, their reviews against yours, the sites that list them and not you, and up to 3 things they have that you don&rsquo;t.</span>
+            </span>
+          </label>
+
+          <button class="btn co-pay" type="submit" id="co-pay">Continue to secure payment &middot; <span data-total>$49</span></button>
+          <p class="status" id="co-status" role="status"></p>
+        </form>
+        <p class="ts-help" id="ts-help" hidden>One quick check: tap the box below to confirm you&rsquo;re a person.</p>
+        <div class="ts-box" id="ts-request" data-turnstile-sitekey=""></div>
+
+        <ul class="co-badges" aria-label="Why it's safe to buy">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span><strong>Secure payment by Stripe.</strong> Encrypted. We never see your card.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span><strong>Money-back promise.</strong> Fewer than 3 problems specific to your business? Your $49 back.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><strong>One-time payment.</strong> No subscription, no auto-renew.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg><span><strong>No logins, ever.</strong> We only read public information.</span></li>
+        </ul>
+        <p class="co-cards" aria-label="Accepted payment">Visa &middot; Mastercard &middot; American Express &middot; Discover</p>
+      </section>
+
+      <aside class="co-card co-summary" aria-labelledby="co-sum-title">
+        <h2 id="co-sum-title">Order summary</h2>
+        <div class="co-line">
+          <span><strong>AI Visibility Audit</strong><small>One-time</small></span>
+          <span>$49</span>
+        </div>
+        <ul class="tier-list co-incl">
+          <li>All 5 customer questions on every AI assistant we check</li>
+          <li>Every answer word for word, and every website AI cited</li>
+          <li>What&rsquo;s wrong on your website and Google listing</li>
+          <li>Every fix, step by step, with the exact text to paste</li>
+          <li>Your Fix Kit: ready-to-install files for your website</li>
+          <li>You vs. the businesses AI picked, and your fix checklist</li>
+          <li>A free re-scan 30 days later</li>
+        </ul>
+        <div class="co-line co-line-add" id="line-breakdown" hidden>
+          <span><strong>Competitor Breakdown</strong><small>Add-on</small></span>
+          <span>$25</span>
+        </div>
+        <div class="co-total">
+          <span>Total today</span>
+          <span data-total>$49</span>
+        </div>
+        <p class="co-when">Usually ready within the hour. We email you the moment it is.</p>
+        <p class="co-guarantee"><strong>Our promise:</strong> if we find fewer than 3 problems specific to your business, reply to your receipt and we refund your $49.</p>
+        <p class="co-links"><a href="/report/mega-wash-and-dry" target="_blank" rel="noopener">See a real audit &rarr;</a></p>
+      </aside>
+    </div>
+
+    <p class="co-free">Not ready to buy? <a href="/#request">Start with the free snapshot</a> instead.</p>
+  </div>
+</main>
+
+<footer class="co-footer">
+  <div class="wrap">
+    <span>&copy; 2026 Fields Holding d/b/a GetAiFound Score &middot; 120 Terminal Drive, Plainview, NY 11803</span>
+    <span><a href="/terms">Terms</a> <a href="/refunds">Refunds</a> <a href="/privacy">Privacy</a> <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a></span>
+  </div>
+</footer>
+
+<script src="/js/config.js?v=12"></script>
+<script src="/js/analytics.js?v=9"></script>
+<script>
+(function () {
+  var PRICE = { xray: 49, competitor_breakdown: 25 };
+  var STATES = 'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY'.split(' ');
+  var HELLO = '<a href="mailto:hello@aifoundscore.com?subject=Audit%20checkout">hello@aifoundscore.com</a>';
+  function el(id) { return document.getElementById(id); }
+  function esc(t) { var d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; }
+  function push(ev) { if (window.dataLayer) window.dataLayer.push(ev); }
+  function postJson(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok === true, status: r.status, body: j }; }); })
+      .catch(function () { return { ok: false, status: 0, body: {} }; });
+  }
+
+  var form = el('co-form');
+  var status = el('co-status');
+  var payBtn = el('co-pay');
+  var bump = el('addon-breakdown');
+  function show(kind, html) { status.className = 'status ' + kind; status.innerHTML = html; }
+  function clearStatus() { status.className = 'status'; status.textContent = ''; }
+  function addons() { return bump.checked ? ['competitor_breakdown'] : []; }
+  function total() { return PRICE.xray + (bump.checked ? PRICE.competitor_breakdown : 0); }
+  function paintTotal() {
+    document.querySelectorAll('[data-total]').forEach(function (t) { t.textContent = '$' + total(); });
+    el('line-breakdown').hidden = !bump.checked;
+    el('co-bump').classList.toggle('on', bump.checked);
+  }
+  bump.addEventListener('change', function () {
+    paintTotal();
+    push({ event: bump.checked ? 'checkout_addon_add' : 'checkout_addon_remove', addon: 'competitor_breakdown' });
+  });
+  paintTotal();
+  push({ event: 'view_checkout', tier: 'xray' });
+
+  // Back from Stripe with the browser's Back button: the page may come back from the cache with the
+  // button still saying "Taking you…". Make it usable again.
+  function resetPay() { payBtn.disabled = false; payBtn.innerHTML = 'Continue to secure payment &middot; <span data-total>$' + total() + '</span>'; }
+  window.addEventListener('pageshow', function (e) { if (e.persisted) { resetPay(); clearStatus(); } });
+
+  // ---- Turnstile (same widget and action as the homepage form; the Worker fills in the site key) ----
+  var TS_BOX = el('ts-request');
+  var TS_KEY = (TS_BOX && TS_BOX.getAttribute('data-turnstile-sitekey')) || '';
+  var ts = { id: null, api: null, token: '', dead: !TS_KEY, waiters: [] };
+  function tsLive(on) {
+    TS_BOX.classList.toggle('ts-live', on);
+    el('ts-help').hidden = !on;
+    if (on) { try { el('ts-help').scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
+  }
+  function tsSettle() { var q = ts.waiters; ts.waiters = []; q.forEach(function (f) { f(); }); }
+  if (TS_KEY) {
+    window.onAfsTurnstile = function () {
+      var api = window.turnstile;
+      if (!api) { ts.dead = true; tsSettle(); return; }
+      ts.api = api;
+      ts.id = api.render(TS_BOX, {
+        sitekey: TS_KEY, action: 'free_report', appearance: 'interaction-only', size: 'flexible',
+        callback: function (t) { ts.token = t; tsLive(false); tsSettle(); },
+        'expired-callback': function () { ts.token = ''; },
+        'before-interactive-callback': function () { tsLive(true); },
+        'after-interactive-callback': function () { tsLive(false); },
+        'error-callback': function () { tsLive(true); }
+      });
+    };
+    var sc = document.createElement('script');
+    sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onAfsTurnstile';
+    sc.async = true; sc.defer = true;
+    sc.onerror = function () { ts.dead = true; tsSettle(); };
+    document.head.appendChild(sc);
+  }
+  function tsTake(ms) {
+    return new Promise(function (resolve) {
+      function give() {
+        var t = ts.token; ts.token = '';
+        if (t && ts.api && ts.id != null) { try { ts.api.reset(ts.id); } catch (e) {} }
+        resolve(t);
+      }
+      if (ts.token || ts.dead) return give();
+      var timer = setTimeout(function () { ts.waiters = ts.waiters.filter(function (f) { return f !== onReady; }); give(); }, ms);
+      function onReady() { clearTimeout(timer); give(); }
+      ts.waiters.push(onReady);
+    });
+  }
+
+  // ---- The town comes from the ZIP ----
+  var zipInput = form.elements.zip, townInput = form.elements.town, stateInput = form.elements.state;
+  var zipPending = null, zipAsked = '', zipBusy = false;
+  function showTownField() { el('zip-found').hidden = true; el('town-field').hidden = false; }
+  function lookupZip() {
+    var z = String(zipInput.value || '').trim();
+    if (!/^\d{5}$/.test(z) || z === zipAsked) return zipPending;
+    zipAsked = z;
+    townInput.value = '';
+    zipBusy = true;
+    zipPending = fetch('/api/zip?zip=' + z).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (j) {
+      if (zipAsked !== z) return;
+      zipBusy = false;
+      var place = j && j.ok && j.places && j.places[0];
+      if (place) {
+        townInput.value = place.town;
+        stateInput.value = place.state;
+        el('zip-town').textContent = place.town + ', ' + place.state + ' ✓';
+        el('zip-found').hidden = false;
+        el('town-field').hidden = true;
+      } else {
+        showTownField();
+      }
+    });
+    return zipPending;
+  }
+  zipInput.addEventListener('input', function () {
+    this.value = this.value.replace(/\D/g, '').slice(0, 5);
+    if (this.value.length === 5) lookupZip();
+    else { zipAsked = ''; zipBusy = false; el('zip-found').hidden = true; }
+  });
+  el('zip-change').addEventListener('click', function () { showTownField(); townInput.focus(); townInput.select(); });
+
+  // ---- What the business does: from its name or website (/api/questions); else we ask ----
+  function kindText() { return String(form.elements.trade_other.value || '').trim().replace(/\s+/g, ' ').slice(0, 40).toLowerCase(); }
+  var presetKind = (function (v) {
+    var A = { plumber: 'plumbing', roofer: 'roofing', electrician: 'electrical', landscaper: 'landscaping', cleaner: 'cleaning', mechanic: 'auto_repair' };
+    v = String(v || '').toLowerCase().replace(/[^a-z_]/g, '');
+    return v ? (A[v] || v) : '';
+  })(new URLSearchParams(location.search).get('trade'));
+  function fetchKind(data) {
+    var qs = new URLSearchParams({ trade: data.trade, preset: presetKind, name: data.business_name, website: data.website, town: data.town, zip: data.zip, state: data.state || 'NY' });
+    return fetch('/api/questions?' + qs.toString())
+      .then(function (r) {
+        if (r.status === 429) return r.json().catch(function () { return {}; }).then(function (j) { return { limited: j.error || 'Too many tries. Wait a minute and try again.' }; });
+        if (r.status === 422) return r.json().catch(function () { return null; });
+        return r.ok ? r.json() : null;
+      })
+      .catch(function () { return null; });
+  }
+  function reportToken(res) {
+    var u = res && res.body && res.body.report_url;
+    return typeof u === 'string' && /^\/report\/[A-Za-z0-9_-]{8,64}$/.test(u) ? u.split('/').pop() : '';
+  }
+
+  var busy = false;
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (busy) return;
+    var data = {};
+    new FormData(form).forEach(function (v, k) { data[k] = String(v).trim(); });
+    delete data.addon_breakdown;
+    var ts2 = /^(.+?)\s*,\s*([A-Za-z]{2})$/.exec(data.town || '');
+    if (ts2 && STATES.indexOf(ts2[2].toUpperCase()) >= 0) { data.town = ts2[1]; data.state = ts2[2].toUpperCase(); }
+    // The town comes from the ZIP; if that lookup is still running, finish it first.
+    if (!data.town && /^\d{5}$/.test(data.zip)) {
+      lookupZip();
+      if (zipBusy) { zipPending.then(function () { form.requestSubmit(); }); return; }
+    }
+    var missing = [];
+    if (!data.business_name) missing.push('your business name');
+    if (!/^\S+\.\S+$/.test(data.website || '')) missing.push('your website (or your Facebook or Yelp page)');
+    if (!/^\d{5}$/.test(data.zip)) missing.push('a 5-digit ZIP');
+    else if (!data.town) { missing.push('your town'); showTownField(); }
+    data.trade = kindText();
+    delete data.trade_other;
+    if (missing.length) { show('error', 'Please add ' + missing.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'); return; }
+    clearStatus();
+
+    busy = true;
+    payBtn.disabled = true;
+    payBtn.textContent = 'One moment…';
+    var extras = addons();
+    function fail(html) { busy = false; resetPay(); show('error', html); }
+
+    fetchKind(data).then(function (res) {
+      if ((res && res.needKind) || !((res && res.ok && res.trade) || data.trade || presetKind)) {
+        el('kind-field').hidden = false;
+        form.elements.trade_other.focus();
+        fail((res && res.limited ? esc(res.limited) + ' Meanwhile: ' : 'One quick thing: ') + 'what kind of business is it? Type it above, like bakery or dentist.');
+        return;
+      }
+      data.trade = (res && res.ok && res.trade) || data.trade || presetKind;
+      data.intent = 'xray';
+      payBtn.textContent = 'Taking you to secure payment…';
+      return tsTake(30000).then(function (token) {
+        if (token) data['cf-turnstile-response'] = token;
+        return postJson('/api/request', data);
+      }).then(function (res) {
+        var token = reportToken(res);
+        if (!res.ok || !token) {
+          fail(res.body && res.body.error ? esc(res.body.error) : 'We couldn\'t start checkout just now. Try again in a minute, or email ' + HELLO + '.');
+          return;
+        }
+        push({ event: 'report_request', trade: data.trade, offer: 'full_audit' });
+        return postJson('/api/checkout', { token: token, tier: 'xray', addons: extras, prepay: true }).then(function (co) {
+          if (co.ok && co.body.url) {
+            try { localStorage.setItem('afs_checkout', JSON.stringify({ token: token, tier: 'xray', addons: extras, prepay: true })); } catch (err) {}
+            push({ event: 'begin_checkout', tier: 'xray', path: 'prepay', addons: extras.join(','), value: total(), currency: 'USD' });
+            location.href = co.body.url;
+            return;
+          }
+          fail((co.body && co.body.error ? esc(co.body.error) + ' ' : 'We couldn\'t open payment just now. ')
+            + '<a href="/api/checkout/cancel?t=' + encodeURIComponent(token) + '">Get your free report instead</a>.');
+        });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

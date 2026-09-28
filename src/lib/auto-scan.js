@@ -297,7 +297,8 @@ export async function startRequestScan(env, req, o = {}) {
   // 3. Reserve.
   const est = estimateRequestScanUsd(engines.length ? engines : ['chatgpt']);
   try {
-    await upsertScan(env, { ...base, status: reason ? 'queued' : 'running', est_cost_usd: reason ? 0 : est }, { fetchImpl });
+    // A queued row says why in its notes: pickRecoveries finds an abandoned checkout by `queued: paid-intent`.
+    await upsertScan(env, { ...base, status: reason ? 'queued' : 'running', est_cost_usd: reason ? 0 : est, ...(reason ? { notes: `${params.notes} · queued: ${reason}` } : {}) }, { fetchImpl });
   } catch (e) {
     console.error('[auto-scan] scans row failed (apply supabase/v4_ladder.sql?)', String(e?.message || e).slice(0, 200));
     return null;

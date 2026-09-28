@@ -82,14 +82,20 @@ test('handleCheckout: 503 without a key; creates the session and returns its url
   assert.equal((await handleCheckout(...req({ token: 'sample-001', tier: 'xray' }), { STRIPE_SECRET_KEY: 'sk_test_x' }, deps([]))).status, 404);
 });
 
-test('pay up front (from the pricing buttons): audit or plan at full price, no report needed, cancel starts the free report', () => {
+test('pay up front (/checkout): the audit at full price, the breakdown can ride along, no report needed, cancel starts the free report', () => {
   const a = priceCheckout({ report: null, tier: 'xray', prepay: true });
   assert.equal(a.ok, true);
   assert.equal(a.total, PRICES.xray);
-  const b = priceCheckout({ report: null, tier: 'be_the_answer', prepay: true });
-  assert.equal(b.total, PRICES.be_the_answer);
+  assert.equal(priceCheckout({ report: null, tier: 'be_the_answer', prepay: true }).status, 409, 'Be the Answer is off sale up front');
   assert.equal(priceCheckout({ report: null, tier: 'competitor_breakdown', prepay: true }).ok, false);
-  assert.equal(priceCheckout({ report: null, tier: 'xray', addons: ['competitor_breakdown'], prepay: true }).ok, false);
+  const both = priceCheckout({ report: null, tier: 'xray', addons: ['competitor_breakdown'], prepay: true });
+  assert.equal(both.ok, true);
+  assert.equal(both.total, PRICES.xray + PRICES.competitor_breakdown);
+  assert.deepEqual(both.items.map((i) => i.tier), ['xray', 'competitor_breakdown']);
+  assert.equal(priceCheckout({ report: null, tier: 'xray', addons: ['nope'], prepay: true }).status, 400);
+  const fb = sessionForm({ ...both, token: 'tokABCDEFGHIJKLMNOPQRS', tier: 'xray', addons: ['competitor_breakdown'], origin: 'https://aifoundscore.com', prepay: true });
+  assert.equal(fb.get('metadata[addons]'), 'competitor_breakdown');
+  assert.equal(fb.get('line_items[1][price_data][unit_amount]'), String(PRICES.competitor_breakdown));
   assert.equal(priceCheckout({ report: null, tier: 'xray', prepay: true, payments: [pay('xray', 4900)] }).status, 409);
   assert.equal(priceCheckout({ report: null, tier: 'xray' }).status, 404, 'no report and not prepay: nothing to sell');
   const f = sessionForm({ ...a, token: 'tokABCDEFGHIJKLMNOPQRS', tier: 'xray', addons: [], origin: 'https://aifoundscore.com', prepay: true });

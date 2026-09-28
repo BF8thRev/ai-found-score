@@ -90,7 +90,8 @@
         be_the_answer: 'Once your audit is ready, open your plan page from your report to add your towns and confirm your details.'
       };
       var next = saved && saved.prepay && PREPAY_NEXT[tier] ? PREPAY_NEXT[tier] : TIER_NEXT[tier];
-      plan.textContent = 'You bought: ' + TIER_LABEL[tier] + '. ' + (next || '');
+      var withBreakdown = saved && Array.isArray(saved.addons) && saved.addons.indexOf('competitor_breakdown') >= 0;
+      plan.textContent = 'You bought: ' + TIER_LABEL[tier] + (withBreakdown ? ' + Competitor Breakdown' : '') + '. ' + (next || '');
       plan.hidden = false;
     }
     if (!saved || !saved.token) return;
@@ -166,7 +167,7 @@
   </div>
 </footer>
 
-<script src="/js/config.js?v=11"></script>
+<script src="/js/config.js?v=12"></script>
 <script src="/js/analytics.js?v=9"></script>
 </body>
 </html>

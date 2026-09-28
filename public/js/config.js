@@ -5,7 +5,8 @@
 // $25 Competitor Breakdown (after the audit, or as a checkbox on the audit), and Be the Answer ($499
 // minus what the owner already paid on that report). Retired tier keys (fix_kit, snapshot,
 // before_after, full_year, listing_fix) still resolve in the webhook (src/lib/stripe.js TIER_BY_CENTS).
-const OFFERED_TIERS = ['xray', 'competitor_breakdown', 'be_the_answer'];
+// Be the Answer is off sale for now (existing plans keep running): add 'be_the_answer' back to sell it.
+const OFFERED_TIERS = ['xray', 'competitor_breakdown'];
 window.OFFERED_TIERS = OFFERED_TIERS;
 window.tierOffered = (tier) => OFFERED_TIERS.includes(tier);
 
