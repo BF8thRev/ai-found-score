@@ -560,6 +560,34 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .hero-cta { display: inline-flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .hero-micro { margin: 0; font-size: 14px; color: var(--muted); text-align: center; letter-spacing: .01em; }
+/* Hero form: name + website side by side, ZIP + button under them. */
+.hero-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 560px; }
+.hero-form label { display: grid; gap: 6px; font-size: 15px; font-weight: 600; color: var(--navy); }
+.hero-form .hint { font-size: 14px; font-weight: 400; color: var(--muted); }
+.hero-form input {
+  font: inherit; font-size: 16px; font-weight: 400; color: var(--ink); background: #fff; border: 1px solid #C9D3E1; border-radius: 10px; padding: 12px 13px; width: 100%; box-sizing: border-box;
+}
+.hero-form input::placeholder { color: #8A96A8; }
+.hero-form input:focus { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
+.hero-form .full, .hero-form fieldset { grid-column: 1 / -1; }
+.hero-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.hero-form #zip-field { max-width: 180px; }
+.hero-form .field-found { margin: 0; font-size: 15px; font-weight: 600; color: var(--green); }
+.hero-form .link-btn { font: inherit; font-size: 14px; font-weight: 500; color: var(--blue); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.hero-micro a { color: var(--muted); }
+.hero-done { margin: 0; padding: 14px 16px; border-radius: 12px; background: #EAF6EF; border: 1px solid #CBE8D7; font-weight: 600; color: var(--navy); max-width: 560px; }
+.hero-done a { color: var(--blue); }
+.hero-start .ts-help { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.hero-start { scroll-margin-top: 90px; }
+.hero-form .btn.big { grid-column: 1 / -1; width: 100%; text-align: center; }
+.hero-form .status, .hero-form .hero-micro { grid-column: 1 / -1; }
+.hero-form[hidden], .hero-form .status:empty, .hero-form [hidden] { display: none; }
+.hero-form .status { margin: 0; font-size: 15px; }
+.hero-form .status.error { color: var(--red); font-weight: 600; }
+@media (max-width: 520px) {
+  .hero-form { grid-template-columns: 1fr; }
+  .hero-form #zip-field { max-width: none; }
+}
 .sc-link { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14.5px; }
 .sc-link a { color: var(--blue); font-weight: 600; text-decoration: none; }
 .sc-link a:hover { text-decoration: underline; }
@@ -581,6 +609,44 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .sc-a { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
 .sc-a b { font-weight: 700; background: #FFF1C2; border-radius: 3px; padding: 0 2px; }
 .sc-more { color: var(--muted); }
+/* Who got the call (green) vs. everyone left out (red): the card's point at a glance. */
+.sc-k { margin: 4px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.sc-names { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sc-names li {
+  position: relative; padding: 9px 12px 9px 38px; border-radius: 10px; background: #EAF6EF; border: 1px solid #CBE8D7;
+  font-weight: 700; font-size: 16.5px; color: var(--navy); overflow-wrap: anywhere;
+}
+.sc-names li::before {
+  content: "✓"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border-radius: 50%;
+  background: var(--green); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-content: center;
+}
+.sc-names li.sc-more-names { background: transparent; border: 0; padding: 0 0 0 38px; font-weight: 600; font-size: 14px; color: var(--muted); }
+.sc-names li.sc-more-names::before { content: none; }
+.sc-lost {
+  position: relative; margin: 10px 0 0; padding: 11px 12px 11px 38px; border-radius: 10px; background: #FDEDEB; border: 1px dashed #EDB5AE;
+  display: grid; gap: 2px;
+}
+.sc-lost::before {
+  content: "✕"; position: absolute; left: 12px; top: 13px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 800; display: grid; place-content: center;
+}
+.sc-lost b { font-size: 16.5px; color: var(--red); }
+.sc-lost span { font-size: 14.5px; color: var(--ink); }
+.sc-full { margin: 0 0 14px; }
+.sc-intro-line { margin: 0 4px 10px; font-size: 14.5px; font-weight: 600; color: var(--muted); }
+.sc-ask { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 15.5px; color: var(--navy); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.sc-ask a { color: var(--blue); font-weight: 700; text-decoration: none; }
+.sc-ask a:hover { text-decoration: underline; }
+/* Points at the form: left of the card on desktop, above it once they stack. */
+.sc-arrow::before { content: " \2190"; }
+@media (max-width: 900px) { .sc-arrow::before { content: " \2191"; } }
+/* Two lines of the verbatim answer, from the sentence that names someone; the button opens the rest. */
+.sc-full:not(.open) .sc-a { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.sc-full:not(.open) .sc-intro { display: none; }
+.sc-full:not(.open) .sc-a.has-intro::before { content: "\2026 "; color: var(--muted); }
+.sc-expand { margin: 6px 0 0; padding: 0; border: 0; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--blue); cursor: pointer; }
+.sc-expand:hover { text-decoration: underline; }
+.sc-expand[hidden] { display: none; }
 .sc-caption { font-size: 16px; font-weight: 700; color: var(--navy); margin: 16px 4px 0; line-height: 1.4; }
 .sc-note { font-size: 12.5px; color: var(--muted); margin: 6px 4px 0; }
 .sc-note a { color: var(--muted); }

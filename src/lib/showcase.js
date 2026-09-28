@@ -13,6 +13,7 @@
 
 import { TRADES, normalizeTrade } from '../../scanner/questions.js';
 import { DEFAULT_GEO } from './geo.js';
+import { ENGINE_NAMES } from '../../shared/report-v2.js';
 
 export const CACHE_SECONDS = 3600;
 export const FAIL_CACHE_SECONDS = 300;
@@ -23,6 +24,15 @@ export const TRADE_LABELS = {
   plumbing: 'Plumbers', hvac: 'Heating & AC', electrical: 'Electricians', roofing: 'Roofers',
   landscaping: 'Landscapers', cleaning: 'House cleaners', auto_repair: 'Auto repair', laundromat: 'Laundromats',
 };
+
+/** "Every other ___ in <town>": one business of each trade. */
+export const TRADE_NOUNS = {
+  plumbing: 'plumber', hvac: 'heating & AC company', electrical: 'electrician', roofing: 'roofer',
+  landscaping: 'landscaper', cleaning: 'house cleaner', auto_repair: 'auto repair shop', laundromat: 'laundromat',
+};
+
+/** Most names the card lists; the rest are "+N more" (all of them are in the full answer). */
+export const MAX_NAMES = 4;
 
 /** ?trade= → a TRADES key, or '' (anything else is ignored, never echoed). */
 export function tradeParam(v) {
@@ -56,7 +66,7 @@ export function pickShowcase(rows, geo, trade) {
     if (!validRow(r)) continue;
     const key = `${r.town.toLowerCase()}|${r.state}`;
     if (!byTown.has(key)) byTown.set(key, { town: r.town, state: r.state, answers: {} });
-    byTown.get(key).answers[r.trade] = { question: r.question, excerpt: r.excerpt, spans: r.spans, truncated: r.truncated !== false, askedAt: r.asked_at };
+    byTown.get(key).answers[r.trade] = { question: r.question, excerpt: r.excerpt, spans: r.spans, truncated: r.truncated !== false, askedAt: r.asked_at, engine: ENGINE_NAMES[r.engine] ? r.engine : null };
   }
   const g = geo || DEFAULT_GEO;
   const want = tradeParam(trade) || DEFAULT_TRADE;
@@ -91,22 +101,93 @@ export function answerHtml(a) {
   return out + (a.truncated ? '<span class="sc-more"> &hellip;</span>' : '');
 }
 
-/** Inner HTML of <div data-showcase> for picked data `p`. */
+/** Skipped only when the naming sentence starts at least this far in (else the preview starts at 0). */
+export const MIN_INTRO = 25;
+
+/**
+ * Where the card's two-line preview starts: the sentence (or line) that names the first business,
+ * so the preview shows who AI picked, not "Here are some options". 0 when that is the start anyway.
+ */
+export function previewStart(a) {
+  const first = a.spans[0][0];
+  const before = a.excerpt.slice(0, first);
+  let at = 0;
+  for (const m of before.matchAll(/[.!?:]\s+|\n+/g)) at = m.index + m[0].length;
+  return at >= MIN_INTRO ? at : 0;
+}
+
+/** The excerpt as { intro, main } HTML: intro = before the preview start (no names in it). */
+export function answerParts(a) {
+  const at = previewStart(a);
+  const intro = at ? escapeHtml(a.excerpt.slice(0, at).replace(/\n{2,}/g, '\n')) : '';
+  const main = answerHtml({ ...a, excerpt: a.excerpt.slice(at), spans: a.spans.map(([x, y]) => [x - at, y - at]) });
+  return { intro, main };
+}
+
+/** The answer paragraph: the intro folds away while the card shows two lines. */
+export function answerBlockHtml(a) {
+  const { intro, main } = answerParts(a);
+  return `<p class="sc-a${intro ? ' has-intro' : ''}" data-sc-a>${intro ? `<span class="sc-intro">${intro}</span>` : ''}${main}</p>`;
+}
+
+/** The businesses the answer names, in order, each once (from the stored spans). */
+export function namedIn(a) {
+  const seen = new Set();
+  const out = [];
+  for (const [s, e] of a.spans) {
+    const n = a.excerpt.slice(s, e).trim();
+    if (n && !seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); out.push(n); }
+  }
+  return out;
+}
+
+/** The "got the call" list: up to MAX_NAMES names, then "+N more". */
+export function namesHtml(a) {
+  const names = namedIn(a);
+  const li = names.slice(0, MAX_NAMES).map((n) => `<li>${escapeHtml(n)}</li>`).join('');
+  const more = names.length > MAX_NAMES ? `<li class="sc-more-names">+${names.length - MAX_NAMES} more in the answer</li>` : '';
+  return li + more;
+}
+
+/** Who answered: "ChatGPT's answer", else "Real AI answer". */
+export function sourceLabel(a) {
+  return a.engine && ENGINE_NAMES[a.engine] ? `${ENGINE_NAMES[a.engine]}&rsquo;s answer` : 'Real AI answer';
+}
+
+/** "ChatGPT didn't give this customer their name." */
+export function lostWhy(a) {
+  return `Not mentioned. ${a.engine && ENGINE_NAMES[a.engine] ? ENGINE_NAMES[a.engine] : 'AI'} didn&rsquo;t give this customer their name.`;
+}
+
+/** "Every other plumber in Massapequa" */
+export function lostLine(trade, town) {
+  return `Every other ${TRADE_NOUNS[trade] || 'business'} in ${town}`;
+}
+
+/**
+ * Inner HTML of <div data-showcase> for picked data `p`: the question, two lines of the verbatim
+ * answer (from the sentence that names someone; the rest one tap away), then who it sent the
+ * customer to and everyone it left out (the visitor, most likely). Same markup as the static
+ * fallback in index.html.
+ */
 export function renderShowcase(p) {
   const a = p.answers[p.trade];
   const options = p.order.map((k) => `<option value="${k}"${k === p.trade ? ' selected' : ''}>${escapeHtml(TRADE_LABELS[k] || k)}</option>`).join('');
   // JSON inside <script>: escape "<" so no string can close the tag.
-  const data = JSON.stringify({ answers: p.answers }).replace(/</g, '\\u003c');
-  return `<figure class="sc-card">
+  const data = JSON.stringify({ town: p.town, nouns: TRADE_NOUNS, engines: ENGINE_NAMES, answers: p.answers }).replace(/</g, '\\u003c');
+  return `<p class="sc-intro-line">Your free report shows you this, for your business and your town:</p>
+<figure class="sc-card">
   <div class="sc-head">
-    <figcaption class="sc-label">Real AI answer &middot; asked <span data-sc-date>${escapeHtml(formatDate(a.askedAt))}</span></figcaption>
+    <figcaption class="sc-label"><span data-sc-src>${sourceLabel(a)}</span> &middot; asked <span data-sc-date>${escapeHtml(formatDate(a.askedAt))}</span></figcaption>
     <label class="sc-pick"><span class="sr-only">Show the answer for</span><select data-sc-trade>${options}</select></label>
   </div>
   <p class="sc-q" data-sc-q>${escapeHtml(a.question)}</p>
-  <p class="sc-a" data-sc-a>${answerHtml(a)}</p>
-  <p class="sc-link"><a href="/report/mega-wash-and-dry">See what you get: a real full report &rarr;</a></p>
+  <div class="sc-full">${answerBlockHtml(a)}<button type="button" class="sc-expand" data-sc-expand aria-expanded="false">Read the full answer, word for word</button></div>
+  <p class="sc-k">AI sent this customer to</p>
+  <ul class="sc-names" data-sc-names>${namesHtml(a)}</ul>
+  <p class="sc-lost"><b data-sc-lost>${escapeHtml(lostLine(p.trade, p.town))}</b><span data-sc-why>${lostWhy(a)}</span></p>
+  <p class="sc-ask"><b>Would it give yours?</b> <a href="#request" data-sc-check>Check my business free<span class="sc-arrow" aria-hidden="true"></span></a></p>
 </figure>
-<p class="sc-caption">Is your name in it? These businesses are. If AI doesn&rsquo;t say your name, the call goes to them.</p>
 <p class="sc-note">Businesses shown are named by AI, not by us. <a href="mailto:hello@aifoundscore.com?subject=Remove%20from%20homepage%20answer">Ask us to remove one</a>.</p>
 <script type="application/json" id="sc-data">${data}</script>`;
 }
@@ -124,7 +205,7 @@ export async function readShowcaseRows(env, { fetchImpl = fetch } = {}) {
   const key = String(env?.SUPABASE_ANON_KEY || '').trim();
   const base = String(env?.SUPABASE_URL || '').replace(/\/+$/, '');
   if (!base || !key) throw new Error('supabase not configured');
-  const q = 'active=eq.true&select=trade,town,state,question,excerpt,spans,truncated,asked_at&limit=5000';
+  const q = 'active=eq.true&select=trade,town,state,engine,question,excerpt,spans,truncated,asked_at&limit=5000';
   const res = await fetchImpl(`${base}/rest/v1/showcase_answers?${q}`, {
     headers: { apikey: key, Authorization: `Bearer ${key}` },
     signal: AbortSignal.timeout(2500),

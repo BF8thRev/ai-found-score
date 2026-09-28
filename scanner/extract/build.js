@@ -215,6 +215,7 @@ export async function buildReport({
   // Answers + verified extraction.
   const answers = [];
   const factsRaw = [];
+  const verified = [];
   const descriptorsRaw = [];
   const rejected = [];
   const extraction = { calls: 0, costUsd: 0, inputTokens: 0, outputTokens: 0, failures: [] };
@@ -270,9 +271,31 @@ export async function buildReport({
     };
     if (v.ownerMatch === 'unsure' && !v.namedYou) ans.ownerMatch = 'unsure';
     answers.push(ans);
-    // Facts only count when this answer is confirmed to be talking about the owner.
-    if (v.namedYou) for (const f of v.facts) factsRaw.push({ answerId: aid, ...f });
-    if (v.namedYou) for (const d of v.descriptors || []) descriptorsRaw.push({ answerId: aid, quote: d.quote });
+    verified.push({ ans, base, proposal, v });
+  }
+
+  // A near-name left "unsure" in one answer ("Glenn Wayne Bakery Outlet", no contact details
+  // next to it) is the owner when another answer already confirmed that exact name as the
+  // owner (by phone, street or website). Re-check those answers with the confirmed names.
+  const ownerNorms = new Set([business.name, ...(business.aliases || [])].filter(Boolean).map(normalizeName));
+  const confirmed = [...new Set(answers.flatMap((a) => a.businessesNamed.filter((b) => b.isYou).map((b) => b.name)))]
+    .filter((n) => !ownerNorms.has(normalizeName(n)));
+  if (confirmed.length) {
+    const withAliases = { ...business, aliases: [...(business.aliases || []), ...confirmed] };
+    for (const x of verified) {
+      if (!x.v.businessesNamed.some((b) => b.ownerMatch === 'unsure')) continue;
+      const v2 = verifyAnswer({ answer: x.base, proposal: x.proposal, business: withAliases });
+      if (!v2.namedYou) continue;
+      x.v = v2;
+      Object.assign(x.ans, { businessesNamed: v2.businessesNamed, namedYou: v2.namedYou, namedYouFirst: v2.namedYouFirst });
+      delete x.ans.ownerMatch;
+    }
+  }
+  // Facts only count when an answer is confirmed to be talking about the owner.
+  for (const { ans, v } of verified) {
+    if (!v.namedYou) continue;
+    for (const f of v.facts) factsRaw.push({ answerId: ans.id, ...f });
+    for (const d of v.descriptors || []) descriptorsRaw.push({ answerId: ans.id, quote: d.quote });
   }
 
   // Entities.

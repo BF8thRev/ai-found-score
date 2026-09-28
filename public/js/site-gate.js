@@ -2,6 +2,7 @@
 // whether the website is real and the business name is a name, and if not, shows a popup that
 // says what's wrong and puts the cursor in that field. The Worker checks again on POST /api/request.
 //   window.siteGate(form, data) -> Promise<boolean>: true = go ahead, false = the popup is showing.
+//   When the website shows its ZIP, it is put on data.siteZip.
 // If the check itself can't run (offline, rate limit, error), it goes ahead: the server still checks.
 (function () {
   'use strict';
@@ -35,6 +36,8 @@
       .then(function (r) { return r.ok ? r.json() : { ok: true }; })
       .catch(function () { return { ok: true }; })
       .then(function (res) {
+        // The ZIP on the business's own website, when it shows one (the hero form doesn't ask for it).
+        if (res && typeof res.zip === 'string' && /^\d{5}$/.test(res.zip)) data.siteZip = res.zip;
         if (!res || res.ok !== false) return true;
         var field = form.elements[res.field === 'business_name' ? 'business_name' : 'website'];
         if (field) {

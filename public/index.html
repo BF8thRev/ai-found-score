@@ -44,10 +44,10 @@
     <nav class="nav" aria-label="Main">
       <a href="/#how">How it works</a>
       <a href="/#pricing">Pricing</a>
-      <a href="/report/sample-001">Sample report</a>
+      <a href="/report/mega-wash-and-dry">Sample report</a>
       <a href="/#faq">FAQ</a>
     </nav>
-    <a class="header-cta" href="/#request">Get my free report</a>
+    <a class="header-cta" href="/#request">Who&rsquo;s getting my calls?</a>
   </div>
 </header>
 
@@ -59,9 +59,30 @@
       <div class="hero-copy">
         <h1>Your customers are asking AI now. <span class="h1-accent">Is it sending your calls to someone else?</span></h1>
         <p class="lede">Do you know what it tells them? We ask AI your customers&rsquo; questions and show you every word.</p>
-        <div class="hero-cta">
-          <a class="btn big" href="#request">Show me who&rsquo;s getting my calls</a>
-          <p class="hero-micro">Free &middot; No email to start &middot; No sales call</p>
+        <!-- The free-report form (the only one on the page; /#request links land here). Business name +
+             website: the website check (/js/site-gate.js) also brings back the ZIP from the business's own
+             site, so the ZIP box only appears when the site doesn't show one (or is a Facebook/Yelp page). -->
+        <div class="hero-start" id="request">
+        <form class="hero-form" id="request-form" method="post" action="/api/request" novalidate>
+          <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="e.g. Joe’s Plumbing"></label>
+          <label class="full"><span>Your website <small class="hint">(or Facebook page)</small></span> <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
+          <label class="full" id="zip-field" hidden>Your ZIP code <input name="zip" type="text" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
+          <p class="full field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
+          <label class="full" id="town-field" hidden>Town <input name="town" type="text" maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
+          <input name="state" type="hidden" value="NY" data-geo-value="state">
+          <fieldset class="full trade-pick" id="trade-pick" hidden>
+            <label class="trade-other">What kind of business is it? <input name="trade_other" id="trade-other" type="text" maxlength="40" autocomplete="off" placeholder="bakery, dentist, plumber, salon…"></label>
+          </fieldset>
+          <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+          <button class="btn big" type="submit">Show me who&rsquo;s getting my calls</button>
+          <p class="status" id="request-status" role="status"></p>
+          <p class="hero-micro">Free &middot; No email to start</p>
+        </form>
+        <!-- Turnstile bot check (invisible unless Cloudflare needs a click). The Worker fills in the site key;
+             empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
+        <p class="ts-help" id="ts-help" hidden>One quick check: tap the box below to confirm you&rsquo;re a person.</p>
+        <div class="ts-box" id="ts-request" data-turnstile-sitekey=""></div>
+        <p class="hero-done" id="hero-done" hidden>Asking AI about your business now. <a href="#results">See it below &darr;</a></p>
         </div>
         <p class="proof-line" id="proof-line" hidden></p>
       </div>
@@ -70,13 +91,16 @@
            Mega Wash & Dry answer (asked Sep 24, 2026; the date is on the linked report), published with the owner's permission; the text is verbatim (the
            hyphens in "all‑around" and "24‑hour" are U+2011, as in the original answer). -->
       <div class="real-answer" data-showcase>
+        <p class="sc-intro-line">Your free report shows you this, for your business and your town:</p>
         <figure class="sc-card">
-          <div class="sc-head"><figcaption class="sc-label">Real AI answer</figcaption></div>
+          <div class="sc-head"><figcaption class="sc-label">ChatGPT&rsquo;s answer</figcaption></div>
           <p class="sc-q">What's the best laundromat in North Babylon, NY?</p>
-          <p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p>
-          <p class="sc-link"><a href="/report/mega-wash-and-dry">See what you get: the full Mega Wash &amp; Dry report &rarr;</a></p>
+          <div class="sc-full"><p class="sc-a">Many people in North Babylon recommend <b>Mega Wash &amp; Dry</b> as the best all‑around choice (24‑hour, wash &amp; fold, modern machines). If you want very large commercial washers or a laundromat focused on fast wash-and-fold turnaround, <b>One Hour Laundry</b> (North Babylon location) is another top option.</p><button type="button" class="sc-expand" data-sc-expand aria-expanded="false">Read the full answer, word for word</button></div>
+          <p class="sc-k">AI sent this customer to</p>
+          <ul class="sc-names"><li>Mega Wash &amp; Dry</li><li>One Hour Laundry</li></ul>
+          <p class="sc-lost"><b>Every other laundromat in North Babylon</b><span>Not mentioned. ChatGPT didn&rsquo;t give this customer their name.</span></p>
+          <p class="sc-ask"><b>Would it give yours?</b> <a href="#request" data-sc-check>Check my business free<span class="sc-arrow" aria-hidden="true"></span></a></p>
         </figure>
-        <p class="sc-caption">If AI doesn&rsquo;t say your name, the call goes to whoever it does name.</p>
       </div>
     </div>
   </div>
@@ -188,7 +212,7 @@
           <li>A free re-check in 30 days, so you see what your fixes changed</li>
         </ul>
         <p class="tier-foot">*Being added now. Your report lists exactly which assistants we asked.</p>
-        <p class="tier-when">Usually ready within the hour. <a href="/report/mega-wash-and-dry" target="_blank" rel="noopener">See a real one: Mega Wash &amp; Dry &rarr;</a></p>
+        <p class="tier-when">Usually ready within the hour. See real ones: <a href="/report/mega-wash-and-dry" target="_blank" rel="noopener">Mega Wash &amp; Dry</a> &middot; <a href="/report/glenn-wayne-bakery" target="_blank" rel="noopener">Glenn Wayne Bakery</a></p>
         <p class="tier-promise">Fewer than 3 problems specific to your business? Your $49 back.</p>
         <a class="btn" data-offer="full_audit" href="/checkout">Get my audit</a>
       </div>
@@ -262,40 +286,10 @@
   </div>
 </section>
 
-<section class="section" id="request">
+<!-- Results of the hero form: the live answer, the report link, the questions, optional email. -->
+<section class="section" id="results" hidden>
   <div class="wrap">
-    <div class="request">
-      <div class="request-intro" id="request-intro">
-        <h2 id="intro-title">Is your business the answer?</h2>
-        <p class="intro" id="intro-text">Tell us your business. We&rsquo;ll ask AI what your customers ask, live, and show you every word.</p>
-        <ul id="intro-points">
-          <li>Free. No sign-up, no card</li>
-          <li>No email to start</li>
-          <li>Public data only, no logins</li>
-        </ul>
-      </div>
-      <div class="request-col" id="request-col">
-      <form id="request-form" method="post" action="/api/request" novalidate>
-        <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="Harborview Plumbing &amp; Heating"></label>
-        <label class="full">Website <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="yourbusiness.com or your Facebook page"></label>
-        <label class="full">ZIP code <input name="zip" type="text" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
-        <p class="full field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
-        <label class="full" id="town-field" hidden>Town <input name="town" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
-        <input name="state" type="hidden" value="NY" data-geo-value="state">
-        <fieldset class="full trade-pick" id="trade-pick" hidden>
-          <label class="trade-other">What kind of business is it? <input name="trade_other" id="trade-other" type="text" maxlength="40" autocomplete="off" placeholder="bakery, dentist, plumber, salon…"></label>
-        </fieldset>
-        <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
-        <button class="btn" type="submit">Show me who&rsquo;s getting my calls</button>
-        <p class="status" id="request-status" role="status"></p>
-        <p class="form-note">No sales call. We only read public information about your business. <a href="/privacy">Privacy</a></p>
-      </form>
-        <!-- Turnstile bot check (invisible unless Cloudflare needs a click). The Worker fills in the site key;
-             empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
-        <p class="ts-help" id="ts-help" hidden>One quick check: tap the box below to confirm you&rsquo;re a person.</p>
-        <div class="ts-box" id="ts-request" data-turnstile-sitekey=""></div>
-      </div>
-
+    <div class="request done">
       <div class="request-next" id="request-next" hidden>
         <!-- Live answer: on submit we ask the first question to one assistant right away
              (POST /api/live-preview) and show its answer word for word. -->
@@ -366,7 +360,8 @@
         <h4>Report</h4>
         <a href="/#how">How it works</a>
         <a href="/#pricing">Pricing</a>
-        <a href="/report/sample-001">Sample report</a>
+        <a href="/report/mega-wash-and-dry">Sample: Mega Wash &amp; Dry</a>
+        <a href="/report/glenn-wayne-bakery">Sample: Glenn Wayne Bakery</a>
       </div>
       <div class="col">
         <h4>Contact</h4>
@@ -393,7 +388,7 @@
   var HELLO = '<a href="mailto:hello@aifoundscore.com?subject=Free%20report">hello@aifoundscore.com</a>';
   var fallback = 'Something went wrong. Email ' + HELLO + ' with your business name and town and we\'ll run it by hand.';
 
-  var box = document.querySelector('#request .request');
+  var box = document.querySelector('#results .request');
   var form = document.getElementById('request-form');
   var status = document.getElementById('request-status');
   var next = document.getElementById('request-next');
@@ -438,7 +433,7 @@
   }
   function tsWidget(box) {
     var w = { id: null, api: null, token: '', dead: !TS_KEY, waiters: [] };
-    var col = document.getElementById('request-col');
+    var col = document.getElementById('request');
     function live(on) {
       box.classList.toggle('ts-live', on);
       if (box !== TS_BOX) return;
@@ -506,6 +501,7 @@
   // optional. The paid audit has its own page (/checkout); old links with ?plan=audit go there.
   function el(id) { return document.getElementById(id); }
   var submitBtn = form.querySelector('button[type=submit]');
+
   (function () {
     var p = new URLSearchParams(location.search).get('plan');
     if (p === 'audit' || p === 'xray' || p === 'full_audit') location.replace('/checkout');
@@ -702,33 +698,43 @@
     // "Stamford, CT" -> town + state. The hidden state is only a guess from the visitor's connection.
     var ts = /^(.+?)\s*,\s*([A-Za-z]{2})$/.exec(data.town || '');
     if (ts && STATES.indexOf(ts[2].toUpperCase()) >= 0) { data.town = ts[1]; data.state = ts[2].toUpperCase(); }
-    // The town comes from the ZIP; if that lookup is still running, finish it first.
-    if (!data.town && /^\d{5}$/.test(data.zip)) {
-      lookupZip();
-      if (zipPending) { zipPending.then(function () { form.requestSubmit(); }); return; }
-    }
     var missing = [];
     if (!data.business_name) missing.push('your business name');
     if (!/^\S+\.\S+$/.test(data.website || '')) missing.push('your website (or your Facebook or Yelp page)');
-    if (!/^\d{5}$/.test(data.zip)) missing.push('a 5-digit ZIP');
-    else if (!data.town) { missing.push('your town'); showTownField(); }
-    // What the owner typed in "What kind of business is it?" (only shown when we couldn't tell), else a preset.
-    data.trade = kindText();
-    delete data.trade_other;
-    if (missing.length) {
-      show(status, 'error', 'Please add ' + missing.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'); return;
-    }
+    if (missing.length) { show(status, 'error', 'Please add ' + missing.join(' and ') + '.'); return; }
     // The gate: a real website and a real business name before anything is saved or scanned
-    // (/js/site-gate.js; the popup says what to fix). Checked once per name + website.
+    // (/js/site-gate.js; the popup says what to fix). Checked once per name + website. It also
+    // brings back the ZIP from the business's own site, so the owner doesn't type one.
     var gateKey = data.business_name + '|' + data.website;
-    if (window.siteGate && gateKey !== gatedKey) {
+    if (gateKey !== gatedKey) {
+      if (!window.siteGate) { gatedKey = gateKey; form.requestSubmit(); return; }
       var gBtn = submitBtn; var gLabel = gBtn.textContent; gBtn.disabled = true; gBtn.textContent = 'Checking your website…';
       window.siteGate(form, data).then(function (go) {
         gBtn.disabled = false; gBtn.textContent = gLabel;
-        if (go) { gatedKey = gateKey; form.requestSubmit(); }
+        if (!go) return;
+        gatedKey = gateKey;
+        if (data.siteZip) { zipInput.value = data.siteZip; lookupZip(); }
+        form.requestSubmit();
       });
       return;
     }
+    // No ZIP on the website (or a Facebook/Yelp page): ask for it.
+    if (!/^\d{5}$/.test(data.zip)) {
+      zipField.hidden = false;
+      show(status, 'error', 'We couldn&rsquo;t find your ZIP code on your website. What&rsquo;s your ZIP?');
+      zipInput.focus();
+      return;
+    }
+    // The town comes from the ZIP; if that lookup is still running, finish it first.
+    if (!data.town) {
+      lookupZip();
+      if (zipPending) { zipPending.then(function () { form.requestSubmit(); }); return; }
+      showTownField();
+      show(status, 'error', 'Please add your town.'); return;
+    }
+    // What the owner typed in "What kind of business is it?" (only shown when we couldn't tell), else a preset.
+    data.trade = kindText();
+    delete data.trade_other;
     status.className = 'status'; status.textContent = '';
     biz = data;
     var btn = submitBtn; var btnLabel = btn.textContent; btn.disabled = true; btn.textContent = 'One moment…';
@@ -754,6 +760,8 @@
       renderQuestions(limited ? null : res);
       if (limited) el('rq-sub').innerHTML = '<strong>' + esc(limited) + '</strong> Your questions are three plain questions a customer in ' + esc(biz.town) + ' would ask, and every one is in your report.';
       form.hidden = true;
+      el('hero-done').hidden = false;
+      el('results').hidden = false;
       next.hidden = false;
       box.classList.add('done');
       var head = liveState === 'preparing' ? liveBox : el('rq-next');
@@ -801,6 +809,7 @@
 
   var zipInput = form.elements.zip, townInput = form.elements.town, stateInput = form.elements.state;
   var zipPending = null, zipAsked = '';
+  var zipField = el('zip-field'); // shown only when the website has no ZIP
   function showTownField() { zipFound.hidden = true; townField.hidden = false; }
   function lookupZip() {
     var z = String(zipInput.value || '').trim();
@@ -830,6 +839,37 @@
   });
   el('zip-change').addEventListener('click', function () { showTownField(); townInput.focus(); townInput.select(); });
 
+  // Hero card: the answer shows two lines (from the sentence that names someone); the button opens
+  // the whole answer, and hides itself when the answer already fits.
+  (function () {
+    var btn = document.querySelector('[data-sc-expand]');
+    if (!btn) return;
+    var full = btn.parentNode;
+    function fits() {
+      var a = full.querySelector('.sc-a');
+      btn.hidden = !full.classList.contains('open') && !a.querySelector('.sc-intro') && a.scrollHeight <= a.clientHeight + 2;
+    }
+    btn.addEventListener('click', function () {
+      var open = full.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.textContent = open ? 'Show less' : 'Read the full answer, word for word';
+      push({ event: 'showcase_expand', open: open });
+    });
+    fits();
+    window.addEventListener('resize', fits);
+    full.addEventListener('sc-changed', fits);
+  })();
+
+  // "Check my business free": up to the form, cursor in the first empty field.
+  var scCheck = document.querySelector('[data-sc-check]');
+  if (scCheck) scCheck.addEventListener('click', function (e) {
+    e.preventDefault();
+    el('request').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var f = !form.elements.business_name.value ? form.elements.business_name : form.elements.website;
+    try { f.focus({ preventScroll: true }); } catch (err) { f.focus(); }
+    push({ event: 'showcase_check_click' });
+  });
+
   // Hero card (src/lib/showcase.js): the picker swaps in that trade's stored answer for the same town.
   (function () {
     var pick = document.querySelector('[data-sc-trade]');
@@ -842,10 +882,21 @@
       var a = sc && sc.answers && sc.answers[pick.value];
       if (!a) return;
       document.querySelector('[data-sc-q]').textContent = a.question;
+      var src = document.querySelector('[data-sc-src]');
+      if (src) src.textContent = a.engine && sc.engines && sc.engines[a.engine] ? sc.engines[a.engine] + '’s answer' : 'Real AI answer';
       document.querySelector('[data-sc-date]').textContent = new Date(a.askedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+      // Same preview split as previewStart / answerBlockHtml in src/lib/showcase.js.
       var box = document.querySelector('[data-sc-a]');
       box.textContent = '';
-      var at = 0;
+      var start = 0;
+      if (a.spans && a.spans.length) {
+        var re = /[.!?:]\s+|\n+/g, m, before = a.excerpt.slice(0, a.spans[0][0]);
+        while ((m = re.exec(before))) start = m.index + m[0].length;
+        if (start < 25) start = 0;
+      }
+      box.className = 'sc-a' + (start ? ' has-intro' : '');
+      if (start) { var intro = document.createElement('span'); intro.className = 'sc-intro'; intro.textContent = a.excerpt.slice(0, start).replace(/\n{2,}/g, '\n'); box.appendChild(intro); }
+      var at = start;
       (a.spans || []).forEach(function (s) {
         if (!(s[0] >= at && s[1] > s[0] && s[1] <= a.excerpt.length)) return;
         box.appendChild(document.createTextNode(a.excerpt.slice(at, s[0]).replace(/\n{2,}/g, '\n')));
@@ -856,6 +907,21 @@
       });
       box.appendChild(document.createTextNode(a.excerpt.slice(at).replace(/\n{2,}/g, '\n')));
       if (a.truncated) { var more = document.createElement('span'); more.className = 'sc-more'; more.textContent = ' …'; box.appendChild(more); }
+      var why = document.querySelector('[data-sc-why]');
+      if (why) why.textContent = 'Not mentioned. ' + (a.engine && sc.engines && sc.engines[a.engine] ? sc.engines[a.engine] : 'AI') + ' didn’t give this customer their name.';
+      var full = document.querySelector('.sc-full');
+      if (full) full.dispatchEvent(new Event('sc-changed'));
+      // Same list and "every other" line as namesHtml / lostLine in src/lib/showcase.js.
+      var list = document.querySelector('[data-sc-names]');
+      var seen = {}, names = [];
+      list.textContent = '';
+      (a.spans || []).forEach(function (s) {
+        var n = a.excerpt.slice(s[0], s[1]).trim();
+        if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; names.push(n); }
+      });
+      names.slice(0, 4).forEach(function (n) { var li = document.createElement('li'); li.textContent = n; list.appendChild(li); });
+      if (names.length > 4) { var li = document.createElement('li'); li.className = 'sc-more-names'; li.textContent = '+' + (names.length - 4) + ' more in the answer'; list.appendChild(li); }
+      document.querySelector('[data-sc-lost]').textContent = 'Every other ' + ((sc.nouns && sc.nouns[pick.value]) || 'business') + ' in ' + sc.town;
       presetTrade(pick.value);
       push({ event: 'showcase_trade', trade: pick.value });
     });

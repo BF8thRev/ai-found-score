@@ -14,11 +14,12 @@ const PAGES = ['index.html', 'checkout.html', 'about.html', 'terms.html', 'refun
 const read = (f) => readFileSync(new URL(f, PUBLIC), 'utf8');
 
 // index.html quotes third-party usage figures (a cited stats band); that band is not our claim.
-// The hero's sample card is a labelled verbatim quote from the sample report. The Full Audit
-// tier names the assistants it asks (owner decision, site copy v2): that one list item may.
+// The hero's answer card is a labelled verbatim quote and says which assistant gave it (owner
+// decision, Sep 28 2026: "ChatGPT's answer"). The Full Audit tier names the assistants it asks
+// (owner decision, site copy v2): that one list item may.
 const withoutStats = (html) => html
   .replace(/<section class="stats-band"[\s\S]*?<\/section>/, '')
-  .replace(/<div class="real-answer" data-(?:real|sample)-quote>[\s\S]*?<\/figure>[\s\S]*?<\/p>\s*<\/div>/, '')
+  .replace(/<div class="real-answer" data-(?:real-quote|sample-quote|showcase)>[\s\S]*?<\/figure>\s*<\/div>/, '')
   .replace(/<li data-assistant-list>[\s\S]*?<\/li>/g, '');
 const visible = (html) => html
   .replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ')
@@ -76,9 +77,13 @@ test('no banned words in page copy', () => {
   }
 });
 
-test('hero links the real report; the sample stays reachable from the nav', () => {
+test('hero shows who got the call and who did not; nav and card link the real reports', () => {
   const index = read('index.html');
-  assert.match(index, /class="sc-link"><a href="\/report\/mega-wash-and-dry">See what you get/);
-  assert.match(index, /href="\/report\/sample-001">Sample report</);
+  assert.match(index, /class="sc-names"><li>Mega Wash &amp; Dry<\/li><li>One Hour Laundry<\/li><\/ul>/);
+  assert.match(index, /class="sc-lost"><b>Every other laundromat in North Babylon<\/b>/);
+  assert.match(index, /class="sc-ask"><b>Would it give yours\?<\/b> <a href="#request" data-sc-check>/);
+  assert.match(index, /class="sc-intro-line">Your free report shows you this, for your business and your town:</);
+  assert.match(index, /See real ones: <a href="\/report\/mega-wash-and-dry"[^>]*>Mega Wash &amp; Dry<\/a> &middot; <a href="\/report\/glenn-wayne-bakery"/);
+  assert.match(index, /href="\/report\/mega-wash-and-dry">Sample report</);
   assert.ok(!/lost-band|stopped Googling/.test(index), 'the made-up lost-call strip and the "stopped Googling" claim are gone');
 });

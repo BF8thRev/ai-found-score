@@ -11,7 +11,12 @@
 //   - too slow to answer → let it through: a slow site is still a real site.
 // Name: a light check for keyboard mashes and test strings, not a spell check.
 //
-// → { ok: true, url } | { ok: false, field: 'website' | 'business_name', reason, error }
+// → { ok: true, url, zip? } | { ok: false, field: 'website' | 'business_name', reason, error }
+// zip: from the home page (schema, then "Town, ST 12345"), else the Google listing whose website is this
+// site (GET /api/site-check only); the forms use it so the owner doesn't type a ZIP.
+
+import { resolveKeys } from '../../scanner/config.js';
+import { placesSearch } from '../../scanner/owner-checks.js';
 
 export const SITE_CHECK_TIMEOUT_MS = 5000;
 const PARKED_MAX_CHARS = 60_000;
@@ -85,8 +90,30 @@ export async function checkWebsite(website, { fetchImpl = (...a) => fetch(...a),
   if (res.ok && /html/i.test(res.headers.get('Content-Type') || 'text/html')) {
     const html = await res.text().catch(() => '');
     if (PARKED_RE.test(html.slice(0, PARKED_MAX_CHARS))) return bad('website', 'parked');
+    // The hero form doesn't ask for a ZIP: the site's own address supplies it when it shows one.
+    const zip = findZip(html);
+    if (zip) return { ok: true, url: u.href, zip };
   }
   return { ok: true, url: u.href };
+}
+
+/**
+ * The business's ZIP from its home page, or ''. Schema postalCode first (it is the business's
+ * own address); else the most frequent "Town, ST 12345" in the text (ties: the first one), so a
+ * footer address beats a one-off mention of a nearby town.
+ */
+export function findZip(html) {
+  const s = String(html || '').slice(0, 400_000);
+  const schema = /"postalCode"\s*:\s*"(\d{5})(?:-\d{4})?"/.exec(s);
+  if (schema) return schema[1];
+  const text = s.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ');
+  const counts = new Map();
+  for (const m of text.matchAll(/,\s*(?:[A-Z]{2}|New York|New Jersey|Connecticut)\.?,?\s+(\d{5})(?:-\d{4})?\b/g)) {
+    counts.set(m[1], (counts.get(m[1]) || 0) + 1);
+  }
+  let best = '';
+  for (const [z, n] of counts) if (!best || n > counts.get(best)) best = z;
+  return best;
 }
 
 /** The whole gate: the name first (no network), then the website when there is one. */
@@ -100,6 +127,29 @@ export async function checkSubmission({ name, website } = {}, deps = {}) {
 /** GET /api/site-check?website=&name= */
 export async function handleSiteCheck(url, deps = {}) {
   const p = url.searchParams;
-  const r = await checkSubmission({ name: p.get('name') ?? 'ok', website: String(p.get('website') || '').slice(0, 160) }, deps);
+  const name = p.get('name') ?? 'ok';
+  const r = await checkSubmission({ name, website: String(p.get('website') || '').slice(0, 160) }, deps);
+  // The site passed but showed no ZIP (bot wall, no address on the home page): ask Google.
+  if (r.ok && r.url && !r.zip && deps.env) {
+    const zip = await zipFromPlaces(name, r.url, deps.env, deps).catch(() => '');
+    if (zip) r.zip = zip;
+  }
   return Response.json(r, { headers: { 'Cache-Control': 'no-store' } });
+}
+
+const hostOf = (s) => { try { return new URL(s).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
+
+/**
+ * The ZIP from the business's Google listing, or ''. One Places Text Search by name (address and
+ * website only, the cheaper field tier). Only a listing whose website is this same site counts:
+ * a name alone could be another business with the same name. Needs the Places key; else ''.
+ */
+export async function zipFromPlaces(name, siteUrl, env, { placesFetch = (...a) => fetch(...a) } = {}) {
+  const key = resolveKeys(env).googlePlacesKey;
+  const host = hostOf(siteUrl);
+  if (!key || !host || isPlatform(host) || !String(name || '').trim()) return '';
+  const r = await placesSearch(String(name).trim().slice(0, 120), key, 'places.formattedAddress,places.websiteUri', placesFetch);
+  const place = (r.places || []).find((pl) => pl.websiteUri && hostOf(pl.websiteUri) === host);
+  const m = place && /,\s*[A-Z]{2}\s+(\d{5})(?:-\d{4})?\b/.exec(place.formattedAddress || '');
+  return m ? m[1] : '';
 }
