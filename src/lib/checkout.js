@@ -29,7 +29,7 @@ import { pendingReportStatus } from './auto-scan.js';
 
 export const PRICES = Object.freeze({ xray: 4900, competitor_breakdown: 2500, be_the_answer: 49900 });
 export const PRODUCTS = Object.freeze({
-  xray: { name: 'AI Visibility Audit', description: 'Every answer word for word, every fix with the text to paste, your Fix Kit, and a free re-scan 30 days later.' },
+  xray: { name: 'AI Visibility Audit', description: 'Every answer word for word, every fix with the text to paste, your Fix Kit, and a free re-check in 30 days to see what your fixes changed.' },
   competitor_breakdown: { name: 'Competitor Breakdown', description: 'The top 3 businesses AI names instead of you, side by side with you.' },
   be_the_answer: { name: 'Be the Answer (one year)', description: 'A re-scan every month in up to 3 towns, a monthly email with your next 3 fixes, competitor alerts, your directory checklist and 12 Google posts.' },
 });
@@ -141,8 +141,8 @@ export function sessionForm({ items, credit, token, tier, addons, origin, prepay
       ? `${it.description} Includes $${(credit / 100).toFixed(2)} credit for what you've already paid.`
       : it.description;
     f.set(`line_items[${i}][price_data][product_data][description]`, desc);
-    // Our logo next to each item on Stripe's page (a public https image; skipped for local dev).
-    if (origin.startsWith('https://')) f.set(`line_items[${i}][price_data][product_data][images][0]`, `${origin}/img/og.png`);
+    // Our square product image next to each item on Stripe's page (a public https image; skipped for local dev).
+    if (origin.startsWith('https://')) f.set(`line_items[${i}][price_data][product_data][images][0]`, `${origin}/img/product.png`);
   });
   return f;
 }
