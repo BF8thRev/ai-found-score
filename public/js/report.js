@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.wireCheckout?.(root, report.sample ? null : report.id);
   root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', (e) => submitLead(e, report.id)));
   wireOfferScroll(root);
+  wireOfferTotal(root);
   focusOffer(root, new URLSearchParams(window.location.search).get('offer'));
 
   // One server-side visit per render, after the JS has run. Link scanners
@@ -285,6 +286,15 @@ function unlockPanel() {
 // "See what the audit includes" and similar links: scroll to the offer band instead of a second checkout.
 function wireOfferScroll(root) {
   root.addEventListener('click', (e) => {
+    const k = e.target.closest('a[data-scroll-keep]');
+    if (k) {
+      const box = root.querySelector('#keep');
+      if (!box) return;
+      e.preventDefault();
+      box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      box.querySelector('input[type=email]')?.focus({ preventScroll: true });
+      return;
+    }
     const a = e.target.closest('a[data-scroll-offer]');
     if (!a) return;
     const band = root.querySelector('[data-offer-band]');
@@ -594,6 +604,7 @@ function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 function tradePlural(trade) {
   const t = String(trade || 'business').toLowerCase();
   if (/(s|sh|ch|x)$/.test(t)) return t + 'es';
+  if (/[^aeiou]y$/.test(t)) return t.slice(0, -1) + 'ies';
   return t + 's';
 }
 
@@ -682,7 +693,8 @@ function renderV2(root, report) {
   const lostAnswerIds = new Set(answers.filter((a) => !a.namedYou && a.ownerMatch !== 'unsure').map((a) => a.id));
   const cw = countWords(report);
   // A locked report's fixes are untitled stand-ins (src/lib/lock.js): still counted.
-  const fixCount = issues.filter((i) => i && (i.title || i.locked)).length;
+  const severity = { high: 0, medium: 0, low: 0 };
+  for (const i of issues) if (i && (i.title || i.locked) && i.severity in severity) severity[i.severity]++;
   const specificFixCount = issues.filter((i) => i && (i.title || i.locked) && !(i.generic === true || /^baseline_/.test(String(i.kind || '')))).length;
   // The $49 audit is offered only on a locked report with at least MIN_FIX_ITEMS fixes specific to
   // this business (the refund promise; same rule as xrayOffered() in shared/report-v2.js).
@@ -711,7 +723,6 @@ function renderV2(root, report) {
   // Same rule as edgeState() in shared/report-v2.js.
   const missingSources = (report.sources || []).filter((s) => s.youListed === false);
   const missingCount = report.sourcesSummary ? num(report.sourcesSummary.missingYou) : missingSources.length;
-  const noFixes = badListings.length === 0 && missingCount === 0;
   const generalAdvice = answers.filter((a) => !(a.businessesNamed || []).length).length;
 
   const trade = b.trade ? b.trade[0].toUpperCase() + b.trade.slice(1) : '';
@@ -719,7 +730,7 @@ function renderV2(root, report) {
   const meta = [trade, place, b.phone].filter(Boolean).map(escapeHtml).join(' · ');
 
   root.innerHTML = [
-    headerV2(report, b, meta),
+    headerV2(report, b, meta, xrayOk && !report.sample && !report.hasEmail),
     '<div class="wrap r2">',
     report.fullScanPending ? fullScanNote() : '',
     verdictV2(report, { t, N, cw, proven, zero, allNamed }),
@@ -738,10 +749,10 @@ function renderV2(root, report) {
     xrayV2({ report, aById, cw, N }),
     report.breakdown ? breakdownV2(report) : '',
     paid && !isDemoReport(report) ? fixKitIncluded(report) : '',
-    offerV2({ allNamed, noFixes, cw, fixCount, xrayOk, hasCompetitors: !nobodyTwice }),
+    offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, proven, badListings, missingCount, severity, specificFixCount, xrayOk, hasCompetitors: !nobodyTwice }),
     answersV2({ questions, answers }),
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
-    bottomLead(report),
+    xrayOk ? '' : bottomLead(report),
     reportTools(),
     '</div>',
   ].join('');
@@ -764,14 +775,14 @@ function renderV2(root, report) {
   }
 }
 
-function headerV2(report, b, meta) {
+function headerV2(report, b, meta, keepLink = false) {
   return `
     <section class="report-header">
       <div class="wrap r2">
         ${report.sample ? '<div class="sample-banner"><strong>Sample report.</strong> A fictional business, fictional competitors and made-up answers. Yours shows your real searches, word for word.</div>' : ''}
         <h1>${escapeHtml(b.name)}</h1>
         <p class="biz-meta">${meta}</p>
-        <p class="fine">Checked ${escapeHtml(fmtDate(report.generatedAt))}</p>
+        <p class="fine">Checked ${escapeHtml(fmtDate(report.generatedAt))}${keepLink ? ' · <a href="#keep" data-scroll-keep>Email me this report</a>' : ''}</p>
       </div>
     </section>`;
 }
@@ -1084,7 +1095,7 @@ function factsV2({ report, b, aById }) {
 function listingsV2({ listings, badListings }) {
   if (!listings.length) return '';
   const sub = badListings.length === 0
-    ? `All ${listings.length} listings agree.`
+    ? (listings.length === 1 ? 'We found 1 listing, and it matches your website.' : `All ${listings.length} listings agree.`)
     : `${badListings.length} of ${listings.length} listings need a fix. When your listings disagree, AI can repeat the wrong one.`;
   return `
     <section class="report-section">
@@ -1389,16 +1400,134 @@ function breakdownV2(report) {
 }
 
 // 9. Offer: the $49 AI Visibility X-Ray, the only tier on sale (OFFERED_TIERS in config.js has 'xray').
-// Only on a locked report with at least MIN_FIX_ITEMS fixes specific to the business (xrayOk; the refund promise). Edge states
-// (named in every answer, or nothing missing) offer it too: the baseline fixes still apply.
+// The offer band on a v2 report. Only on a locked report with at least MIN_FIX_ITEMS fixes specific to the
+// business (xrayOk; the refund promise). It leads with what this report actually found (never a claim the
+// report can't back), then what $49 buys, the refund promise, and the one email box for anyone not ready.
 // Sample and showcase reports never link to Stripe (isDemoReport, at the top of this file).
-function offerV2({ allNamed, noFixes, cw, fixCount, xrayOk, hasCompetitors }) {
+function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, proven, badListings, missingCount, severity, specificFixCount, xrayOk, hasCompetitors }) {
   if (!xrayOk) return '';
-  if (allNamed || noFixes) {
-    const lead = allNamed ? `Every ${cw.one} named you.` : 'We found no listing to fix and no cited site missing you.';
-    return xrayOffer(`${lead} There are still ${num(fixCount)} things you can do to keep your details clear and consistent.`, { breakdown: hasCompetitors });
+  const name = escapeHtml(b.name || 'your business');
+  const town = escapeHtml(b.town || b.city || 'your area');
+  const top = proven[0] ? escapeHtml(proven[0].name) : '';
+
+  // What we found, strongest first. Each line is a fact already shown above on this page.
+  const found = [];
+  const seenField = new Set();
+  for (const w of (report.aiFacts || []).filter((x) => x && x.status === 'differs')) {
+    if (seenField.has(w.field) || (w.field === 'address' && nearMiss(w.aiSays, w.sourceSays))) continue;
+    seenField.add(w.field);
+    const label = w.field === 'phone' ? 'phone number' : (FIELD_LABELS[w.field] || w.field || 'detail').toLowerCase();
+    const eng = escapeHtml(engineName(aById[w.answerId]?.engine));
+    found.push({ level: 'high', text: `${eng} gave out ${/^[aeiou]/.test(label) ? 'an' : 'a'} ${escapeHtml(label)} that isn’t the one on your website: <q>${escapeHtml(w.aiSays)}</q>` });
   }
-  return xrayOffer('', { breakdown: hasCompetitors });
+  if (lostIntents.length && top) found.push({ level: 'high', text: `AI named other businesses over you when customers asked for ${escapeHtml(listJoin(lostIntents.map(intentLabel)))}. ${top} came up most.` });
+  if (missingCount) found.push({ level: 'high', text: `${num(missingCount)} ${plural(num(missingCount), 'website AI cited lists', 'websites AI cited list')} other ${escapeHtml(tradePlural(b.trade))} and not you.` });
+  if (badListings.length) found.push({ level: 'high', text: `${badListings.length} of your listings ${plural(badListings.length, 'shows', 'show')} details that don’t match your website.` });
+  const sc = report.siteCheck;
+  const scFailed = sc && sc.reachable ? num(sc.checks) - num(sc.passed) : 0;
+  if (scFailed > 0) found.push({ level: 'mid', text: `${scFailed} of ${num(sc.checks)} checks failed when we read ${escapeHtml(shortUrl(sc.url || b.website || ''))} the way an AI crawler does.` });
+  if (severity.high) found.push({ level: 'mid', text: `${severity.high} ${plural(severity.high, 'problem', 'problems')} to fix first, ${severity.medium} to fix soon, ${severity.low} minor.` });
+  if (!zero && top && !lostIntents.length) found.push({ level: 'mid', text: `${top} was named in ${num(proven[0].named)} of ${N} searches. The audit shows what AI finds on them.` });
+
+  // Headline: the outcome they want, in their words. Lede: where they stand today, from this report.
+  const winning = !zero && !lostIntents.length && N > 0 && t.namedYou / N >= 0.6;
+  const trade = escapeHtml(String(b.trade || 'business').toLowerCase());
+  const title = zero ? `Get AI to recommend ${name}.`
+    : winning ? `Stay the ${trade} AI recommends in ${town}.`
+      : `Be the ${trade} AI recommends in ${town}.`;
+  const lede = zero ? `Right now AI sends people who ask for a ${trade} in ${town} somewhere else. The audit shows why, and exactly what to change.`
+    : winning ? `AI named you in ${t.namedYou} of ${N} searches, first in ${t.firstYou}. That’s worth protecting, because AI answers change, and whatever AI gets wrong about you, it repeats to every customer who asks. This report already found:`
+      : `AI named you in ${t.namedYou} of ${N} searches. This report already found why it picks someone else:`;
+  const wrongPhone = (report.aiFacts || []).find((x) => x && x.status === 'differs' && x.field === 'phone');
+
+  // The value stack: what each piece does for them, and how much work it is.
+  const stack = [
+    ['The Fix Plan', 'Every problem by name, most important first, with the exact steps and the text to copy and paste.', 'Copy and paste'],
+    ['The Fix Kit', 'Ready-to-install files for your website: business details AI reads, an llms.txt, an FAQ page, your Google listing text and a review QR code. Hand them to whoever runs your site.', 'Done for you'],
+    ['The full scan', 'All 5 customer questions on every AI assistant we check. Every answer word for word, and every website AI cited.', 'Emailed within the hour'],
+    ['The competitor gap sheet', top ? `What AI finds on ${top} and the others that it doesn’t find on you.` : 'What AI finds on the businesses it names that it doesn’t find on you.', 'Included'],
+    ['The 30-day re-scan', 'We ask every AI assistant again in 30 days and show you, side by side, what changed.', 'Proof it worked'],
+  ];
+  const addon = hasCompetitors && tierOn('competitor_breakdown') ? `
+          <label class="ob-addon">
+            <input type="checkbox" data-addon="competitor_breakdown" data-addon-price="25">
+            <span><b>Add the Competitor Breakdown <em>+$25</em></b>The top 3 businesses AI names, side by side with you: what AI said about them, their reviews against yours, the questions they win.</span>
+          </label>` : '';
+  const keep = !report.sample && !report.hasEmail ? `
+      <div class="ob-keep" id="keep">
+        <p><b>Not ready yet?</b> We’ll email you the link so this report is there when you are.</p>
+        ${leadForm('bottom')}
+      </div>` : '';
+
+  return `
+    <section class="offer-band" id="offer" data-offer-band aria-labelledby="offer-title">
+      <div class="ob-head">
+        <p class="ob-kicker">AI Visibility Audit · ${name}</p>
+        <h2 id="offer-title">${title}</h2>
+        <p class="ob-lede">${lede}</p>
+      </div>
+      ${found.length && !zero ? `<ul class="ob-found">${found.slice(0, 4).map((x) => `<li class="${x.level}">${x.text}</li>`).join('')}</ul>` : ''}
+      <p class="ob-bridge">The free report shows <em>what</em> is wrong. The audit shows you <em>how to fix every one</em>, and hands you the files to do it.</p>
+      <div class="ob-grid">
+        <div class="ob-gets">
+          <h3>Everything in the audit</h3>
+          <ol class="ob-stack">${stack.map(([h, d, tag]) => `<li><div><b>${h}</b> <span class="ob-tag">${tag}</span><p>${d}</p></div></li>`).join('')}</ol>
+          ${tierOn('be_the_answer') ? '<p class="ob-anchor">Our year-long plan, Be the Answer, is $499. Start here for $49, and if you move up later, every dollar you paid counts toward it.</p>' : ''}
+        </div>
+        <div class="ob-buy">
+          <p class="ob-price"><span>$49</span> one-time</p>
+          <p class="ob-price-note">Unlocks the moment you pay. No subscription.</p>
+          ${addon}
+          <a class="btn big ob-btn" data-tier="xray" href="#" data-base-price="49">Show me every fix — $<span data-total>49</span></a>
+          ${wrongPhone ? `<p class="ob-urgent">If ${escapeHtml(wrongPhone.aiSays)} isn’t a number you answer, every customer who gets it from ${escapeHtml(engineName(aById[wrongPhone.answerId]?.engine))} is a call you miss.</p>` : ''}
+          <p class="ob-secure">${ICON.lock}Secure checkout by Stripe. We never see your card.</p>
+          <p class="trust-cards" aria-label="Cards accepted"><span>VISA</span><span>MASTERCARD</span><span>AMEX</span><span>DISCOVER</span></p>
+          <div class="ob-promise">${ICON.shield}<p><b>The 3-problem promise.</b> This report already found ${num(specificFixCount)} problems specific to ${name}. If the audit finds fewer than 3, email us within 30 days and you get your $49 back.</p></div>
+          <p class="ob-small">No logins, ever. We never touch your website or accounts.</p>
+        </div>
+      </div>
+      <details class="ob-next">
+        <summary>What happens after you pay</summary>
+        <ol class="trust-next">
+          <li>You pay on Stripe’s secure page.</li>
+          <li>This report unlocks right away: every answer, every fix, your Fix Kit.</li>
+          <li>We ask every AI assistant again and email you, usually within the hour.</li>
+          <li>In 30 days we re-scan for free and show you what changed.</li>
+        </ol>
+        <p class="trust-foot">Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a> · <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
+      </details>
+      ${keep}
+    </section>`;
+}
+
+// An address one or two letters off ("Artic Ave" for "Arctic Ave") is still on the facts card, but too small to lead the
+// offer with. Compares the AI's text with the same-length start of ours, letters and digits only.
+function nearMiss(a, b) {
+  const n = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const x = n(a);
+  const y = n(b).slice(0, x.length + 1);
+  if (!x || !y) return false;
+  let prev = Array.from({ length: y.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= x.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= y.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return Math.min(prev[y.length], prev[y.length - 1] ?? Infinity) <= 2;
+}
+
+// Offer band add-on checkbox → the buy button shows the total.
+function wireOfferTotal(root) {
+  root.querySelectorAll('[data-offer-band]').forEach((band) => {
+    const out = band.querySelector('[data-total]');
+    const btn = band.querySelector('[data-base-price]');
+    if (!out || !btn) return;
+    band.addEventListener('change', (e) => {
+      if (!e.target.matches('input[data-addon]')) return;
+      const extra = [...band.querySelectorAll('input[data-addon]:checked')].reduce((n, x) => n + num(x.dataset.addonPrice), 0);
+      out.textContent = String(num(btn.dataset.basePrice) + extra);
+    });
+  });
 }
 
 // Answer text with business names bolded at their stored positions.
