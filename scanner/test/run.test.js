@@ -21,7 +21,7 @@ async function setup({ intercept } = {}) {
     const host = new URL(u).hostname;
     let body = null;
     try { body = typeof init.body === 'string' ? JSON.parse(init.body) : null; } catch { /* not json */ }
-    const kind = host === 'api.anthropic.com' ? (body?.output_config ? 'extract' : 'claude') : host;
+    const kind = host === 'api.anthropic.com' ? (body?.output_config?.format ? 'extract' : 'claude') : host;
     hits.push(kind);
     const r = intercept && (await intercept({ url: u, init, host, kind, body }));
     return r || d.fetchImpl(url, init);

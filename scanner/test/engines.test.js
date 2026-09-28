@@ -264,8 +264,9 @@ test('claude: Messages API + web_search, text after the search, citations from w
   assert.equal(body.model, 'claude-sonnet-5');
   assert.deepEqual(body.messages, [{ role: 'user', content: question.text }], 'the question exactly as a customer types it');
   assert.equal(body.system, undefined, 'no system prompt');
+  assert.deepEqual(body.output_config, { effort: 'medium' }, 'medium effort: same picks as high for about half the cost');
   assert.deepEqual(body.tools, [{
-    type: 'web_search_20260209', name: 'web_search', max_uses: 5,
+    type: 'web_search_20260209', name: 'web_search', max_uses: 3,
     user_location: { type: 'approximate', country: 'US', city: 'North Babylon', region: 'New York' },
   }]);
   assert.deepEqual(r.request.body, body);
