@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=14">
+  <link rel="stylesheet" href="/css/styles.css?v=15">
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
   <!-- Google Tag Manager -->
   <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-K58KFVJC');</script>
@@ -128,6 +128,7 @@
 
 <script src="/js/config.js?v=12"></script>
 <script src="/js/analytics.js?v=9"></script>
+<script src="/js/site-gate.js?v=1"></script>
 <script>
 (function () {
   var PRICE = { xray: 49, competitor_breakdown: 25 };
@@ -296,6 +297,7 @@
   }
 
   var busy = false;
+  var gatedKey = null; // name + website that already passed /api/site-check
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     if (busy) return;
@@ -317,6 +319,17 @@
     data.trade = kindText();
     delete data.trade_other;
     if (missing.length) { show('error', 'Please add ' + missing.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'); return; }
+    // The gate: a real website and a real business name before anything is saved or scanned
+    // (/js/site-gate.js; the popup says what to fix). Checked once per name + website.
+    var gateKey = data.business_name + '|' + data.website;
+    if (window.siteGate && gateKey !== gatedKey) {
+      var gBtn = payBtn; var gLabel = gBtn.textContent; gBtn.disabled = true; gBtn.textContent = 'Checking your website…';
+      window.siteGate(form, data).then(function (go) {
+        gBtn.disabled = false; gBtn.textContent = gLabel;
+        if (go) { gatedKey = gateKey; form.requestSubmit(); }
+      });
+      return;
+    }
     clearStatus();
 
     busy = true;

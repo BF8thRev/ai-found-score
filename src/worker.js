@@ -20,6 +20,7 @@
 //   GET  /api/admin/scan/:id  -> scan status + progress
 //   POST /api/live-preview    -> ask one of the visitor's questions live (src/lib/live-preview.js);
 //                                needs the signed token /api/request returned after Turnstile
+//   GET  /api/site-check      -> the gate before a scan: is ?website= real, is ?name= a name (src/lib/site-check.js)
 //   GET  /api/zip           -> town for ?zip= (src/lib/zip.js, zippopotam.us, cached 30 days; per-IP rate limit)
 //   GET|POST /api/fix-kit/[token], GET /api/fix-kit/[token].zip -> Fix Kit details form + zip download
 //                                ($49 xray, which includes it / $499 be_the_answer / retired $149 fix_kit); src/lib/fix-kit-route.js
@@ -43,6 +44,7 @@ import {
 } from './lib/db.js';
 import { handleQuestions } from './lib/questions-route.js';
 import { handleReportRequest } from './lib/report-request.js';
+import { handleSiteCheck } from './lib/site-check.js';
 import { turnstileConfigured, turnstileSiteKey } from './lib/turnstile.js';
 import { rateLimit } from './lib/rate-limit.js';
 import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
@@ -115,6 +117,9 @@ export default {
 
     if (url.pathname === '/api/zip' && request.method === 'GET') {
       return (await rateLimit(env, request, 'zip')) || handleZip(url);
+    }
+    if (url.pathname === '/api/site-check' && request.method === 'GET') {
+      return (await rateLimit(env, request, 'site')) || handleSiteCheck(url);
     }
     if (url.pathname === '/api/questions' && request.method === 'GET') {
       return (await rateLimit(env, request, 'questions')) || handleQuestions(url);
