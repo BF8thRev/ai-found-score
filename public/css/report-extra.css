@@ -124,3 +124,11 @@
 .ob-anchor { margin: 14px 0 0; font-size: 14.5px; color: var(--muted); }
 .ob-urgent { margin: 12px 0 0; font-size: 13.5px; color: var(--red); font-weight: 600; }
 .ob-small { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* Locked "What to fix": one row per problem, a blurred bar where the title goes. */
+.r2-locked-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+.r2-locked-list li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+.r2-locked-list .badge { flex: none; min-width: 72px; text-align: center; }
+.r2-locked-list .bar { height: 12px; border-radius: 6px; background: linear-gradient(90deg, #CBD5E3, #E3E9F1); filter: blur(2px); max-width: 70%; }
+.r2-locked-list .lock { margin-left: auto; font-size: 14px; }
+.r2-locked-more { margin: 8px 0 0; }
