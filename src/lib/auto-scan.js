@@ -45,6 +45,10 @@ export const DEDUPE_DAYS = 7;
 export const DEFAULT_PER_IP_DAY = 3;
 /** Queue reason for a request made on the way to checkout. */
 export const PAID_INTENT = 'paid-intent';
+/** Notes prefix of a request row made by pressing pay on /checkout. */
+export const CHECKOUT_NOTE = 'checkout request';
+/** A row made on the way to checkout (new label, or the older `queued: paid-intent` note). */
+export const isCheckoutRow = (r) => String(r?.notes || '').startsWith(CHECKOUT_NOTE) || String(r?.notes || '').includes(`queued: ${PAID_INTENT}`);
 /** Tokens this module hands out: 22 chars of base64url (128 random bits). */
 export const REQUEST_TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
 /** Any token worth looking up in `scans` (older admin tokens are 10 chars). */
@@ -81,7 +85,7 @@ export function autoScanLimits(env) {
  */
 export function ipDailyHit(rows, ownId, ipHash, max) {
   if (!ipHash) return false;
-  const mine = (rows || []).filter((r) => r && r.id !== ownId && r.ip_hash === ipHash && r.status !== 'failed');
+  const mine = (rows || []).filter((r) => r && r.id !== ownId && r.ip_hash === ipHash && r.status !== 'failed' && r.status !== 'cancelled');
   return mine.length >= Math.max(0, max);
 }
 
@@ -120,7 +124,7 @@ export function rowCostUsd(r) {
  * Count: rows ordered before ours. Spend: every other row plus our estimate (fails closed).
  */
 export function capDecision(rows, ownId, { max, usd, estimateUsd }) {
-  const live = (rows || []).filter((r) => r && r.status !== 'queued');
+  const live = (rows || []).filter((r) => r && r.status !== 'queued' && r.status !== 'cancelled');
   if (max <= 0 || rowsBefore(live, ownId).length >= max) return 'count';
   const spent = live.filter((r) => r.id !== ownId).reduce((s, r) => s + rowCostUsd(r), 0);
   if (usd <= 0 || spent + (Number(estimateUsd) || 0) > usd) return 'spend';
@@ -129,7 +133,7 @@ export function capDecision(rows, ownId, { max, usd, estimateUsd }) {
 
 /** The earliest other live row for the same request key ordered before ours, or null. */
 export function dedupeHit(rows, ownId) {
-  const earlier = rowsBefore((rows || []).filter((r) => r && r.status !== 'failed' && r.report_token), ownId);
+  const earlier = rowsBefore((rows || []).filter((r) => r && r.status !== 'failed' && r.status !== 'cancelled' && r.report_token), ownId);
   return earlier[0] || null;
 }
 
@@ -143,8 +147,11 @@ export const MAX_ATTEMPTS = 2;
  * (retryFailedScans), so the first failure still reads 'queued'; after MAX_ATTEMPTS it's 'failed'.
  */
 export function statusFromRows(rows) {
-  const list = (rows || []).filter(Boolean);
-  if (!list.length) return null;
+  const all = (rows || []).filter(Boolean);
+  if (!all.length) return null;
+  // Cancelled from /admin: the page says the request was closed (unless a paid scan exists).
+  const list = all.filter((r) => r.status !== 'cancelled');
+  if (!list.length) return 'cancelled';
   const running = list.filter((r) => r.status === 'running');
   if (running.length) return running.some((r) => r.trigger === 'paid') ? 'paid' : 'running';
   // Paid for: the paid scan decides, not the free request row left queued on the way to checkout.
@@ -256,7 +263,9 @@ export async function startRequestScan(env, req, o = {}) {
     engines: engines.length ? engines : undefined,
     runs: 1,
     trigger: 'request',
-    notes: `free-report request ${req.id}`,
+    // A checkout start (paid intent) is labelled as one: admin lists it apart, and it never becomes a
+    // free scan unless the visitor asks ("Get my free snapshot" on /checkout).
+    notes: `${o.paidIntent ? CHECKOUT_NOTE : 'free-report request'} ${req.id}`,
   });
   if (!parsed.ok) return null;
   const business = parsed.params.business;
@@ -443,6 +452,19 @@ export async function runQueuedScan(env, id, { fetchImpl = (...a) => fetch(...a)
   return { ok: true, scanId };
 }
 
+/**
+ * /admin "Cancel": close a waiting request row (queued or failed) so it never runs. Its report link then
+ * says the request was closed. → { ok: true } | { ok: false, status, error }
+ */
+export async function cancelRequestScan(env, id, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  if (!canStore(env)) return { ok: false, status: 503, error: 'Database not configured.' };
+  const row = await getScan(env, id, { fetchImpl });
+  if (!row || row.trigger !== 'request') return { ok: false, status: 404, error: 'No such request.' };
+  if (row.status !== 'queued' && row.status !== 'failed') return { ok: false, status: 409, error: `It's ${row.status}, so it can't be cancelled.` };
+  await upsertScan(env, { id, status: 'cancelled', est_cost_usd: 0, notes: `${row.notes || ''} · cancelled from /admin` }, { fetchImpl });
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Hands-off recovery, run by the Worker's cron (src/worker.js scheduled)
 // ---------------------------------------------------------------------------
@@ -468,7 +490,7 @@ const attemptFailed = (r) => r.status === 'failed' || (r.status === 'done' && (r
  * rows: [{ id, report_token, trigger, status, report_valid, notes, created_at }]
  * → [{ kind: 'request-retry'|'paid-retry'|'abandoned', id, token }]
  */
-export function pickRecoveries(rows, { now = Date.now(), autoScan = false } = {}) {
+export function pickRecoveries(rows, { now = Date.now(), autoScan = false, abandoned = false } = {}) {
   const byToken = new Map();
   for (const r of rows || []) {
     if (!r?.report_token) continue;
@@ -479,6 +501,7 @@ export function pickRecoveries(rows, { now = Date.now(), autoScan = false } = {}
   for (const [token, list] of byToken) {
     // Paid for: only the paid rows decide (the free report that came first is done, not busy).
     const paid = list.filter((r) => r.trigger === 'paid');
+    if (!paid.length && list.some((r) => r.status === 'cancelled')) continue;
     const busy = (paid.length ? paid : list).some((r) => r.status === 'running' || (r.status === 'done' && r.report_valid === true && !storeFailed(r)));
     if (busy) continue;
     if (paid.length) {
@@ -490,7 +513,9 @@ export function pickRecoveries(rows, { now = Date.now(), autoScan = false } = {}
     const queued = req.find((r) => r.status === 'queued');
     if (queued) {
       const age = now - Date.parse(queued.created_at);
-      if (String(queued.notes || '').includes(`queued: ${PAID_INTENT}`) && age >= ABANDONED_CHECKOUT_MINUTES * 60_000) out.push({ kind: 'abandoned', id: queued.id, token });
+      // A checkout left unpaid gets its free scan only when the visitor asks for it (abandoned: true,
+      // from startAbandonedCheckout), never from the cron.
+      if (abandoned && isCheckoutRow(queued) && age >= ABANDONED_CHECKOUT_MINUTES * 60_000) out.push({ kind: 'abandoned', id: queued.id, token });
       continue;
     }
     const failed = req.filter(attemptFailed);
@@ -534,7 +559,7 @@ export async function startAbandonedCheckout(env, token, { fetchImpl = (...a) =>
   try {
     if (!autoScanOn(env) || !REQUEST_TOKEN_RE.test(String(token || ''))) return { ok: false, reason: 'off' };
     const rows = await readRows(env, `report_token=eq.${encodeURIComponent(token)}&select=id,report_token,trigger,status,report_valid,errors,notes,created_at&order=created_at.desc&limit=10`, fetchImpl);
-    const pick = pickRecoveries(rows, { now: Infinity, autoScan: true }).find((p) => p.kind === 'abandoned');
+    const pick = pickRecoveries(rows, { now: Infinity, autoScan: true, abandoned: true }).find((p) => p.kind === 'abandoned');
     if (!pick) return { ok: false, reason: 'nothing to start' };
     return await runQueuedScan(env, pick.id, { fetchImpl });
   } catch (e) {

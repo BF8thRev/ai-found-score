@@ -187,14 +187,15 @@ async function readAll(fetchImpl, s, path, { pageSize = 1000, maxPages = 50 } = 
 
 const sumCost = (rows) => Math.round(rows.reduce((t, r) => t + (Number(r.cost_usd) || 0), 0) * 1e6) / 1e6;
 
-/** What we logged spending on an engine's account since a date (scan_raw + scan_usage). */
+/** What we logged spending on an engine's account since a date (scan_raw + scan_usage). scan_raw is read through
+ *  v_scan_raw_billed, so Gemini's free monthly searches don't count against its prepaid credit. */
 export async function spentSince(env, engine, sinceDay, { fetchImpl = (...a) => fetch(...a) } = {}) {
   const s = supa(env);
   if (!s) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_KEY not set');
   const since = encodeURIComponent(`${sinceDay}T00:00:00Z`);
   const providers = ACCOUNTS[engine].providers.join(',');
   const [raw, usage] = await Promise.all([
-    readAll(fetchImpl, s, `scan_raw?engine=eq.${engine}&created_at=gte.${since}&select=cost_usd&order=created_at.asc`),
+    readAll(fetchImpl, s, `v_scan_raw_billed?engine=eq.${engine}&created_at=gte.${since}&select=cost_usd&order=created_at.asc`),
     readAll(fetchImpl, s, `scan_usage?provider=in.(${providers})&created_at=gte.${since}&select=cost_usd&order=created_at.asc`),
   ]);
   return Math.round((sumCost(raw) + sumCost(usage)) * 1e6) / 1e6;

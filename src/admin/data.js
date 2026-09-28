@@ -22,7 +22,7 @@ async function get(env, s, path) {
     // PostgREST's "relation does not exist" → the SQL hasn't been applied yet.
     if (res.status === 404 || /does not exist|PGRST205|schema cache/i.test(text)) {
       const table = path.split('?')[0];
-      throw new Error(`${table} not found — apply ${table === 'refund_requests' ? 'supabase/v4_ladder.sql' : 'supabase/admin_v3.sql'}`);
+      throw new Error(`${table} not found — apply ${table === 'refund_requests' ? 'supabase/v4_ladder.sql' : table === 'v_gemini_searches' ? 'supabase/v11_gemini_free_tier.sql' : 'supabase/admin_v3.sql'}`);
     }
     throw new Error(`${path.split('?')[0]}: HTTP ${res.status} ${redact(env, text, 200)}`);
   }
@@ -39,7 +39,10 @@ const QUERIES = {
   expenses: 'expenses?select=*&order=spent_on.desc,created_at.desc&limit=10',
   requests: 'report_requests?select=business_name,town,trade,email,requested_at&order=requested_at.desc&limit=10',
   // Finished free (request) and paid scans: real cost per report for "Costs and break-even".
-  unitScans: 'scans?select=trigger,total_cost_usd&status=eq.done&trigger=in.(request,paid)&total_cost_usd=gt.0&order=created_at.desc&limit=200',
+  // v_scan_costs, not scans.total_cost_usd: its Gemini cost leaves out the free searches (supabase/v11_gemini_free_tier.sql).
+  unitScans: 'v_scan_costs?select=trigger,total_cost_usd&status=eq.done&trigger=in.(request,paid)&total_cost_usd=gt.0&order=started_at.desc.nullslast&limit=200',
+  // Gemini search queries this month against the 5,000 free (supabase/v11_gemini_free_tier.sql).
+  gemini: 'v_gemini_searches?select=*&order=month.desc&limit=1',
   leads: 'leads?select=arm,status,created_at&order=created_at.desc&limit=10',
   payments: 'payments?select=tier,amount_cents,arm,livemode,paid_at,refunded_cents,revoked_at&order=paid_at.desc&limit=10',
   // Free-report request scans still waiting (queued), in progress (running) or needing a person (failed).
