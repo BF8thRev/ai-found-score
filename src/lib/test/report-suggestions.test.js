@@ -64,7 +64,7 @@ test('early offer strip: right after Who got the call, before the search card; r
   assert.ok(strip < html.indexOf('id="offer"'), 'before the offer band');
   const seg = html.slice(strip, html.indexOf('</aside>', strip));
   assert.match(seg, /problems? found/);
-  assert.match(seg, /Fewer than 3 problems specific to your business\? Your \$49 back\./);
+  assert.match(seg, /Fewer than 3 problems specific to your business\? Your money back\./);
   assert.match(seg, /href="#offer" data-scroll-offer>Show me the fixes — \$49</);
 });
 
@@ -81,7 +81,7 @@ test('offer: a sample report link next to the buy button, not on the sample itse
 test('offer wording matches the top of the page: mentioned / answers, not named / searches', () => {
   const html = render(load(), locked());
   const band = html.slice(html.indexOf('id="offer"'));
-  assert.doesNotMatch(band.slice(0, band.indexOf('ob-buy')), /named you|searches/);
+  assert.doesNotMatch(band.slice(0, band.indexOf('class="ob-get"')), /named you|searches/);
 });
 
 test('how we searched: collapsed behind one line, all the text still there', () => {
@@ -92,9 +92,8 @@ test('how we searched: collapsed behind one line, all the text still there', () 
 
 test('print: the strip and sample link are hidden', () => {
   const css = readFileSync(new URL('../../../public/css/report-print.css', import.meta.url), 'utf8');
-  assert.match(css, /\.r2-strip, \.ob-sample, \.r2-bridge \{ display: none !important; \}/);
-  assert.match(css, /\.r2-hero-read a\[href\^="http"\]::after \{ content: " \(" attr\(href\) "\)"/);
-  assert.match(css, /\.r2-hero \{ background: none !important; color: #000 !important;/);
+  assert.match(css, /\.r2-strip, \.ob-sample \{ display: none !important; \}/);
+    assert.match(css, /\.r2-hero \{ background: none !important; color: #000 !important;/);
 });
 
 // ---- served through the real router ----
@@ -122,7 +121,7 @@ test('GET /report/<token> serves a skeleton, not a bare "Loading" line, while th
   assert.match(root, /class="r2-skel-band"/);
   assert.match(root, /Loading your report…/);
   assert.doesNotMatch(root, /padding:60px 0/);
-  assert.match(html, /report\.js\?v=(34|[3-9]\d)/);
+  assert.match(html, /report\.js\?v=(38|[3-9]\d)/);
 });
 
 test('result sentence: the top competitor gets its own amber highlight, escaped', () => {
@@ -220,15 +219,83 @@ test('what to fix shows two locked rows and counts the rest', () => {
   assert.ok(html.includes(`and ${rep.issues.length - 2} more.`));
 });
 
-test('offer band: one sentence and one card; no list of everything in the audit; contact and sample link stay one line of small print', () => {
-  const html = render(load(), { ...locked(), sample: false });
-  const band = html.slice(html.indexOf('id="offer"'), html.indexOf('class="ob-next"'));
-  assert.match(band, /<p class="ob-one"><b>\$49, one time\.<\/b> Every problem we found, with the exact steps to fix each one, plus the finished pieces to paste into your website\. We re-check you free in 30 days\.<\/p>/);
-  assert.doesNotMatch(band, /ob-stack|ob-grid|ob-lede|ob-found|ob-anchor|ob-keep|Everything in the audit|Fix Kit|competitor gap/i);
-  assert.match(band, /Questions first\? <a href="mailto:hello@aifoundscore\.com">hello@aifoundscore\.com<\/a> · <a class="ob-sample" href="\/report\/sample-001">See a sample report first<\/a>/);
+test('offer: a navy closing card; the rival in the headline, the cost, what you get (report numbers), one button, the promise, small print', () => {
+  const r = load();
+  const rep = locked();
+  const html = render(r, { ...rep, sample: false });
+  const start = html.indexOf('<section class="offer-band ob-navy"');
+  assert.ok(start > 0, 'navy offer card');
+  const band = html.slice(start, html.indexOf('</section>', start));
+  assert.match(band, /class="offer-band ob-navy" id="offer"/);
+  assert.match(band, /<p class="ob-eyebrow">Your next step<\/p>/);
+  assert.match(band, /<ul class="ob-get">/);
+  assert.equal((band.match(/<li>/g) || []).length, 4, 'four things you get');
+  assert.match(band, /<p class="ob-easy">Paste the files in, or hand them to whoever runs your website\. Opens the moment you pay\.<\/p>/);
   assert.equal((band.match(/data-tier="xray"/g) || []).length, 1, 'one buy button');
-  assert.match(band, /<b>The 3-problem promise\.<\/b> Fewer than 3 problems specific to .+\? Email us within 30 days and get your \$49 back\./);
-  assert.ok(band.length < 3800, `the offer band markup stays small (${band.length})`);
+  assert.match(band, /Show me the fixes — \$<span data-total>49<\/span>/, 'the price is on the button only');
+  assert.match(band, /<p class="ob-promise">[^]*?<b>The 3-problem promise:<\/b> fewer than 3 problems specific to .+\? Email us within 30 days for your money back\.<\/span><\/p>/);
+  assert.match(band, /Secure Stripe checkout\. No subscription\. No logins\. <a class="ob-sample" href="\/report\/sample-001">See a sample report first<\/a>/);
+  assert.doesNotMatch(band, /<div class="ob-promise">/, 'the promise is a line, not a second box');
+  // the price is never restated in copy, anywhere on the page: only on buttons
+  const noButtons = html.replace(/— \$<span data-total>49<\/span>|— \$49|data-base-price="49"/g, '');
+  assert.doesNotMatch(noButtons, /\$49/, 'no $49 outside a button');
+  assert.doesNotMatch(html, /Questions first|Questions\?|mailto:hello@aifoundscore\.com|Be the Answer|year-long plan|\$499|one-time|one time|What happens after you pay|ob-next|Fix Kit|competitor gap/i);
+  assert.doesNotMatch(band, /ob-stack|ob-grid|ob-lede|ob-found|ob-compact|ob-buy/);
+});
+
+test('offer: what you get uses the report’s own numbers and never names a fix', () => {
+  const r = load();
+  const rep = locked();
+  const html = render(r, { ...rep, sample: false });
+  const items = [...html.slice(html.indexOf('<ul class="ob-get">')).matchAll(/<li>([^]*?)<\/li>/g)].slice(0, 4).map((m) => m[1]);
+  const total = rep.issues.length;
+  const high = rep.issues.filter((i) => i.severity === 'high').length;
+  assert.equal(items[0], `All ${total} problems by name${high ? ` (${high} to fix first)` : ''}.`);
+  assert.equal(items[1], 'The exact steps to fix each one, in plain words.');
+  assert.equal(items[2], 'Files to paste in: your FAQ page, your Google listing text and a review QR code.');
+  assert.equal(items[3], `All ${rep.answers.length} AI answers word for word, and a free re-scan in 30 days.`);
+  for (const i of rep.issues) if (i.title) assert.ok(!html.slice(html.indexOf('id="offer"')).includes(i.title), 'no fix title in the offer');
+  const none = render(r, { ...rep, sample: false, answers: [] });
+  if (none.includes('<ul class="ob-get">')) assert.match(none.slice(none.indexOf('<ul class="ob-get">')), /<li>A free re-scan in 30 days\.<\/li>/);
+});
+
+test('offer headline and cost line: rival named when nobody mentioned the owner; escaped; other states read right', () => {
+  const r = load();
+  const rep = locked();
+  for (const a of rep.answers) a.namedYou = false;
+  const html = render(r, { ...rep, sample: false });
+  const top = r.provenEntities(rep)[0];
+  assert.ok(top, 'fixture has a rival');
+  const esc = top.name.replace(/&/g, '&amp;');
+  assert.ok(html.includes(`Take the call back from <span class="ob-rival">${esc}</span>.`));
+  assert.match(html, /<p class="ob-cost">We asked \d+ times\. You got 0 mentions\.<\/p>/);
+  top.name = '<img src=x onerror=alert(1)>';
+  const xss = render(r, { ...rep, sample: false });
+  assert.doesNotMatch(xss, /<img src=x/);
+  const some = locked();
+  some.answers.forEach((a, i) => { a.namedYou = i < 2; });
+  const mixed = render(r, { ...some, sample: false });
+  assert.match(mixed, /<p class="ob-cost">AI mentioned you in 2 of \d+ answers\.<\/p>/);
+  assert.doesNotMatch(mixed.slice(mixed.indexOf('id="offer"')), /Take the call back|You got 0 mentions/);
+});
+
+test('offer card colors keep enough contrast (WCAG AA, 4.5:1)', () => {
+  const lum = (hex) => { const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const pairs = [['#071C40', '#FFC857'], ['#FFFFFF', '#123B7A'], ['#FFFFFF', '#071C40'], ['#DCE6F5', '#0B2A5B'], ['#CFE0FA', '#071C40'], ['#FFE0A3', '#0B2A5B'], ['#FFC857', '#123B7A'], ['#FFFFFF', '#0B2A5B']];
+  for (const [fg, bg] of pairs) assert.ok(ratio(fg, bg) >= 4.5, `${fg} on ${bg} = ${ratio(fg, bg).toFixed(2)}`);
+  const css = readFileSync(new URL('../../../public/css/report-extra.css', import.meta.url), 'utf8');
+  for (const s of ['background: #FFC857; color: #071C40;', 'color: #FFE0A3', 'color: #DCE6F5', 'color: #CFE0FA']) assert.ok(css.includes(s), s);
+});
+
+test('the Gemini card has no link out to a website', () => {
+  const r = load();
+  const rep = locked();
+  const html = render(r, rep);
+  const hero = html.slice(html.indexOf('class="r2-hero"'), html.indexOf('</div>', html.indexOf('r2-hero-read')));
+  assert.doesNotMatch(hero, /Check it yourself|target="_blank"|A site it used|rel="nofollow/);
+  assert.match(hero, /class="r2-hero-read"><a href="#ans-[^"]+" data-open="[^"]+">Read the whole answer<\/a><\/p>/);
+  assert.equal(r.citedExampleV2, undefined, 'the helper is gone');
 });
 
 test('plainer words: no "AI crawler"; the website lines are in plain terms', () => {
@@ -243,8 +310,11 @@ test('long unbroken names wrap: CSS for the lines that overflowed, blue on light
   assert.match(css, /\.report-section \.sub, \.r2-ans p, \.r2-ans, \.r2-line \{ overflow-wrap: anywhere; min-width: 0; \}/);
   assert.match(css, /\.report-page \.site-footer a \{ color: #1A5FD0; \}/);
   assert.match(css, /\.report-page summary \{ min-height: 44px;/);
-  assert.match(css, /\.ob-small a \{ padding: 11px 0; \}/);
-  assert.match(css, /\.ob-compact \.ob-sample \{ padding: 12px 0; \}/);
+  assert.match(css, /\.ob-navy \.ob-small a, \.ob-navy \.ob-sample \{ color: #fff; text-decoration: underline; display: inline-block; padding: 12px 0; \}/);
+  assert.match(css, /\.ob-get li \{[^}]*overflow-wrap: anywhere;/);
+  assert.match(css, /\.offer-band h2, #offer-title \{ overflow-wrap: anywhere; min-width: 0; \}/);
+  assert.match(css, /\.ob-navy \.ob-promise span, \.ob-navy \.ob-easy, \.ob-navy \.ob-urgent, \.ob-navy \.ob-small, \.ob-navy \.ob-addon span, \.ob-navy \.ob-cost, \.ob-navy h2 \{ overflow-wrap: anywhere; min-width: 0; \}/);
+  assert.match(css, /\.ob-navy \.ob-urgent \{ font-size: 15px; \}/);
 });
 
 // ---- "Email me this report": a second way into the funnel, near the top ----
@@ -322,7 +392,7 @@ test('plainer words on the bars and the website check', () => {
 
 test('dead helpers are gone', () => {
   const src = readFileSync(new URL('../../../public/js/report.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(src, /function nearMiss|function shortVersionV2|function gridV2/);
+  assert.doesNotMatch(src, /function nearMiss|function shortVersionV2|function gridV2|function citedExampleV2/);
 });
 
 // ---- "Why AI skips you" and the offer trim ----
@@ -330,11 +400,10 @@ test('dead helpers are gone', () => {
 
 
 
-test('what to fix: no second button stacked on the offer; a short bridge line instead', () => {
+test('what to fix: no second button and no stray caption between it and the offer', () => {
   const html = render(load(), locked());
-  const fix = html.slice(html.indexOf('<h2>What to fix</h2>'), html.indexOf('id="offer"'));
-  assert.doesNotMatch(fix, /unlock-panel|data-scroll-offer|class="btn"/);
-  assert.match(fix, /Every one is fixed step by step in the audit below\./);
+  const fix = html.slice(html.indexOf('<h2>What to fix</h2>'), html.indexOf('<section class="offer-band'));
+  assert.doesNotMatch(fix, /unlock-panel|data-scroll-offer|class="btn"|r2-bridge|comes with steps you can follow|fixed step by step/);
   // the other entry points are still there: strip, offer band, phone bar
   assert.equal((html.match(/data-scroll-offer/g) || []).length, 2, 'strip button + phone bar');
   assert.match(html, /data-offer-band/);
@@ -424,35 +493,7 @@ test('where the problems are: unreachable site, clean site, singular grammar, no
   assert.match(r.fixWhereV2({ report: base({ listings: [{ platform: 'Google', status: 'mismatch' }, { platform: 'Yelp', status: 'mismatch' }] }), b }), /Your Google and Yelp listings:<\/b> don’t match your website, or we couldn’t find them\./);
 });
 
-test('example site in the Gemini card: the headline answer’s own citation, domain shown, full page linked, never the owner’s site, http(s) only', () => {
-  const r = load();
-  const rep = locked();
-  const h = rep.answers.find((a) => a.id === rep.headline.answerId) || rep.answers[0];
-  const aById = Object.fromEntries(rep.answers.map((a) => [a.id, a]));
-  const qById = Object.fromEntries(rep.questions.map((q) => [q.id, q]));
-  const t = r.computeTotalsV2(rep.answers);
-  const call = (own) => r.heroV2(rep, { answers: rep.answers, aById, qById, t, cw: r.countWords(rep), engineList: 'Gemini', proven: [], provenIds: new Set(), zero: true, b: rep.business, ownDomain: own });
-  h.citations = [{ domain: 'www.mine.com', url: 'https://www.mine.com/a' }, { domain: 'bad.com', url: 'javascript:alert(1)' }, { domain: 'www.varsity.com', url: 'https://www.varsity.com/smithtown-ny/plumbing/?a=1&b="2"' }];
-  const html = call('mine.com');
-  assert.match(html, /Check it yourself: [A-Za-z]+ used <a href="https:\/\/www\.varsity\.com\/smithtown-ny\/plumbing\/\?a=1&amp;b=(&quot;|%22)2(&quot;|%22)" rel="nofollow noopener" target="_blank">varsity\.com<\/a>/);
-  assert.doesNotMatch(html, /mine\.com\/a|javascript:/);
-  h.citations = [];
-  assert.doesNotMatch(call('mine.com'), /Check it yourself/);
-  h.citations = [{ domain: 'mine.com', url: 'https://mine.com/' }];
-  assert.doesNotMatch(call('mine.com'), /Check it yourself/);
-});
 
-test('example site: on the real Werner-shaped report it is one page the report really cited', () => {
-  const r = load();
-  const rep = locked();
-  const html = render(r, rep);
-  const hero = html.slice(html.indexOf('class="r2-hero"'), html.indexOf('</ol>', html.indexOf('class="r2-hero"')));
-  const after = html.slice(html.indexOf('class="r2-hero-read"'), html.indexOf('</p>', html.indexOf('class="r2-hero-read"')));
-  const cited = rep.answers.flatMap((a) => (a.citations || []).map((c) => c.url));
-  const m = after.match(/Check it yourself: [A-Za-z]+ used <a href="([^"]+)"/);
-  if (m) assert.ok(cited.includes(m[1].replace(/&amp;/g, '&')));
-  assert.ok(hero.length > 0);
-});
 
 // ---- final review round ----
 test('every button that means "see the fixes" says the same thing (header, strip, offer, phone bar); a strong score says "See what to improve"', () => {
@@ -478,11 +519,6 @@ test('every question, every answer: one line until opened; opening a link to an 
   assert.match(css, /details\.r2-allans > summary \{ cursor: pointer; display: flex;/);
 });
 
-test('example site: a subdomain of the owner’s site is the owner’s site', () => {
-  const r = load();
-  assert.equal(r.citedExampleV2([{ engine: 'gemini', citations: [{ domain: 'blog.mine.com', url: 'https://blog.mine.com/a' }] }], 'mine.com'), null);
-  assert.equal(r.citedExampleV2([{ engine: 'gemini', citations: [{ domain: 'notmine.com', url: 'https://notmine.com/a' }] }], 'mine.com').domain, 'notmine.com');
-});
 
 test('where the problems are: a sources line needs both numbers (never "of the 0")', () => {
   const r = load();

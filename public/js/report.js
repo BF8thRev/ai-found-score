@@ -313,7 +313,7 @@ const XRAY = {
   name: 'AI Visibility Audit',
   price: '$49 one-time',
   what: 'We ask all 5 customer questions again on every AI assistant we check, and you get every answer word for word, every website AI cited, exactly what’s wrong on your website and Google listing, every fix step by step with copy-paste text, your Fix Kit (ready-to-install files for whoever runs your website), the competitor gap sheet, your fix checklist, and a free re-scan 30 days later to see what changed.',
-  promise: 'Fewer than 3 problems specific to your business? Your $49 back.',
+  promise: 'Fewer than 3 problems specific to your business? Your money back.',
   button: 'Get my audit — $49',
 };
 
@@ -819,7 +819,7 @@ function renderV2(root, report) {
 
   const sec = {
     verdict: verdictV2(report, { t, N, cw, proven, zero, allNamed, b, engineList }),
-    hero: heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b, ownDomain }),
+    hero: heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
     baseline: baselineV2(report, t),
     plan: report.plan ? planPanel(report) : '',
     recheck: paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
@@ -902,7 +902,7 @@ function fullScanNote() {
 
 // 1. Hero: one real search, and who it named, in the order AI named them.
 const HERO_ROWS = 3;
-function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b, ownDomain = '' }) {
+function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }) {
   const h = aById[report.headline?.answerId] || answers[0];
   if (!h) return '';
   const q = qById[h.questionId] || { text: '' };
@@ -923,7 +923,6 @@ function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, prov
       : `<li class="not"><span class="pos">✕</span><span class="nm">${escapeHtml(b.name)}<em>Not mentioned</em></span></li>`);
   }
   const eng = escapeHtml(engineName(h.engine));
-  const eg = citedExampleV2([h], ownDomain);
   const head = h.namedYou
     ? (h.namedYouFirst ? `${eng} mentioned you first:` : `${eng} mentioned you, but not first:`)
     : !named.length
@@ -935,7 +934,7 @@ function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, prov
       <div class="q">“${escapeHtml(q.text)}”</div>
       <p class="a">${head}</p>
       <ol class="r2-hero-list">${rows.join('')}</ol>
-      <p class="r2-hero-read"><a href="#ans-${escapeHtml(h.id)}" data-open="${escapeHtml(h.id)}">Read the whole answer</a>${eg ? ` <span aria-hidden="true">·</span> Check it yourself: ${eng} used <a href="${safeHref(eg.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(eg.domain)}</a>` : ''}</p>
+      <p class="r2-hero-read"><a href="#ans-${escapeHtml(h.id)}" data-open="${escapeHtml(h.id)}">Read the whole answer</a></p>
     </div>`;
 }
 
@@ -1166,19 +1165,6 @@ function listingLineV2(listings) {
   if (!bad.length) return '';
   const names = listJoin(bad.map((l) => escapeHtml(l.platform || 'A')));
   return `<p class="r2-site-listing"><span aria-hidden="true">✗</span> Your ${names} ${plural(bad.length, 'listing doesn’t', 'listings don’t')} match your website, or we couldn’t find ${plural(bad.length, 'it', 'them')}. When sources disagree, AI can repeat the wrong details.</p>`;
-}
-
-// The first real website an answer we can show used (never the owner's own), with its page address, so the
-// owner can open it and see for themselves.
-function citedExampleV2(answers, ownDomain) {
-  for (const a of answers || []) {
-    for (const c of (a && a.citations) || []) {
-      const d = String((c && c.domain) || '').replace(/^www\./, '').toLowerCase();
-      if (!d || d === ownDomain || (ownDomain && d.endsWith('.' + ownDomain)) || !/^https?:\/\//i.test(String(c.url || ''))) continue;
-      return { engine: a.engine, domain: d, url: c.url };
-    }
-  }
-  return null;
 }
 
 // Where the problems are, on a free report with the offer: up to three short lines under the severity tiles.
@@ -1422,7 +1408,7 @@ function issuesV2({ issues, locked, xrayOk, name = '', specificCount = null, whe
         ${issues.slice(0, 2).map((i, n) => `<li><span class="badge ${escapeHtml(i.severity || 'low')}">${escapeHtml(severityLabel(i.severity || 'low'))}</span><span class="bar" style="width:${[78, 64, 86, 58, 72, 66][n]}%" aria-hidden="true"></span><span class="lock" aria-hidden="true">🔒</span></li>`).join('')}
       </ol>
       ${issues.length > 2 ? `<p class="r2-muted r2-locked-more">and ${issues.length - 2} more.</p>` : ''}
-      ${xrayOk ? '<p class="r2-muted r2-bridge">Every one is fixed step by step in the audit below.</p>' : '<p class="r2-muted">Each problem by name, with the exact steps to fix it, is in the full report.</p>'}
+      ${xrayOk ? '' : '<p class="r2-muted">Each problem by name, with the exact steps to fix it, is in the full report.</p>'}
     </section>`;
   }
   return `
@@ -1572,7 +1558,7 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
   // Headline: the outcome they want, in their words.
   const winning = !zero && !lostIntents.length && N > 0 && t.namedYou / N >= 0.6;
   const trade = escapeHtml(String(b.trade || 'business').toLowerCase());
-  const title = zero ? `Get AI to recommend ${name}.`
+  const title = zero ? (top ? `Take the call back from <span class="ob-rival">${top}</span>.` : `Get AI to recommend ${name}.`)
     : winning ? `Stay the ${trade} AI recommends in ${town}.`
       : `Be the ${trade} AI recommends in ${town}.`;
   const wrongPhone = (report.aiFacts || []).find((x) => x && x.status === 'differs' && x.field === 'phone');
@@ -1582,28 +1568,30 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
             <input type="checkbox" data-addon="competitor_breakdown" data-addon-price="25">
             <span><b>Add the Competitor Breakdown <em>+$25</em></b>The top 3 businesses AI names, side by side with you.</span>
           </label>` : '';
+  // What they get, in numbers the free report already shows. Nothing here names a fix or a step.
+  const totalFixes = num(severity.high) + num(severity.medium) + num(severity.low);
+  const first = num(severity.high);
+  const gets = [
+    totalFixes ? `All ${totalFixes} problems by name${first ? ` (${first} to fix first)` : ''}.` : 'Every problem, by name.',
+    'The exact steps to fix each one, in plain words.',
+    'Files to paste in: your FAQ page, your Google listing text and a review QR code.',
+    N ? `All ${N} AI ${plural(N, 'answer', 'answers')} word for word, and a free re-scan in 30 days.` : 'A free re-scan in 30 days.',
+  ];
+  const cost = zero
+    ? `We asked ${N} ${plural(N, 'time', 'times')}. You got 0 mentions.`
+    : N ? `AI mentioned you in ${t.namedYou} of ${N} ${plural(N, 'answer', 'answers')}.` : '';
   return `
-    <section class="offer-band ob-compact" id="offer" data-offer-band aria-labelledby="offer-title">
+    <section class="offer-band ob-navy" id="offer" data-offer-band aria-labelledby="offer-title">
+      <p class="ob-eyebrow">Your next step</p>
       <h2 id="offer-title">${title}</h2>
-      <p class="ob-one"><b>$49, one time.</b> Every problem we found, with the exact steps to fix each one, plus the finished pieces to paste into your website. We re-check you free in 30 days.</p>
-      <div class="ob-buy">
-        ${addon}
-        <a class="btn big ob-btn" data-tier="xray" href="#" data-base-price="49">${escapeHtml(ctaWord(report))} — $<span data-total>49</span></a>
-        ${wrongPhone ? `<p class="ob-urgent">If ${escapeHtml(wrongPhone.aiSays)} isn’t a number you answer, every customer who gets it from ${escapeHtml(engineName(aById[wrongPhone.answerId]?.engine))} is a call you miss.</p>` : ''}
-        <div class="ob-promise">${ICON.shield}<p><b>The 3-problem promise.</b> Fewer than 3 problems specific to ${name}? Email us within 30 days and get your $49 back.</p></div>
-        <p class="ob-small">${ICON.lock}Secure checkout by Stripe. No subscription. Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a>${report.sample ? '' : ' · <a class="ob-sample" href="/report/sample-001">See a sample report first</a>'}</p>
-        ${tierOn('be_the_answer') ? '<p class="ob-small">Later, our year-long plan (Be the Answer, $499) counts every dollar you paid toward it.</p>' : ''}
-      </div>
-      <details class="ob-next">
-        <summary>What happens after you pay</summary>
-        <ol class="trust-next">
-          <li>You pay on Stripe’s secure page.</li>
-          <li>This report unlocks right away: every answer, every fix, your Fix Kit.</li>
-          <li>We ask every AI assistant again and email you when it’s done.</li>
-          <li>In 30 days we re-scan for free and show you what changed.</li>
-        </ol>
-        <p class="trust-foot">Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a> · <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
-      </details>
+      ${cost ? `<p class="ob-cost">${cost}</p>` : ''}
+      <ul class="ob-get">${gets.map((g) => `<li>${g}</li>`).join('')}</ul>
+      <p class="ob-easy">Paste the files in, or hand them to whoever runs your website. Opens the moment you pay.</p>
+      ${wrongPhone ? `<p class="ob-urgent">If ${escapeHtml(wrongPhone.aiSays)} isn’t a number you answer, every customer who gets it from ${escapeHtml(engineName(aById[wrongPhone.answerId]?.engine))} is a call you miss.</p>` : ''}
+      <a class="btn big ob-btn" data-tier="xray" href="#" data-base-price="49">${escapeHtml(ctaWord(report))} — $<span data-total>49</span></a>
+      <p class="ob-promise">${ICON.shield}<span><b>The 3-problem promise:</b> fewer than 3 problems specific to ${name}? Email us within 30 days for your money back.</span></p>
+      ${addon}
+      <p class="ob-small">${ICON.lock}Secure Stripe checkout. No subscription. No logins.${report.sample ? '' : ' <a class="ob-sample" href="/report/sample-001">See a sample report first</a>'}</p>
     </section>`;
 }
 

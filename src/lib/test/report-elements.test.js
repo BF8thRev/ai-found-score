@@ -113,8 +113,8 @@ test('trade names read as businesses: plumbing → plumbers', () => {
 
 test('report page ships the new script and styles under fresh cache keys', () => {
   const html = readFileSync(new URL('../../../public/report.html', import.meta.url), 'utf8');
-  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 34);
-  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 23);
+  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 38);
+  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 27);
 });
 
 // ---- the top of the page: result, the search card, the short version ----
@@ -339,7 +339,7 @@ test('GET /report/<token> serves a header with one report button and no links of
   const head = html.slice(html.indexOf('<header class="site-header">'), html.indexOf('</header>'));
   assert.match(head, /data-hdr-cta/);
   assert.match(head, /data-hdr-ctx/);
-  assert.match(head, /href="\/contact">Questions\?/);
+  assert.doesNotMatch(head, /<nav|Questions|\/contact/, 'no menu links and no questions link in the report header');
   for (const gone of ['/#how', '/#pricing', '/#faq', 'Who&rsquo;s getting my calls', 'Sample report']) assert.ok(!head.includes(gone), gone);
   assert.match(html, /<body class="report-page">/);
   assert.match(html, /report\.js\?v=\d+/);

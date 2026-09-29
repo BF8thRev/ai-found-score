@@ -9,7 +9,7 @@ body { font-size: 12pt; color: #000; }
 
 .site-header, .site-footer, nav, .header-cta,
 .cta-band, .offer-band, .unlock-panel, .lead-form, .r2-tools, .r2-copy-btn,
-[data-tier], .locked-note, .r2-sticky, .r2-strip, .ob-sample, .r2-bridge { display: none !important; }
+[data-tier], .locked-note, .r2-sticky, .r2-strip, .ob-sample { display: none !important; }
 
 .report-header { background: none !important; padding: 0 0 8pt !important; }
 .wrap { max-width: none !important; padding: 0 !important; }
@@ -38,7 +38,6 @@ a { color: #000; text-decoration: none; }
 .r2-band .r2-score { box-shadow: none !important; border: 1px solid #ccc !important; }
 
 /* Show where the example page in Why AI skips you points. */
-.r2-hero-read a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #555; overflow-wrap: anywhere; }
 
 /* The dark search card prints as plain text. */
 .r2-hero { background: none !important; color: #000 !important; border: 1px solid #ccc; }
