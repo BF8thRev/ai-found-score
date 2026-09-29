@@ -61,20 +61,6 @@ test('one-off businesses are summed as "+ N other businesses named once each"', 
   assert.ok(html.includes(`+ ${others} other ${others === 1 ? 'business' : 'businesses'} named once each`), html);
 });
 
-test('websites AI used: on a free report with the offer, ONE real cited page to check; never the withheld source list', () => {
-  const r = load();
-  const rep = locked();
-  const html = render(r, rep);
-  const why = html.slice(html.indexOf('<h2>Why AI skips you</h2>'), html.indexOf('<h2>What to fix</h2>'));
-  const cited = rep.answers.flatMap((a) => (a.citations || []).map((c) => c.url));
-  assert.ok(cited.length, 'fixture has a cited page');
-  const links = [...why.matchAll(/<a href="([^"]+)" rel="nofollow noopener" target="_blank">/g)].map((m) => m[1].replace(/&amp;/g, '&'));
-  assert.equal(links.length, 1, 'exactly one example link');
-  assert.ok(cited.includes(links[0]), 'the example is a page the report really cited');
-  assert.match(why, /Check one yourself: [A-Za-z]+’s answer above used /);
-  assert.ok(!rep.sources || rep.sources.length === 0, 'lock.js empties sources');
-  assert.doesNotMatch(why, /r2-cited/);
-});
 
 test('can AI read your website: locked shows a pass/fail meter and the count, never which checks', () => {
   const r = load();
@@ -127,8 +113,8 @@ test('trade names read as businesses: plumbing → plumbers', () => {
 
 test('report page ships the new script and styles under fresh cache keys', () => {
   const html = readFileSync(new URL('../../../public/report.html', import.meta.url), 'utf8');
-  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 31);
-  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 20);
+  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 34);
+  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 23);
 });
 
 // ---- the top of the page: result, the search card, the short version ----
@@ -446,6 +432,6 @@ test('search card: owner counted as named but absent from the list still gets a 
 
 test('offer band and the top of the page tolerate long unbroken names in CSS', () => {
   const css = readFileSync(new URL('../../../public/css/report-extra.css', import.meta.url), 'utf8');
-  assert.match(css, /\.ob-head h2, \.ob-kicker, \.ob-head \{ overflow-wrap: anywhere; min-width: 0; \}/);
+  assert.match(css, /\.offer-band h2, #offer-title \{ overflow-wrap: anywhere; min-width: 0; \}/);
   assert.match(css, /\.report-page \.nav a \{[^}]*min-height: 44px/);
 });

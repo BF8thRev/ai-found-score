@@ -328,9 +328,13 @@ function unlockPanel() {
 
 // Phones only (CSS): a bottom bar that scrolls to the offer band, shown once the reader is past the
 // first screen and hidden while the offer band itself is on screen.
-function ctaLabel(report) {
+function ctaWord(report) {
   const n = Number(report && report.score && report.score.score);
-  return `${Number.isFinite(n) && n >= 70 ? 'See what to improve' : 'Show me the fixes'} — ${XRAY.price.split(' ')[0]}`;
+  return Number.isFinite(n) && n >= 70 ? 'See what to improve' : 'Show me the fixes';
+}
+
+function ctaLabel(report) {
+  return `${ctaWord(report)} — ${XRAY.price.split(' ')[0]}`;
 }
 
 function stickyCtaV2(report) {
@@ -622,8 +626,7 @@ async function submitLead(e, token, { pending = false } = {}) {
       : `Done. We’ll send the link to ${email}.`;
     status.className = 'lead-status ok';
     f.querySelector('.lead-row').hidden = true;
-    document.querySelectorAll('form.lead-form').forEach((x) => { if (x !== f && x.dataset.where !== 'pending') x.hidden = true; });
-    document.querySelectorAll('.ob-keep, .r2-strip-lead').forEach((x) => { if (!x.contains(f)) x.hidden = true; });
+    f.querySelector('label')?.setAttribute('hidden', '');
     window.dataLayer?.push({ event: 'generate_lead', report_token: token });
     return true;
   } catch (err) {
@@ -816,18 +819,17 @@ function renderV2(root, report) {
 
   const sec = {
     verdict: verdictV2(report, { t, N, cw, proven, zero, allNamed, b, engineList }),
-    hero: heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
+    hero: heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b, ownDomain }),
     baseline: baselineV2(report, t),
     plan: report.plan ? planPanel(report) : '',
     recheck: paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
     strip: offerStripV2({ report, severity, xrayOk, count: issues.length }),
     who: nobodyTwice ? '' : whoAiNamesV2({ report, b, t, N, cw, proven }),
-    why: xrayOk && lostAnswerIds.size ? whySkipV2({ report, b, ownDomain }) : '',
     sources: sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     facts: factsV2({ report, b, aById }),
     site: siteV2(report),
     listings: listingsV2({ listings, badListings }),
-    issues: issuesV2({ issues, locked, xrayOk, name: b.name, specificCount: specificFixCount }),
+    issues: issuesV2({ issues, locked, xrayOk, name: b.name, specificCount: specificFixCount, where: xrayOk ? fixWhereV2({ report, b }) : '' }),
     xray: xrayV2({ report, aById, cw, N }),
     breakdown: report.breakdown ? breakdownV2(report) : '',
     fixkit: paid && !isDemoReport(report) ? fixKitIncluded(report) : '',
@@ -839,7 +841,7 @@ function renderV2(root, report) {
   // the reference material (listings, every answer) after the buy button. Everything else keeps the
   // findings-first order.
   const order = xrayOk
-    ? ['verdict', 'who', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'why', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
+    ? ['verdict', 'who', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
     : ['verdict', 'hero', 'baseline', 'plan', 'recheck', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method'];
 
   root.innerHTML = [
@@ -900,7 +902,7 @@ function fullScanNote() {
 
 // 1. Hero: one real search, and who it named, in the order AI named them.
 const HERO_ROWS = 3;
-function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }) {
+function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b, ownDomain = '' }) {
   const h = aById[report.headline?.answerId] || answers[0];
   if (!h) return '';
   const q = qById[h.questionId] || { text: '' };
@@ -921,6 +923,7 @@ function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, prov
       : `<li class="not"><span class="pos">✕</span><span class="nm">${escapeHtml(b.name)}<em>Not mentioned</em></span></li>`);
   }
   const eng = escapeHtml(engineName(h.engine));
+  const eg = citedExampleV2([h], ownDomain);
   const head = h.namedYou
     ? (h.namedYouFirst ? `${eng} mentioned you first:` : `${eng} mentioned you, but not first:`)
     : !named.length
@@ -932,7 +935,7 @@ function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, prov
       <div class="q">“${escapeHtml(q.text)}”</div>
       <p class="a">${head}</p>
       <ol class="r2-hero-list">${rows.join('')}</ol>
-      <p class="r2-hero-read"><a href="#ans-${escapeHtml(h.id)}" data-open="${escapeHtml(h.id)}">Read the whole answer</a></p>
+      <p class="r2-hero-read"><a href="#ans-${escapeHtml(h.id)}" data-open="${escapeHtml(h.id)}">Read the whole answer</a>${eg ? ` <span aria-hidden="true">·</span> Check it yourself: ${eng} used <a href="${safeHref(eg.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(eg.domain)}</a>` : ''}</p>
     </div>`;
 }
 
@@ -1171,51 +1174,29 @@ function citedExampleV2(answers, ownDomain) {
   for (const a of answers || []) {
     for (const c of (a && a.citations) || []) {
       const d = String((c && c.domain) || '').replace(/^www\./, '').toLowerCase();
-      if (!d || d === ownDomain || !/^https?:\/\//i.test(String(c.url || ''))) continue;
+      if (!d || d === ownDomain || (ownDomain && d.endsWith('.' + ownDomain)) || !/^https?:\/\//i.test(String(c.url || ''))) continue;
       return { engine: a.engine, domain: d, url: c.url };
     }
   }
   return null;
 }
 
-// "Why AI skips you" on a free report with the offer: what the locked report can honestly say about why
-// AI picks someone else, in three short lines. Nothing here is withheld data: the tallies, the pass/fail
-// count, the listing platform and one cited page from an answer that is shown in full.
-function whySkipV2({ report, b, ownDomain }) {
+// Where the problems are, on a free report with the offer: up to three short lines under the severity tiles.
+// Nothing here is withheld data: a tally, a pass/fail count, a listing platform and its status.
+function fixWhereV2({ report, b }) {
   const rows = [];
-  const sum = report.sourcesSummary;
-  if (sum && num(sum.cited)) {
-    const eg = citedExampleV2(report.answers, ownDomain);
-    rows.push(`
-      <div class="r2-why-row"><span class="x" aria-hidden="true">✗</span><div>
-        <p>AI used <b>${num(sum.cited)} web ${plural(num(sum.cited), 'page', 'pages')}</b> to build the answers that didn’t mention you.${num(sum.missingYou) ? ` <b>${num(sum.missingYou)} of the pages we could check ${plural(num(sum.missingYou), 'lists', 'list')} other ${escapeHtml(tradePlural(b.trade))} and not you.</b>` : ''}</p>
-        ${eg ? `<p class="r2-why-eg">Check one yourself: ${escapeHtml(engineName(eg.engine))}’s answer above used <a href="${safeHref(eg.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(eg.domain)}</a>. Open it and see who it lists.</p>` : ''}
-      </div></div>`);
-  }
   const sc = report.siteCheck;
   if (sc && sc.url && sc.locked) {
     const failedN = Math.max(0, num(sc.checks) - num(sc.passed));
-    if (!sc.reachable) {
-      rows.push('<div class="r2-why-row"><span class="x" aria-hidden="true">✗</span><div><p>We couldn’t load your website. AI can’t read a site that doesn’t load.</p></div></div>');
-    } else if (failedN) {
-      rows.push(`
-      <div class="r2-why-row"><span class="x" aria-hidden="true">✗</span><div>
-        <p><b>${failedN} of ${num(sc.checks)}</b> website checks failed. They make your site harder for AI to read.</p>
-        ${num(sc.checks) > 0 ? siteMeterV2(num(sc.checks), num(sc.passed)) : ''}
-        <p class="r2-why-eg">Which ${failedN === 1 ? 'one' : 'ones'}, and the exact ${failedN === 1 ? 'fix' : 'fixes'}, ${failedN === 1 ? 'is' : 'are'} in the audit.</p>
-      </div></div>`);
-    } else if (num(sc.checks) > 0) {
-      rows.push(`<div class="r2-why-row"><span class="ok" aria-hidden="true">✓</span><div><p>Your website passed all ${num(sc.checks)} checks.</p></div></div>`);
-    }
+    if (!sc.reachable) rows.push('<b>Your website:</b> we couldn’t load it, and AI can’t read a site that doesn’t load.');
+    else if (failedN) rows.push(`<b>Your website:</b> ${failedN} of ${num(sc.checks)} checks failed, so it’s harder for AI to read.`);
   }
-  const listing = listingLineV2(report.listings);
-  if (!rows.length && !listing) return '';
-  return `
-    <section class="report-section r2-why">
-      <h2>Why AI skips you</h2>
-      ${rows.join('')}
-      ${listing}
-    </section>`;
+  const bad = (report.listings || []).filter((l) => l && l.status === 'mismatch');
+  if (bad.length) rows.push(`<b>Your ${listJoin(bad.map((l) => escapeHtml(l.platform || 'A')))} ${plural(bad.length, 'listing', 'listings')}:</b> ${plural(bad.length, 'doesn’t', 'don’t')} match your website, or we couldn’t find ${plural(bad.length, 'it', 'them')}.`);
+  const sum = report.sourcesSummary;
+  if (sum && num(sum.cited) && num(sum.missingYou)) rows.push(`<b>The pages AI reads:</b> ${num(sum.missingYou)} of the ${num(sum.cited)} we checked ${plural(num(sum.missingYou), 'lists', 'list')} other ${escapeHtml(tradePlural(b.trade))} and not you.`);
+  if (!rows.length) return '';
+  return `<ul class="r2-fixwhere">${rows.map((r) => `<li><span aria-hidden="true">✗</span><span>${r}</span></li>`).join('')}</ul>`;
 }
 
 // One segment per check: green passed, red failed. Says nothing about which checks (locked).
@@ -1423,7 +1404,7 @@ function copyBlocksV2(items) {
 
 // 8. What to fix: titles free; descriptions, steps and copy text locked until paid
 // (removed server-side, src/lib/lock.js).
-function issuesV2({ issues, locked, xrayOk, name = '', specificCount = null }) {
+function issuesV2({ issues, locked, xrayOk, name = '', specificCount = null, where = '' }) {
   if (!issues.length) return '';
   // Locked: how many fixes and how serious; the titles are the fix, so they're the audit's.
   if (issues.every((i) => i && i.locked && !i.title)) {
@@ -1436,10 +1417,11 @@ function issuesV2({ issues, locked, xrayOk, name = '', specificCount = null }) {
       <h2>What to fix</h2>
       <p class="sub">We found <strong>${issues.length} ${plural(issues.length, 'problem', 'problems')}</strong> you can fix.${specificCount !== null && specificCount < issues.length ? ` ${specificCount} ${plural(specificCount, 'is', 'are')} specific to ${escapeHtml(name || 'your business')}. The rest are general tips.` : ''}</p>
       <div class="r2-fixtiles">${sevs.map((k) => `<div class="r2-fixtile ${escapeHtml(k)}"><div class="n">${num(bySev[k])}</div><div class="l">${escapeHtml(severityLabel(k).toLowerCase())}</div></div>`).join('')}</div>
+      ${where}
       <ol class="r2-locked-list" aria-label="Problems found, details in the audit">
-        ${issues.slice(0, 4).map((i, n) => `<li><span class="badge ${escapeHtml(i.severity || 'low')}">${escapeHtml(severityLabel(i.severity || 'low'))}</span><span class="bar" style="width:${[78, 64, 86, 58, 72, 66][n]}%" aria-hidden="true"></span><span class="lock" aria-hidden="true">🔒</span></li>`).join('')}
+        ${issues.slice(0, 2).map((i, n) => `<li><span class="badge ${escapeHtml(i.severity || 'low')}">${escapeHtml(severityLabel(i.severity || 'low'))}</span><span class="bar" style="width:${[78, 64, 86, 58, 72, 66][n]}%" aria-hidden="true"></span><span class="lock" aria-hidden="true">🔒</span></li>`).join('')}
       </ol>
-      ${issues.length > 4 ? `<p class="r2-muted r2-locked-more">and ${issues.length - 4} more.</p>` : ''}
+      ${issues.length > 2 ? `<p class="r2-muted r2-locked-more">and ${issues.length - 2} more.</p>` : ''}
       ${xrayOk ? '<p class="r2-muted r2-bridge">Every one is fixed step by step in the audit below.</p>' : '<p class="r2-muted">Each problem by name, with the exact steps to fix it, is in the full report.</p>'}
     </section>`;
   }
@@ -1587,58 +1569,30 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
   const town = escapeHtml(b.town || b.city || 'your area');
   const top = proven[0] ? escapeHtml(proven[0].name) : '';
 
-  // Headline: the outcome they want, in their words. Lede: where they stand today, from this report.
+  // Headline: the outcome they want, in their words.
   const winning = !zero && !lostIntents.length && N > 0 && t.namedYou / N >= 0.6;
   const trade = escapeHtml(String(b.trade || 'business').toLowerCase());
   const title = zero ? `Get AI to recommend ${name}.`
     : winning ? `Stay the ${trade} AI recommends in ${town}.`
       : `Be the ${trade} AI recommends in ${town}.`;
-  const lede = zero ? `Right now AI sends people who ask for a ${trade} in ${town} somewhere else. The audit shows why, and exactly what to change.`
-    : winning ? `AI mentioned you in ${t.namedYou} of ${N} answers, first in ${t.firstYou}. That’s worth protecting, because AI answers change, and whatever AI gets wrong about you, it repeats to every customer who asks. This report already found:`
-      : `AI mentioned you in ${t.namedYou} of ${N} answers. This report already found why it picks someone else:`;
   const wrongPhone = (report.aiFacts || []).find((x) => x && x.status === 'differs' && x.field === 'phone');
 
-  // The value stack: what each piece does for them, and how much work it is.
-  const stack = [
-    ['The Fix Plan', 'Every problem by name, most important first, with the exact steps and text to paste.', 'Copy and paste'],
-    ['The Fix Kit', 'Ready-made files for your website: business details, an FAQ page, your Google listing text and a review QR code.', 'Done for you'],
-    ['The proof', `Every answer word for word, ${top ? `what AI finds on ${top} but not on you` : 'what AI finds on your rivals but not on you'}, and a free 30-day re-scan.`, 'Included'],
-  ];
   const addon = hasCompetitors && tierOn('competitor_breakdown') ? `
           <label class="ob-addon">
             <input type="checkbox" data-addon="competitor_breakdown" data-addon-price="25">
-            <span><b>Add the Competitor Breakdown <em>+$25</em></b>The top 3 businesses AI names, side by side with you: what AI said about them, their reviews against yours, the questions they win.</span>
+            <span><b>Add the Competitor Breakdown <em>+$25</em></b>The top 3 businesses AI names, side by side with you.</span>
           </label>` : '';
-  const keep = !report.sample && !report.hasEmail ? `
-      <div class="ob-keep" id="keep">
-        <p><b>Not ready yet?</b> We’ll email you the link so this report is there when you are.</p>
-        ${leadForm('bottom')}
-      </div>` : '';
-
   return `
-    <section class="offer-band" id="offer" data-offer-band aria-labelledby="offer-title">
-      <div class="ob-head">
-        <p class="ob-kicker">AI Visibility Audit · ${name}</p>
-        <h2 id="offer-title">${title}</h2>
-        <p class="ob-lede">${lede}</p>
-      </div>
-      <div class="ob-grid">
-        <div class="ob-gets">
-          <h3>Everything in the audit</h3>
-          <ol class="ob-stack">${stack.map(([h, d, tag]) => `<li><div><b>${h}</b> <span class="ob-tag">${tag}</span><p>${d}</p></div></li>`).join('')}</ol>
-        </div>
-        <div class="ob-buy">
-          <p class="ob-price"><span>$49</span> one-time</p>
-          <p class="ob-price-note">Unlocks the moment you pay. No subscription.</p>
-          ${addon}
-          <a class="btn big ob-btn" data-tier="xray" href="#" data-base-price="49">Show me every fix — $<span data-total>49</span></a>
-          ${wrongPhone ? `<p class="ob-urgent">If ${escapeHtml(wrongPhone.aiSays)} isn’t a number you answer, every customer who gets it from ${escapeHtml(engineName(aById[wrongPhone.answerId]?.engine))} is a call you miss.</p>` : ''}
-          ${report.sample ? '' : '<a class="ob-sample" href="/report/sample-001">See a sample report first</a>'}
-          <p class="ob-secure">${ICON.lock}Secure checkout by Stripe. We never see your card.</p>
-          <div class="ob-promise">${ICON.shield}<p><b>The 3-problem promise.</b> This report already found ${num(specificFixCount)} problems specific to ${name}. If the audit finds fewer than 3, email us within 30 days and you get your $49 back.</p></div>
-          <p class="ob-small">No logins, ever. We never touch your website or accounts. Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a></p>
-          ${tierOn('be_the_answer') ? '<p class="ob-small">Later, our year-long plan (Be the Answer, $499) counts every dollar you paid toward it.</p>' : ''}
-        </div>
+    <section class="offer-band ob-compact" id="offer" data-offer-band aria-labelledby="offer-title">
+      <h2 id="offer-title">${title}</h2>
+      <p class="ob-one"><b>$49, one time.</b> Every problem we found, with the exact steps to fix each one, plus the finished pieces to paste into your website. We re-check you free in 30 days.</p>
+      <div class="ob-buy">
+        ${addon}
+        <a class="btn big ob-btn" data-tier="xray" href="#" data-base-price="49">${escapeHtml(ctaWord(report))} — $<span data-total>49</span></a>
+        ${wrongPhone ? `<p class="ob-urgent">If ${escapeHtml(wrongPhone.aiSays)} isn’t a number you answer, every customer who gets it from ${escapeHtml(engineName(aById[wrongPhone.answerId]?.engine))} is a call you miss.</p>` : ''}
+        <div class="ob-promise">${ICON.shield}<p><b>The 3-problem promise.</b> Fewer than 3 problems specific to ${name}? Email us within 30 days and get your $49 back.</p></div>
+        <p class="ob-small">${ICON.lock}Secure checkout by Stripe. No subscription. Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a>${report.sample ? '' : ' · <a class="ob-sample" href="/report/sample-001">See a sample report first</a>'}</p>
+        ${tierOn('be_the_answer') ? '<p class="ob-small">Later, our year-long plan (Be the Answer, $499) counts every dollar you paid toward it.</p>' : ''}
       </div>
       <details class="ob-next">
         <summary>What happens after you pay</summary>
@@ -1650,7 +1604,6 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
         </ol>
         <p class="trust-foot">Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a> · <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a></p>
       </details>
-      ${keep}
     </section>`;
 }
 
@@ -1732,14 +1685,14 @@ function answersV2({ questions, answers, failedNote = '' }) {
   }).join('');
   const hasUnsure = answers.some((a) => a.ownerMatch === 'unsure' && !a.namedYou);
   return `
-    <section class="report-section">
-      <h2>Every question, every answer</h2>
+    <details class="report-section r2-allans">
+      <summary><h2>Every question, every answer</h2><span class="r2-allans-n">${answers.length} ${plural(answers.length, 'answer', 'answers')}</span></summary>
       <p class="sub">✓ mentioned you (★ first) · ✗ didn’t${hasUnsure ? ' · ? unsure, not counted' : ''}. ${answers.some((a) => a.locked)
         ? 'Tap to open. The answer at the top of this report is here word for word; every other answer, and the websites it cited, is in the audit.'
         : 'Word for word, as the AI returned it. Business names in bold, yours highlighted. Tap to open.'}</p>
       ${failedNote ? `<p class="r2-note">${escapeHtml(failedNote)}</p>` : ''}
       ${groups}
-    </section>`;
+    </details>`;
 }
 
 // The headline re-ask (one run per assistant, so the search we lead with is checked once more).

@@ -84,29 +84,29 @@
 
 /* Offer band (report.js offerV2): findings first, what $49 buys, a price card, the one email box. */
 .offer-band { margin: 56px 0 48px; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(180deg, #F4F7FB 0%, #FFFFFF 100%); border: 1px solid var(--line); box-shadow: var(--shadow); }
-.ob-head { max-width: 640px; }
-.ob-kicker { margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--blue); }
+
+
 .offer-band h2 { font-size: clamp(26px, 3.4vw, 34px); line-height: 1.15; margin: 0 0 10px; color: var(--navy); }
-.ob-lede { margin: 0; font-size: 17px; color: var(--ink); }
-.ob-found { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
-.ob-found li { position: relative; padding: 12px 14px 12px 40px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 15.5px; color: var(--ink); }
-.ob-found li::before { content: '!'; position: absolute; left: 12px; top: 12px; width: 20px; height: 20px; border-radius: 50%; font-size: 13px; font-weight: 800; line-height: 20px; text-align: center; color: #fff; background: var(--amber); }
-.ob-found li.high::before { background: var(--red); }
-.ob-found q { font-weight: 700; }
-.ob-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; margin-top: 26px; align-items: start; }
-.ob-gets h3 { margin: 4px 0 12px; font-size: 18px; color: var(--navy); }
+
+
+
+
+
+
+
+
 .ob-buy { background: #fff; border: 2px solid var(--blue); border-radius: 16px; padding: 22px 20px 18px; text-align: center; box-shadow: var(--shadow-lg); }
-.ob-price { margin: 0; font-size: 16px; font-weight: 700; color: var(--muted); }
-.ob-price span { font-size: 48px; font-weight: 800; color: var(--navy); letter-spacing: -.02em; vertical-align: -4px; margin-right: 4px; }
-.ob-price-note { margin: 2px 0 14px; font-size: 14px; color: var(--muted); }
+
+
+
 .ob-addon { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 12px; margin: 0 0 14px; border: 1px dashed #C9D4E3; border-radius: 10px; cursor: pointer; font-size: 14px; color: var(--muted); }
 .ob-addon:has(input:checked) { border-style: solid; border-color: var(--blue); background: #EEF4FE; }
 .ob-addon input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--blue); }
 .ob-addon b { display: block; color: var(--ink); font-size: 15px; }
 .ob-addon em { font-style: normal; color: var(--blue); }
 .ob-btn { display: block; width: 100%; box-sizing: border-box; text-align: center; }
-.ob-secure { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--navy); }
-.ob-secure svg { width: 15px; height: 15px; color: var(--green); flex: none; }
+
+
 .ob-buy .trust-cards { margin-top: 8px; }
 .ob-promise { display: flex; gap: 10px; align-items: flex-start; text-align: left; margin-top: 16px; padding: 12px; border-radius: 10px; background: #E9F6EE; font-size: 14px; color: var(--ink); }
 .ob-promise svg { width: 22px; height: 22px; color: var(--green); flex: none; }
@@ -115,22 +115,22 @@
 .ob-next summary { cursor: pointer; font-weight: 700; color: var(--navy); font-size: 15px; }
 .ob-next .trust-next { margin: 12px 0 0; max-width: none; }
 .ob-next .trust-foot { text-align: left; }
-.ob-keep { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
-.ob-keep > p { margin: 0 0 8px; color: var(--ink); }
-.ob-keep .lead-form { margin: 0; }
-.ob-keep .lead-form label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+
+
+
 @media (min-width: 901px) { .ob-buy { position: sticky; top: 88px; } }
-@media (max-width: 900px) { .ob-grid { grid-template-columns: 1fr; } }
+
 @media (max-width: 760px) { .offer-band { padding: 26px 18px 20px; margin: 40px 0; } }
 
-.ob-stack { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: stk; }
-.ob-stack li { counter-increment: stk; display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
-.ob-stack li::before { content: counter(stk); flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
-.ob-stack li > div { flex: 1; min-width: 0; }
-.ob-stack b { color: var(--ink); font-size: 16px; }
-.ob-stack p { margin: 2px 0 0; font-size: 14.5px; color: var(--muted); }
-.ob-tag { display: inline-block; vertical-align: 2px; margin-left: 6px; font-size: 11.5px; font-weight: 800; color: var(--green); background: #E2F4E8; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
-.ob-anchor { margin: 14px 0 0; font-size: 14.5px; color: var(--muted); }
+
+
+
+
+
+
+
+
 .ob-urgent { margin: 12px 0 0; font-size: 13.5px; color: var(--red); font-weight: 600; }
 .ob-small { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
 
@@ -282,8 +282,8 @@
 .report-page .btn:hover, .report-page .header-cta:hover { background: #154FB0; }
 .report-page .nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; }
 .r2-score-how summary { padding: 8px 0; color: #3D4858; font-weight: 600; font-size: 14px; }
-.ob-head h2, .ob-kicker, .ob-head { overflow-wrap: anywhere; min-width: 0; }
-.ob-buy, .ob-gets { min-width: 0; overflow-wrap: anywhere; }
+
+.ob-buy { min-width: 0; overflow-wrap: anywhere; }
 .hdr-ctx b { min-width: 60px; }
 
 /* What to fix: big severity tiles. */
@@ -356,8 +356,7 @@ details.r2-method p { margin: 8px 0 0; }
 .r2-qv.won .r2-verdict-badge { background: #1E7B4F; }
 
 /* ---- review fixes: long names wrap; blue text on light grey passes; 44px tap targets ---- */
-.report-section .sub, .r2-ans p, .r2-ans, .r2-line, .ob-found li { overflow-wrap: anywhere; min-width: 0; }
-.report-page .ob-kicker, .report-page .site-footer a { color: #1A5FD0; }
+.report-section .sub, .r2-ans p, .r2-ans, .r2-line { overflow-wrap: anywhere; min-width: 0; }
 .report-page .site-footer .footer-brand a { color: inherit; }
 .report-page summary { min-height: 44px; display: flex; align-items: center; }
 .report-page .btn-secondary, .report-page .r2-src a { min-height: 44px; display: inline-flex; align-items: center; }
@@ -396,3 +395,43 @@ details.r2-method { border-top: 0; padding-top: 0; }
 .r2-why-eg a, .ob-small a { display: inline-block; padding: 10px 0; }
 .r2-qans { margin-top: 6px; }
 .r2-qans > summary { cursor: pointer; font-weight: 700; color: #1A5FD0; text-decoration: underline; }
+
+/* Where the problems are: short lines under the severity tiles. */
+.r2-fixwhere { list-style: none; margin: 12px 0 4px; padding: 0; display: grid; gap: 8px; }
+.r2-fixwhere li { display: flex; gap: 10px; align-items: flex-start; font-size: 16.5px; line-height: 1.4; color: #14213A; overflow-wrap: anywhere; }
+.r2-fixwhere li > span:first-child { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #FDECEA; color: #9B1C12; font-weight: 800; font-size: 14px; margin-top: 1px; }
+.r2-fixwhere li > span:last-child { min-width: 0; }
+.r2-hero-read a[target] { text-decoration: underline; }
+
+/* The offer: a headline, one sentence, one card. */
+.offer-band.ob-compact { padding: 24px 24px 18px; margin: 36px 0 28px; }
+.ob-compact h2 { margin: 0 0 8px; }
+.ob-one { margin: 0 0 16px; font-size: 17px; line-height: 1.5; color: #14213A; max-width: 620px; }
+.ob-compact .ob-buy { position: static; max-width: 560px; margin: 0; box-shadow: none; text-align: left; padding: 18px; }
+.ob-compact .ob-btn { margin-top: 4px; }
+.ob-compact .ob-promise { margin-top: 14px; }
+.ob-compact .ob-small { display: block; text-align: left; margin: 12px 0 0; }
+.ob-compact .ob-small svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; color: var(--green); }
+.ob-compact .ob-sample { text-align: left; padding: 10px 0; }
+
+/* Offer: tighter still. */
+.ob-compact .ob-addon { padding: 10px 12px; margin: 0 0 12px; }
+.ob-compact .ob-promise { padding: 10px 12px; }
+.ob-compact .ob-small { margin: 10px 0 0; }
+.ob-compact .ob-sample { display: inline-block; padding: 6px 0; }
+
+/* Final review round */
+.report-page .site-footer a { color: #1A5FD0; }
+.report-page .site-footer .footer-brand a { color: inherit; }
+.offer-band h2, #offer-title { overflow-wrap: anywhere; min-width: 0; }
+.ob-compact .ob-sample { padding: 12px 0; }
+.ob-small a { padding: 11px 0; }
+.lead-form label[hidden] { display: none; }
+
+/* Every question, every answer: one line until opened. */
+details.r2-allans > summary { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; list-style: none; padding: 6px 0; }
+details.r2-allans > summary::-webkit-details-marker { display: none; }
+details.r2-allans > summary h2 { margin: 0; }
+details.r2-allans > summary::after { content: "+"; font-size: 24px; font-weight: 700; color: var(--navy); }
+details.r2-allans[open] > summary::after { content: "–"; }
+.r2-allans-n { margin-left: auto; font-size: 15px; color: #3D4858; white-space: nowrap; }
