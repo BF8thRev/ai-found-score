@@ -68,7 +68,7 @@
             <input type="checkbox" name="addon_breakdown" id="addon-breakdown">
             <span class="co-bump-body">
               <strong>Yes, add the Competitor Breakdown <em>+$25</em></strong>
-              <span>See what they have that you don&rsquo;t. A scorecard of what the top 3 businesses AI names instead of you show that you don&rsquo;t (a page for your town, how they price, licenses, reviews, directories), how many you match, and a &ldquo;do these first&rdquo; list in the order to copy them.</span>
+              <span>See what the top 3 businesses AI picks over you have that you don&rsquo;t, and what to copy first.</span>
             </span>
           </label>
 
@@ -106,6 +106,12 @@
           <span><strong>Competitor Breakdown</strong><small>Add-on</small></span>
           <span>$25</span>
         </div>
+        <ul class="tier-list co-incl co-incl-add" id="list-breakdown" hidden>
+          <li>A scorecard of what the top 3 businesses AI picks have that you don&rsquo;t</li>
+          <li>How many of those you match</li>
+          <li>A &ldquo;do these first&rdquo; list, in the order to copy them</li>
+          <li>What AI said about each one, and the pages it read</li>
+        </ul>
         <div class="co-total">
           <span>Total today</span>
           <span data-total>$49</span>
@@ -155,6 +161,7 @@
   function paintTotal() {
     document.querySelectorAll('[data-total]').forEach(function (t) { t.textContent = '$' + total(); });
     el('line-breakdown').hidden = !bump.checked;
+    el('list-breakdown').hidden = !bump.checked;
     el('co-bump').classList.toggle('on', bump.checked);
   }
   bump.addEventListener('change', function () {

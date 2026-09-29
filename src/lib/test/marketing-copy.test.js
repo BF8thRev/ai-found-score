@@ -65,6 +65,12 @@ test('only the plans on the ladder are offered', () => {
   const checkout = read('checkout.html');
   assert.match(checkout, /Competitor Breakdown <em>\+\$25<\/em>/);
   assert.match(checkout, /Secure payment by Stripe/);
+  // The add-on box stays short (a title and one line); the detail lives in the order summary, shown when ticked.
+  const bumpLine = checkout.match(/class="co-bump-body">[\s\S]*?<\/strong>\s*<span>([\s\S]*?)<\/span>/)[1];
+  assert.ok(bumpLine.split(/\s+/).length <= 25, `add-on box is too wordy: ${bumpLine}`);
+  const addList = checkout.match(/id="list-breakdown"[^>]*>([\s\S]*?)<\/ul>/)[1];
+  assert.ok((addList.match(/<li>/g) || []).length >= 3, 'order summary lists what the Competitor Breakdown includes');
+  assert.match(checkout, /el\('list-breakdown'\)\.hidden = !bump\.checked/);
   // The Fix Kit is part of the $49 audit, never a separate price.
   assert.ok(!/\$149\b/.test(index), 'the Fix Kit is included in the audit, not sold at $149');
   assert.ok(!/0[–-]100/.test(index), 'the offer no longer promises a score');
