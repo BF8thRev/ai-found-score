@@ -536,6 +536,7 @@ export const MATCH_SIGNALS = Object.freeze([
   { key: 'awards', label: 'Awards or “best of” wins', action: 'List any awards or “best of” wins you have earned on your website. Only real ones.', re: /\b(?:award[- ]winning|awards?|best of [A-Z][a-z]+|winner of)\b/i },
   { key: 'experience', label: 'Says how long it has been in business or who owns it', action: 'Say how long you have been in business and who owns it, on your home page.', re: /\b(?:\d{2,3}\+? years|decades|since (?:19|20)\d\d|family[- ](?:owned|operated)|locally owned|generations?)\b/i },
   { key: 'reviews', label: 'Described as highly reviewed', action: 'Ask every happy customer for a Google review, and send them the link right after the job.', re: /\b(?:highly[- ]reviewed|five[- ]star|5[- ]star|great reviews|positive reviews|excellent (?:reviews|reputation)|top[- ]rated)\b/i },
+  { key: 'ratingHigher', label: 'A higher Google rating than yours', action: 'Ask every happy customer for a Google review, so your rating reflects the work you do.' },
   { key: 'reviewsCount', label: 'More Google reviews than you', action: 'Ask every happy customer for a Google review, and send them the link right after the job.' },
   { key: 'directories', label: 'Listed on sites AI read that don’t list you', action: 'Claim your profile on the sites AI reads (Yelp, Angi and similar), and match your name, phone and address to your website.' },
 ]);
@@ -546,12 +547,22 @@ const MAX_MENTIONS = 200;
 const NEGATED_RE = /\b(?:not|no|non|never|nor|neither|without|lacks?|lacking|hardly|rarely|seldom|barely|few|little|fails?|failed|unable|cannot|only|except|unless|if|may|might|could|would|should|claims?|claimed|allegedly|reportedly|supposedly|possibly|probably|perhaps|least|expired|lapsed|revoked|suspended|used to|formerly|unclear|unknown|whether)\b|\w+n['’]t\b|\bun-?(?:licensed|insured|certified|bonded)\b/i;
 const ADVICE_RE = /^\s*(?:always|look for|choose|pick|hire|ensure|check|ask|verify|beware|remember|note|make sure|be sure|you (?:should|can|may|will|need|must)|when |if )|\b(?:requires?|required|by law|state law|whoever you hire|any (?:plumber|contractor|company)|tips?)\b/i;
 // Never quote a sentence about complaints or legal trouble under a positive label.
-const RISKY_RE = /\b(?:complaints?|lawsuits?|sued|scam|fraud|fined|violations?|f rating|unresolved|warning|accused)\b/i;
+const RISKY_RE = /\b(?:complaints?|lawsuits?|sued|scam|fraud|fined|violations?|f rating|unresolved|warning|accused|busy|slow|rude|poor|bad|worst|terrible|overcharg\w*|no-?shows?|never (?:showed|called|came)|wait\w*|delays?|delayed|cancel\w*|disappoint\w*|unprofessional|mixed|negative)\b/i;
 // "A is 24/7 while B is not", "unlike A, B is licensed": a comparison says nothing safe about either.
-const COMPARE_RE = /\b(?:unlike|whereas|while|vs\.?|versus|compared (?:to|with)|than|instead of|rather than|but|however)\b/i;
+const COMPARE_RE = /\b(?:unlike|whereas|while|vs\.?|versus|compared (?:to|with)|than|instead of|rather than|but|however|outperform\w*|outrank\w*|outshine\w*|beats?|edges? out|tops|trails|lags?|ahead of|better|worse|cheaper|pricier|the same|as well)\b/i;
 const FOLLOW_UP_RE = /^\s*(?:however|but|although|though|yet)\b/i;
 const LIST_JOIN_RE = /^\s*(?:,\s*(?:and\s+|or\s+)?|\s+and\s+|\s+or\s+|\s*&\s*)$/i;
 const BULLET_LINE_RE = /^\s*(?:[-*•]|\d+[.)])\s+/;
+const OBJECT_PREP_RE = /\b(?:with|from|by|to|for|like|near|against|behind|than|over|via|alongside)\s+$/i;
+
+// "Rubber Duck works with Roto-Rooter and offers 24/7": Roto-Rooter is the object, so a descriptor after it is not about it
+// (unless it is an appositive: "with Roto-Rooter, a licensed…").
+function isObjectMention(text, b) {
+  const before = text.slice(Math.max(0, b.pos - 20), b.pos).replace(/\*\*/g, '');
+  if (!OBJECT_PREP_RE.test(before)) return false;
+  const nl = String(b.name || '').length;
+  return !/^\s*,\s*(?:an?|the)\b/i.test(text.slice(b.pos + nl, b.pos + nl + 12));
+}
 
 function lineStartOf(text, pos) {
   return text.lastIndexOf('\n', pos - 1) + 1;
@@ -598,10 +609,11 @@ function signalsFor(answers, isThis) {
     const accept = (sig, key, sb) => {
       if (found.has(key)) return;
       const clause = text.slice(sb.start, sb.end);
-      if (NEGATED_RE.test(clause) || ADVICE_RE.test(cleanSentence(clause)) || RISKY_RE.test(clause) || /\?\s*$/.test(clause)) return;
+      const forNeg = clause.replace(/\bno (?:hidden|surprise) (?:fees|charges|costs)\b/gi, '');
+      if (NEGATED_RE.test(forNeg) || ADVICE_RE.test(cleanSentence(clause)) || RISKY_RE.test(clause) || /\?\s*$/.test(clause)) return;
       if (FOLLOW_UP_RE.test(text.slice(sb.end, sb.end + 40))) return;
       const quote = cleanSentence(clause);
-      if (quote.length < 12 || quote.length > 400) return;
+      if (quote.length < 4 || quote.length > 400) return;
       found.set(key, { text: quote, engine: a.engine || null });
     };
     list.forEach((b, i) => {
@@ -619,7 +631,9 @@ function signalsFor(answers, isThis) {
           for (const m of sentence.matchAll(re)) {
             const at = sb.start + m.index;
             let owner = -1;
-            for (const k of inSentence) if (list[k].pos <= at) owner = k;
+            for (const k of inSentence) if (list[k].pos <= at && !isObjectMention(text, list[k])) owner = k;
+            // a new capitalised subject between the name and the descriptor, without a recorded mention ("…; Varsity is licensed")
+            if (owner >= 0 && /[;:]\s*[A-Z][a-z]+\b|,\s+(?:and\s+)?[A-Z][a-z]+\s+(?:is|has|offers|provides)\b/.test(text.slice(list[owner].pos + String(list[owner].name || '').length, at))) owner = -2;
             if (owner === -1 && distinct.size === 1) owner = inSentence[0];
             if (owner < 0 || gid[owner] !== gid[i]) continue;
             accept(sig, sig.key, sb);
@@ -633,6 +647,7 @@ function signalsFor(answers, isThis) {
       const le = nl === -1 ? text.length : nl;
       const residual = (text.slice(ls, b.pos) + text.slice(b.pos + nameLen, le)).replace(/[*#>:\-\d.)\s]/g, '');
       if (residual.length > 70 || nl === -1) return;
+      if (new Set(list.filter((x) => x.pos >= ls && x.pos < le).map(idOf)).size > 1) return;
       let pos = le + 1;
       for (let n = 0; n < 12 && pos < text.length; n++) {
         const e2 = text.indexOf('\n', pos);
@@ -640,7 +655,10 @@ function signalsFor(answers, isThis) {
         const line = text.slice(pos, lineEnd);
         if (!line.trim() || /^\s*(?:#{1,6}\s|---+|\*\*\*)/.test(line)) break;
         if (list.some((x) => x.pos >= pos && x.pos < lineEnd)) break;
-        if (!BULLET_LINE_RE.test(line) && !/^\s+\S/.test(line)) break;
+        if (!BULLET_LINE_RE.test(line) && !/^\s+\S/.test(line)) {
+          if (n === 0) { pos = lineEnd + 1; continue; } // one plain line ("A well-known name.") before the bullets is skipped, never credited
+          break;
+        }
         for (const sig of MATCH_SIGNALS) {
           if (!sig.re || found.has(sig.key)) continue;
           const re = new RegExp(sig.re.source, sig.re.flags.includes('g') ? sig.re.flags : `${sig.re.flags}g`);
@@ -715,10 +733,22 @@ export function buildMatchList(report, competitors, youReviews) {
         const stars = typeof r.rating === 'number' ? ` at ${r.rating} stars` : '';
         return { has, evidence: { text: yc === null ? `${r.count} Google reviews${stars}. We couldn't find yours.` : `${r.count} Google reviews${stars}, to your ${yc}.` } };
       });
+    } else if (sig.key === 'ratingHigher') {
+      const yr = youReviews && typeof youReviews.rating === 'number' ? youReviews.rating : null;
+      rivals = competitors.map((c) => {
+        const r = c.reviews;
+        const has = !!(yr !== null && r && typeof r.rating === 'number' && r.rating > yr);
+        return { has, evidence: has ? { text: `A ${r.rating} Google rating, to your ${yr}.` } : null };
+      });
     } else if (sig.key === 'directories') {
       rivals = competitors.map((c) => ({ has: c.sources.length > 0, evidence: c.sources.length ? { domains: c.sources.slice(0, 3).map((x) => x.domain) } : null }));
     } else {
-      rivals = rivalSignals.map((m) => { const e = m.get(sig.key); return { has: !!e, evidence: e || null }; });
+      rivals = rivalSignals.map((m, i) => {
+        const e = m.get(sig.key);
+        // A cited Better Business Bureau page that lists them is direct evidence of a BBB profile.
+        const bbb = sig.key === 'bbb' && !e && (competitors[i].sources || []).some((x) => /(^|\.)bbb\.org$/i.test(String(x.domain || '')));
+        return bbb ? { has: true, evidence: { domains: ['bbb.org'] } } : { has: !!e, evidence: e || null };
+      });
       you = yourSignals.has(sig.key);
     }
     const rivalCount = rivals.filter((r) => r.has).length;
@@ -788,7 +818,7 @@ export function buildCompetitorBreakdown(report) {
       const p = match.pages.find((x) => x.competitor === c.name && x.kind === 'town-page');
       if (p && !match.youTownPage) c.edges = [`AI cited their page for ${town} (${p.domain}). It cited none from your site.`, ...c.edges].slice(0, 5);
       c.pages = match.pages.filter((x) => x.competitor === c.name);
-      c.says = MATCH_SIGNALS.filter((sg) => sg.re).map((sg) => { const row = match.rows.find((rw) => rw.key === sg.key); const cell = row && row.rivals[competitors.indexOf(c)]; return cell && cell.has ? { key: sg.key, label: sg.label, text: cell.evidence.text, engine: cell.evidence.engine } : null; }).filter(Boolean);
+      c.says = MATCH_SIGNALS.filter((sg) => sg.re).map((sg) => { const row = match.rows.find((rw) => rw.key === sg.key); const cell = row && row.rivals[competitors.indexOf(c)]; return cell && cell.has && cell.evidence && cell.evidence.text ? { key: sg.key, label: sg.label, text: cell.evidence.text, engine: cell.evidence.engine } : null; }).filter(Boolean);
     });
   }
   return { you: { named: t.namedYou, first: t.firstYou, answers: t.answers, reviews: youReviews }, competitors, match };

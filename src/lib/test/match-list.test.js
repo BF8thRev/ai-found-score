@@ -118,7 +118,7 @@ test('match list: what the top businesses show, with evidence, and you at zero',
   assert.equal(rowOf(m, 'pricing').rivals[idx('Rubber Duck Plumbing')].has, true);
   // every quoted sentence is word for word from an answer
   const texts = makeReport().answers.map((a) => a.text.replace(/\*\*/g, ''));
-  for (const r of m.rows) for (const c of r.rivals) if (c.evidence && c.evidence.text && r.key !== 'reviewsCount') assert.ok(texts.some((t) => t.includes(c.evidence.text)), `verbatim: ${c.evidence.text}`);
+  for (const r of m.rows) for (const c of r.rivals) if (c.evidence && c.evidence.text && !['reviewsCount', 'ratingHigher'].includes(r.key)) assert.ok(texts.some((t) => t.includes(c.evidence.text)), `verbatim: ${c.evidence.text}`);
   // the owner was never named, so nothing is credited to them
   assert.equal(m.youCount, 0);
   assert.ok(m.total >= 5);
@@ -652,4 +652,85 @@ test('bullets under a full sentence are not under a heading: only a line that is
   assert.deepEqual(ticks(rival(text)), []);
   const label = ['**Roto-Rooter** (best for late nights):', '* Offers 24/7 emergency service.'].join('\n');
   assert.deepEqual(ticks(rival(label)), ['emergency']);
+});
+
+// ---------------------------------------------------------------------------
+// Round 3 of the accuracy audit (30 realistic answers: 97% precise; these are the 7 patterns that were wrong).
+// ---------------------------------------------------------------------------
+const NAMES = ['Rubber Duck Plumbing', 'Roto-Rooter', 'Varsity Home Service'];
+
+test('a name after "with", "from", "by" is the object, not the subject: the descriptor is about the subject', () => {
+  assert.deepEqual(several('Rubber Duck Plumbing works with Roto-Rooter on large jobs and offers 24/7 emergency service.', NAMES.slice(0, 2)), { 'Rubber Duck Plumbing': ['emergency'], 'Roto-Rooter': [] });
+  assert.deepEqual(several('Rubber Duck Plumbing partners with Varsity Home Service, and offers free estimates.', [NAMES[0], NAMES[2]]), { 'Rubber Duck Plumbing': ['pricing'], 'Varsity Home Service': [] });
+  assert.deepEqual(several('Roto-Rooter, which partnered with Varsity Home Service, is licensed.', [NAMES[1], NAMES[2]]), { 'Roto-Rooter': ['licensed'], 'Varsity Home Service': [] });
+  // an appositive is about the object; a verb like "hired" is not a preposition
+  assert.deepEqual(several('Customers hired Varsity Home Service, which is licensed and insured.', [NAMES[2], NAMES[1]]), { 'Varsity Home Service': ['licensed'], 'Roto-Rooter': [] });
+});
+
+test('comparison verbs never tick either side: outperforms, edges out, beats, tops, better than', () => {
+  for (const text of [
+    'Rubber Duck Plumbing outperforms Roto-Rooter on upfront pricing.',
+    'Rubber Duck Plumbing edges out Roto-Rooter for 24/7 emergency service.',
+    'Rubber Duck Plumbing beat Roto-Rooter for the Best of Long Island award.',
+    'Rubber Duck Plumbing tops Roto-Rooter in free estimates.',
+    'Rubber Duck Plumbing is better than Roto-Rooter for licensed work.',
+  ]) assert.deepEqual(several(text, NAMES.slice(0, 2)), { 'Rubber Duck Plumbing': [], 'Roto-Rooter': [] }, text);
+});
+
+test('an unrecorded second subject ("…or Varsity will help; Varsity is licensed") is not credited to the recorded name', () => {
+  const text = 'Rubber Duck Plumbing or a shop like Varsity will help; Varsity is licensed.';
+  assert.deepEqual(several(text, [NAMES[0]]), { 'Rubber Duck Plumbing': [] });
+});
+
+test('a heading that names two businesses ("A vs. B") gives its bullets to neither', () => {
+  const text = ['### Rubber Duck Plumbing vs. Roto-Rooter', '* Winner: 24/7 emergency service', '* Free estimates'].join('\n');
+  assert.deepEqual(several(text, NAMES.slice(0, 2)), { 'Rubber Duck Plumbing': [], 'Roto-Rooter': [] });
+});
+
+test('complaints and bad experiences are never quoted under a positive label ("line is always busy", "cancelled", "late")', () => {
+  for (const text of [
+    'Customers say Roto-Rooter’s 24/7 line is always busy.',
+    'Roto-Rooter’s 24/7 line was busy for an hour.',
+    'An award-winning chain, Roto-Rooter cancelled our appointment.',
+    'Roto-Rooter is licensed but reviewers mention delays.',
+    'Roto-Rooter offers 24/7 service, though the wait was long and staff were rude.',
+    'Roto-Rooter has upfront pricing but it was a poor experience.',
+  ]) assert.deepEqual(ticks(rival(text)), [], text);
+  assert.deepEqual(ticks(rival('Roto-Rooter offers 24/7 late-night emergency service.')), ['emergency'], 'a plain "late-night" is fine');
+});
+
+test('"no hidden fees" and "no surprise charges" are pluses, not negations', () => {
+  assert.deepEqual(ticks(rival('Roto-Rooter offers upfront pricing with no hidden fees.')), ['pricing']);
+  assert.deepEqual(ticks(rival('Roto-Rooter has flat-rate jobs and no surprise charges.')), ['pricing']);
+  assert.deepEqual(ticks(rival('Roto-Rooter has no upfront pricing.')), [], 'a real negation still blocks');
+});
+
+test('terse bullets count when they sit under a heading of one name, and one plain line before them is skipped', () => {
+  assert.deepEqual(ticks(rival(['### Roto-Rooter', '* 24/7', '* Free estimates'].join('\n'))), ['emergency', 'pricing']);
+  assert.deepEqual(ticks(rival(['### Roto-Rooter', 'A well-known national name.', '* Available 24/7'].join('\n'))), ['emergency']);
+  assert.deepEqual(ticks(rival(['### Roto-Rooter', 'Offers 24/7 emergency service.'].join('\n'))), [], 'the plain line itself is never credited');
+});
+
+test('a higher Google rating and a BBB profile shown by a cited BBB page are data-backed rows', () => {
+  const bd = buildCompetitorBreakdown(makeReport());
+  const rr = bd.competitors.findIndex((c) => c.name === 'Roto-Rooter');
+  const rating = rowOf(bd.match, 'ratingHigher');
+  assert.ok(rating);
+  assert.equal(rating.rivals[rr].evidence.text, 'A 4.5 Google rating, to your 4.1.');
+  assert.equal(rating.rivals[bd.competitors.findIndex((c) => c.name === 'Varsity Home Service')].has, false, 'no rating data: not claimed');
+  assert.equal(rowOf(buildCompetitorBreakdown(makeReport({ reviews: { you: { rating: 4.9, count: 5 }, competitors: [{ name: 'Roto-Rooter', rating: 4.5, count: 300 }] } })).match, 'ratingHigher'), undefined, 'a lower rating is never claimed');
+  assert.equal(rowOf(buildCompetitorBreakdown(makeReport({ reviews: { you: null, competitors: [{ name: 'Roto-Rooter', rating: 4.5, count: 300 }] } })).match, 'ratingHigher'), undefined, 'no owner rating: not claimed');
+  const rep = makeReport({ sources: [{ domain: 'bbb.org', url: 'https://www.bbb.org/us/ny/x/profile/plumber/rubber-duck', citedIn: ['a3'], youListed: false, topListed: 'Rubber Duck Plumbing', listed: ['Rubber Duck Plumbing'] }] });
+  const bd2 = buildCompetitorBreakdown(rep);
+  const bbb = rowOf(bd2.match, 'bbb');
+  const d = bd2.competitors.findIndex((c) => c.name === 'Rubber Duck Plumbing');
+  assert.equal(bbb.rivals[d].has, true, 'a cited BBB page that lists them');
+  assert.deepEqual(bbb.rivals[d].evidence, { domains: ['bbb.org'] });
+  assert.equal(bbb.rivals[bd2.competitors.findIndex((c) => c.name === 'Roto-Rooter')].has, false, 'and only them');
+});
+
+test('rows without a quote never make an empty "AI said" line on the page', () => {
+  const rep = makeReport({ sources: [{ domain: 'bbb.org', url: 'https://www.bbb.org/us/ny/x/profile/plumber/varsity', citedIn: ['a3'], youListed: false, topListed: 'Varsity Home Service', listed: ['Varsity Home Service'] }] });
+  const bd = buildCompetitorBreakdown(rep);
+  for (const c of bd.competitors) for (const sy of c.says) assert.ok(typeof sy.text === 'string' && sy.text.length >= 4);
 });
