@@ -299,7 +299,8 @@
 @media (max-width: 480px) { .r2-fixtile .n { font-size: 36px; } .r2-fixtile .l { font-size: 14px; } }
 
 /* Early offer strip under the short version. */
-.r2-strip { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 26px 0 0; padding: 16px 20px; border-radius: 14px; background: #E8F0FE; border: 2px solid #1A5FD0; }
+.r2-strip { margin: 26px 0 0; padding: 16px 20px; border-radius: 14px; background: #E8F0FE; border: 2px solid #1A5FD0; }
+.r2-strip-main { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .r2-strip-t { flex: 1 1 260px; min-width: 0; color: #14213A; font-size: 17px; }
 .r2-strip-t b { display: block; font-size: 19px; color: #0B2A5B; }
 .r2-strip-t span { font-size: 15px; }
@@ -322,3 +323,59 @@ details.r2-method p { margin: 8px 0 0; }
 @media (prefers-reduced-motion: no-preference) { .r2-skel-card, .r2-skel-line { animation: r2-pulse 1.4s ease-in-out infinite; } }
 @keyframes r2-pulse { 50% { opacity: .55; } }
 .r2-skel .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* The competitor in the result sentence: amber highlight, dark text (never orange text on white). */
+.r2-rival { background: #FFC857; color: #14213A; padding: 0 8px; border-radius: 8px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+
+/* ---- Score: compact card with a three-zone meter (report.js scoreV2) ---- */
+.r2-band-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 300px); }
+.r2-band-grid.noscore { grid-template-columns: minmax(0, 1fr); }
+.r2-band .r2-score { --c: #B42318; --t: #FDECEA; --tx: #9B1C12; display: block; border: 0; border-radius: 14px; padding: 14px 16px 6px; background: #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, .28); }
+.r2-band .r2-score.mixed { --c: #B45309; --t: #FFF4E0; --tx: #7A4A0B; }
+.r2-band .r2-score.strong { --c: #1E7B4F; --t: #E2F4E8; --tx: #0F5A35; }
+.r2-sc-k { margin: 0; font-size: 12.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #14213A; }
+.r2-sc-num { margin: 2px 0 10px; display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; line-height: 1; color: var(--c); }
+.r2-sc-num b { font-size: 46px; font-weight: 800; letter-spacing: -.03em; }
+.r2-sc-num span { font-size: 18px; font-weight: 700; color: #3D4858; }
+.r2-sc-pill { font-style: normal; font-size: 14px; font-weight: 800; padding: 3px 10px; border-radius: 999px; margin-left: 8px; background: var(--t); color: var(--tx); align-self: center; }
+.r2-sc-meter { position: relative; display: grid; grid-template-columns: 40fr 30fr 30fr; gap: 3px; height: 10px; }
+.r2-sc-meter i { border-radius: 5px; background: #E6EAF1; }
+.r2-sc-meter i:nth-child(1) { background: #F4B8B0; }
+.r2-sc-meter i:nth-child(2) { background: #F7D9A4; }
+.r2-sc-meter i:nth-child(3) { background: #A9D8BE; }
+.r2-sc-meter::after { content: ""; position: absolute; top: -4px; left: calc(var(--n) * 1%); width: 6px; height: 18px; border-radius: 3px; background: var(--c); box-shadow: 0 0 0 2px #fff; transform: translateX(calc(var(--n) * -1%)); }
+.r2-sc-scale { display: grid; grid-template-columns: 40fr 30fr 30fr; margin-top: 5px; font-size: 12.5px; font-weight: 700; color: #3D4858; }
+.r2-sc-scale span:nth-child(2) { padding-left: 3px; }
+.r2-sc-verdict { margin: 8px 0 0; font-size: 15.5px; line-height: 1.3; font-weight: 700; color: #14213A; }
+.r2-band .r2-score-how { margin: 4px 0 0; }
+.r2-band .r2-score-how summary { color: #1A5FD0; text-decoration: underline; }
+@media (max-width: 720px) { .r2-band-grid { grid-template-columns: minmax(0, 1fr); } .r2-sc-num b { font-size: 40px; } }
+
+/* ---- Won / Lost line under each question in "Every question, every answer" ---- */
+.r2-qv { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px; font-size: 15.5px; color: #14213A; }
+.r2-qv .r2-verdict-badge { flex: none; min-width: 70px; text-align: center; font-weight: 800; font-size: 14px; border-radius: 8px; padding: 4px 10px; color: #fff; }
+.r2-qv.lost .r2-verdict-badge { background: #B42318; }
+.r2-qv.won .r2-verdict-badge { background: #1E7B4F; }
+
+/* ---- review fixes: long names wrap; blue text on light grey passes; 44px tap targets ---- */
+.report-section .sub, .r2-ans p, .r2-ans, .r2-line, .ob-found li { overflow-wrap: anywhere; min-width: 0; }
+.report-page .ob-kicker, .report-page .site-footer a { color: #1A5FD0; }
+.report-page .site-footer .footer-brand a { color: inherit; }
+.report-page summary { min-height: 44px; display: flex; align-items: center; }
+.report-page .btn-secondary, .report-page .r2-src a { min-height: 44px; display: inline-flex; align-items: center; }
+details.r2-method { border-top: 0; padding-top: 0; }
+
+/* Email capture inside the offer strip. */
+.r2-strip-lead { margin-top: 14px; padding-top: 14px; border-top: 1px solid #A9C2EE; }
+.r2-strip .lead-form { border: 0; padding: 0; margin: 0; background: transparent; }
+.r2-strip .lead-form label { font-size: 16px; margin-bottom: 8px; }
+.r2-strip .lead-form[hidden] { display: none; }
+
+/* Round 2 review fixes */
+.r2-strip-lead[hidden] { display: none; }
+.r2-hero .q, h3.r2-q { overflow-wrap: anywhere; }
+.ob-small, .trust-foot { font-size: 14px; }
+.r2-hero-read a { min-height: 44px; display: inline-flex; align-items: center; }
+.ob-sample { padding: 12px 0; }
+.r2-site-listing { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: #FDF1EF; font-size: 15.5px; line-height: 1.45; color: #14213A; overflow-wrap: anywhere; }
+.r2-site-listing span { font-weight: 800; color: #B42318; margin-right: 6px; }
