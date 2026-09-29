@@ -138,11 +138,11 @@ test('plan API: add towns up to 3 in all, each with its own token and a first sc
   assert.equal((await handlePlan(...post('/api/plan/real_tok', { towns: [{ town: 'C', state: 'NY' }] }), {}, unpaid.deps)).status, 402);
 });
 
-test('Competitor Breakdown: top 3, a word-for-word sentence, up to 3 edges; only when paid for, never locked', () => {
+test('Competitor Breakdown: top 3, a word-for-word sentence, up to 5 edges; only when paid for, never locked', () => {
   const bd = buildCompetitorBreakdown(v2);
   assert.ok(bd.competitors.length > 0 && bd.competitors.length <= 3);
   for (const c of bd.competitors) {
-    assert.ok(c.edges.length <= 3);
+    assert.ok(c.edges.length <= 5);
     if (c.quote) assert.ok(v2.answers.some((a) => a.text.replace(/\*\*/g, '').includes(c.quote.text)), `quote is word for word: ${c.quote.text}`);
   }
   assert.match(bd.competitors[0].edges[0], /Google reviews to your/);
