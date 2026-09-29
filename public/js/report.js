@@ -586,7 +586,7 @@ function leadForm(where) {
   const pending = where === 'pending';
   return `
     <form class="lead-form" data-where="${where}" novalidate>
-      <label for="lead-email-${where}">${pending ? 'Email me when it’s ready' : where === 'strip' ? 'Not ready to buy? Get this report by email.' : 'Not ready? Keep a copy.'}</label>
+      <label for="lead-email-${where}">${pending ? 'Email me when it’s ready' : where === 'strip' ? 'Not ready? We’ll email you this report so you can come back to it.' : 'Not ready? Keep a copy.'}</label>
       <div class="lead-row">
         <input id="lead-email-${where}" name="email" type="email" required autocomplete="email" placeholder="you@yourbusiness.com">
         <input class="hp" name="company_url" tabindex="-1" autocomplete="off" aria-hidden="true">
@@ -822,6 +822,7 @@ function renderV2(root, report) {
     recheck: paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
     strip: offerStripV2({ report, severity, xrayOk, count: issues.length }),
     who: nobodyTwice ? '' : whoAiNamesV2({ report, b, t, N, cw, proven }),
+    why: xrayOk && lostAnswerIds.size ? whySkipV2({ report, b, ownDomain }) : '',
     sources: sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     facts: factsV2({ report, b, aById }),
     site: siteV2(report),
@@ -838,7 +839,7 @@ function renderV2(root, report) {
   // the reference material (listings, every answer) after the buy button. Everything else keeps the
   // findings-first order.
   const order = xrayOk
-    ? ['verdict', 'who', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'sources', 'facts', 'site', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
+    ? ['verdict', 'who', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'why', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
     : ['verdict', 'hero', 'baseline', 'plan', 'recheck', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method'];
 
   root.innerHTML = [
@@ -859,14 +860,14 @@ function renderV2(root, report) {
     const d = document.getElementById('ans-' + link.dataset.open);
     if (!d) return;
     e.preventDefault();
-    d.open = true;
+    openAnswer(d);
     d.scrollIntoView({ behavior: 'smooth', block: 'start' });
     try { history.replaceState(null, '', '#ans-' + link.dataset.open); } catch {}
   });
   const hash = location.hash.match(/^#ans-(.+)$/);
   if (hash) {
     const d = document.getElementById('ans-' + hash[1]);
-    if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); }
+    if (d) { openAnswer(d); d.scrollIntoView({ block: 'start' }); }
   }
 }
 
@@ -898,7 +899,7 @@ function fullScanNote() {
 }
 
 // 1. Hero: one real search, and who it named, in the order AI named them.
-const HERO_ROWS = 4;
+const HERO_ROWS = 3;
 function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }) {
   const h = aById[report.headline?.answerId] || answers[0];
   if (!h) return '';
@@ -1001,7 +1002,7 @@ function scoreV2(report) {
         <p class="r2-score-note">Our own 0 to 100 measure, not a rating from any AI company.</p>
         <ul class="r2-score-parts">${rows}
         </ul>
-        <p class="r2-score-note">We compute it only from the answers in this report: how often you were named (50%), named first (25%), whether the facts AI stated about you were right (15%) and whether AI cited your website (10%). A part we couldn&rsquo;t check is left out and the rest are scaled to 100. AI answers change, so the score can change from scan to scan.</p>
+        <p class="r2-score-note">Computed only from the answers in this report. A part we couldn&rsquo;t check is left out and the rest are scaled to 100. AI answers change, so the score can too.</p>
       </details>
     </div>`;
 }
@@ -1058,13 +1059,18 @@ function whoAiNamesV2({ report, b, t, N, cw, proven }) {
   return `
     <section class="report-section" id="who">
       <h2>Who got the call instead</h2>
-      <p class="sub">Businesses AI recommended more than once. Dark bar = mentioned first.</p>
+      <p class="sub">Businesses AI recommended more than once. The dark part of each bar is how often it was the first pick.</p>
       <div class="r2-bars">
         ${row(b.name, t.namedYou, t.firstYou, true)}
         ${proven.map((e) => row(e.name, num(e.named), num(e.first), false)).join('')}
       </div>
       ${once ? `<p class="r2-once">+ ${once} other ${plural(once, 'business', 'businesses')} named once each.</p>` : ''}
     </section>`;
+}
+
+// Opens an answer and any closed group around it, so links to an answer always land on something visible.
+function openAnswer(d) {
+  for (let p = d; p; p = p.parentElement) if (p.tagName === 'DETAILS') p.open = true;
 }
 
 function markFor(a) {
@@ -1156,7 +1162,60 @@ function listingLineV2(listings) {
   const bad = (listings || []).filter((l) => l && l.status === 'mismatch');
   if (!bad.length) return '';
   const names = listJoin(bad.map((l) => escapeHtml(l.platform || 'A')));
-  return `<p class="r2-site-listing"><span aria-hidden="true">✗</span> Your ${names} ${plural(bad.length, 'listing shows', 'listings show')} details that don’t match your website. When listings disagree, AI can repeat the wrong one.</p>`;
+  return `<p class="r2-site-listing"><span aria-hidden="true">✗</span> Your ${names} ${plural(bad.length, 'listing doesn’t', 'listings don’t')} match your website, or we couldn’t find ${plural(bad.length, 'it', 'them')}. When sources disagree, AI can repeat the wrong details.</p>`;
+}
+
+// The first real website an answer we can show used (never the owner's own), with its page address, so the
+// owner can open it and see for themselves.
+function citedExampleV2(answers, ownDomain) {
+  for (const a of answers || []) {
+    for (const c of (a && a.citations) || []) {
+      const d = String((c && c.domain) || '').replace(/^www\./, '').toLowerCase();
+      if (!d || d === ownDomain || !/^https?:\/\//i.test(String(c.url || ''))) continue;
+      return { engine: a.engine, domain: d, url: c.url };
+    }
+  }
+  return null;
+}
+
+// "Why AI skips you" on a free report with the offer: what the locked report can honestly say about why
+// AI picks someone else, in three short lines. Nothing here is withheld data: the tallies, the pass/fail
+// count, the listing platform and one cited page from an answer that is shown in full.
+function whySkipV2({ report, b, ownDomain }) {
+  const rows = [];
+  const sum = report.sourcesSummary;
+  if (sum && num(sum.cited)) {
+    const eg = citedExampleV2(report.answers, ownDomain);
+    rows.push(`
+      <div class="r2-why-row"><span class="x" aria-hidden="true">✗</span><div>
+        <p>AI used <b>${num(sum.cited)} web ${plural(num(sum.cited), 'page', 'pages')}</b> to build the answers that didn’t mention you.${num(sum.missingYou) ? ` <b>${num(sum.missingYou)} of the pages we could check ${plural(num(sum.missingYou), 'lists', 'list')} other ${escapeHtml(tradePlural(b.trade))} and not you.</b>` : ''}</p>
+        ${eg ? `<p class="r2-why-eg">Check one yourself: ${escapeHtml(engineName(eg.engine))}’s answer above used <a href="${safeHref(eg.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(eg.domain)}</a>. Open it and see who it lists.</p>` : ''}
+      </div></div>`);
+  }
+  const sc = report.siteCheck;
+  if (sc && sc.url && sc.locked) {
+    const failedN = Math.max(0, num(sc.checks) - num(sc.passed));
+    if (!sc.reachable) {
+      rows.push('<div class="r2-why-row"><span class="x" aria-hidden="true">✗</span><div><p>We couldn’t load your website. AI can’t read a site that doesn’t load.</p></div></div>');
+    } else if (failedN) {
+      rows.push(`
+      <div class="r2-why-row"><span class="x" aria-hidden="true">✗</span><div>
+        <p><b>${failedN} of ${num(sc.checks)}</b> website checks failed. They make your site harder for AI to read.</p>
+        ${num(sc.checks) > 0 ? siteMeterV2(num(sc.checks), num(sc.passed)) : ''}
+        <p class="r2-why-eg">Which ${failedN === 1 ? 'one' : 'ones'}, and the exact ${failedN === 1 ? 'fix' : 'fixes'}, ${failedN === 1 ? 'is' : 'are'} in the audit.</p>
+      </div></div>`);
+    } else if (num(sc.checks) > 0) {
+      rows.push(`<div class="r2-why-row"><span class="ok" aria-hidden="true">✓</span><div><p>Your website passed all ${num(sc.checks)} checks.</p></div></div>`);
+    }
+  }
+  const listing = listingLineV2(report.listings);
+  if (!rows.length && !listing) return '';
+  return `
+    <section class="report-section r2-why">
+      <h2>Why AI skips you</h2>
+      ${rows.join('')}
+      ${listing}
+    </section>`;
 }
 
 // One segment per check: green passed, red failed. Says nothing about which checks (locked).
@@ -1243,7 +1302,7 @@ function siteV2(report) {
     const verdict = !sc.reachable
       ? '<li class="bad"><span aria-hidden="true">✗</span> We couldn’t load your website. AI can’t read a site that doesn’t load.</li>'
       : failedN
-        ? `<li class="bad"><span aria-hidden="true">✗</span> ${failedN} ${plural(failedN, 'problem', 'problems')} on your website could make AI skip you.</li>`
+        ? `<li class="bad"><span aria-hidden="true">✗</span> ${failedN} of ${num(sc.checks)} website checks failed. They make your site harder for AI to read.</li>`
         : `<li class="ok"><span aria-hidden="true">✓</span> All ${num(sc.checks)} checks passed.</li>`;
     return `
     <section class="report-section r2-site">
@@ -1381,7 +1440,7 @@ function issuesV2({ issues, locked, xrayOk, name = '', specificCount = null }) {
         ${issues.slice(0, 4).map((i, n) => `<li><span class="badge ${escapeHtml(i.severity || 'low')}">${escapeHtml(severityLabel(i.severity || 'low'))}</span><span class="bar" style="width:${[78, 64, 86, 58, 72, 66][n]}%" aria-hidden="true"></span><span class="lock" aria-hidden="true">🔒</span></li>`).join('')}
       </ol>
       ${issues.length > 4 ? `<p class="r2-muted r2-locked-more">and ${issues.length - 4} more.</p>` : ''}
-      ${xrayOk ? unlockPanel() : '<p class="r2-muted">Each problem by name, with the exact steps to fix it, is in the full report.</p>'}
+      ${xrayOk ? '<p class="r2-muted r2-bridge">Every one is fixed step by step in the audit below.</p>' : '<p class="r2-muted">Each problem by name, with the exact steps to fix it, is in the full report.</p>'}
     </section>`;
   }
   return `
@@ -1541,9 +1600,9 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
 
   // The value stack: what each piece does for them, and how much work it is.
   const stack = [
-    ['The Fix Plan', 'Every problem by name, most important first, with the exact steps and the text to copy and paste.', 'Copy and paste'],
-    ['The Fix Kit', 'Ready-made files for your website: business details AI reads, an FAQ page, your Google listing text and a review QR code. Hand them to whoever runs your site.', 'Done for you'],
-    ['The proof', `All 5 customer questions on every AI assistant, every answer word for word, the competitor gap sheet${top ? ` (what AI finds on ${top} that it doesn’t find on you)` : ''}, and a free re-scan in 30 days to show what changed.`, 'Included'],
+    ['The Fix Plan', 'Every problem by name, most important first, with the exact steps and text to paste.', 'Copy and paste'],
+    ['The Fix Kit', 'Ready-made files for your website: business details, an FAQ page, your Google listing text and a review QR code.', 'Done for you'],
+    ['The proof', `Every answer word for word, ${top ? `what AI finds on ${top} but not on you` : 'what AI finds on your rivals but not on you'}, and a free 30-day re-scan.`, 'Included'],
   ];
   const addon = hasCompetitors && tierOn('competitor_breakdown') ? `
           <label class="ob-addon">
@@ -1563,7 +1622,6 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
         <h2 id="offer-title">${title}</h2>
         <p class="ob-lede">${lede}</p>
       </div>
-      <p class="ob-bridge">The free report shows <em>what</em> is wrong. The audit shows you <em>how to fix every one</em>, and hands you the files to do it.</p>
       <div class="ob-grid">
         <div class="ob-gets">
           <h3>Everything in the audit</h3>
@@ -1577,7 +1635,6 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
           ${wrongPhone ? `<p class="ob-urgent">If ${escapeHtml(wrongPhone.aiSays)} isn’t a number you answer, every customer who gets it from ${escapeHtml(engineName(aById[wrongPhone.answerId]?.engine))} is a call you miss.</p>` : ''}
           ${report.sample ? '' : '<a class="ob-sample" href="/report/sample-001">See a sample report first</a>'}
           <p class="ob-secure">${ICON.lock}Secure checkout by Stripe. We never see your card.</p>
-          <p class="trust-cards" aria-label="Cards accepted"><span>VISA</span><span>MASTERCARD</span><span>AMEX</span><span>DISCOVER</span></p>
           <div class="ob-promise">${ICON.shield}<p><b>The 3-problem promise.</b> This report already found ${num(specificFixCount)} problems specific to ${name}. If the audit finds fewer than 3, email us within 30 days and you get your $49 back.</p></div>
           <p class="ob-small">No logins, ever. We never touch your website or accounts. Questions first? <a href="mailto:hello@aifoundscore.com">hello@aifoundscore.com</a></p>
           ${tierOn('be_the_answer') ? '<p class="ob-small">Later, our year-long plan (Be the Answer, $499) counts every dollar you paid toward it.</p>' : ''}
@@ -1644,6 +1701,7 @@ function answersV2({ questions, answers, failedNote = '' }) {
     return `
       <h3 class="r2-q">“${escapeHtml(q.text)}”</h3>
       ${verdict}
+      <details class="r2-qans"><summary>Read the ${qa.length} ${plural(qa.length, 'answer', 'answers')}</summary>
       ${qa.map((a) => {
         const m = markFor(a);
         const cites = (a.citations || []).filter((c) => c && c.url);
@@ -1669,7 +1727,8 @@ function answersV2({ questions, answers, failedNote = '' }) {
               : '<p class="r2-src">No sources cited.</p>'}
           </div>
         </details>`;
-      }).join('')}`;
+      }).join('')}
+      </details>`;
   }).join('');
   const hasUnsure = answers.some((a) => a.ownerMatch === 'unsure' && !a.namedYou);
   return `

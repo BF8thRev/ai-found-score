@@ -123,8 +123,6 @@
 @media (max-width: 900px) { .ob-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .offer-band { padding: 26px 18px 20px; margin: 40px 0; } }
 
-.ob-bridge { margin: 20px 0 0; font-size: 17px; font-weight: 600; color: var(--navy); }
-.ob-bridge em { font-style: normal; background: #FFE7B8; padding: 0 3px; border-radius: 3px; }
 .ob-stack { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: stk; }
 .ob-stack li { counter-increment: stk; display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .ob-stack li::before { content: counter(stk); flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
@@ -379,3 +377,22 @@ details.r2-method { border-top: 0; padding-top: 0; }
 .ob-sample { padding: 12px 0; }
 .r2-site-listing { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: #FDF1EF; font-size: 15.5px; line-height: 1.45; color: #14213A; overflow-wrap: anywhere; }
 .r2-site-listing span { font-weight: 800; color: #B42318; margin-right: 6px; }
+
+/* Why AI skips you: three short lines. */
+.r2-why-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); }
+.r2-why-row:first-of-type { border-top: 0; }
+.r2-why-row .x, .r2-why-row .ok { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 15px; margin-top: 1px; }
+.r2-why-row .x { background: #FDECEA; color: #9B1C12; }
+.r2-why-row .ok { background: #E2F4E8; color: #0F5A35; }
+.r2-why-row > div { min-width: 0; flex: 1; }
+.r2-why-row p { margin: 0; font-size: 17px; line-height: 1.45; color: #14213A; overflow-wrap: anywhere; }
+.r2-why-row .r2-why-eg { margin-top: 6px; font-size: 15px; color: #3D4858; }
+.r2-why-row .r2-why-eg a { color: #1A5FD0; text-decoration: underline; overflow-wrap: anywhere; }
+.r2-why .r2-meter { margin: 10px 0 4px; }
+.r2-why .r2-site-listing { margin-top: 6px; }
+.r2-bridge { margin-top: 12px; font-size: 16px; }
+
+/* Round 3 review fixes */
+.r2-why-eg a, .ob-small a { display: inline-block; padding: 10px 0; }
+.r2-qans { margin-top: 6px; }
+.r2-qans > summary { cursor: pointer; font-weight: 700; color: #1A5FD0; text-decoration: underline; }

@@ -28,7 +28,7 @@ function load({ tier = true } = {}) {
   vm.runInContext(src, ctx);
   return ctx;
 }
-const locked = () => reportBody(MOCK_REPORTS['sample-001'], false);
+const locked = () => structuredClone(reportBody(MOCK_REPORTS['sample-001'], false));
 const render = (ctx, report) => {
   const root = { innerHTML: '', addEventListener() {}, querySelector: () => null };
   ctx.renderV2(root, report);
@@ -61,16 +61,19 @@ test('one-off businesses are summed as "+ N other businesses named once each"', 
   assert.ok(html.includes(`+ ${others} other ${others === 1 ? 'business' : 'businesses'} named once each`), html);
 });
 
-test('websites AI trusted: locked report lists the cited domains it has, never the withheld source list', () => {
+test('websites AI used: on a free report with the offer, ONE real cited page to check; never the withheld source list', () => {
   const r = load();
   const rep = locked();
   const html = render(r, rep);
-  const domains = rep.answers.flatMap((a) => (a.citations || []).map((c) => c.domain));
-  assert.ok(domains.length, 'fixture has a cited domain');
-  assert.match(html, /class="r2-cited"/);
-  for (const d of domains.slice(0, 4)) assert.ok(html.includes(d), d);
+  const why = html.slice(html.indexOf('<h2>Why AI skips you</h2>'), html.indexOf('<h2>What to fix</h2>'));
+  const cited = rep.answers.flatMap((a) => (a.citations || []).map((c) => c.url));
+  assert.ok(cited.length, 'fixture has a cited page');
+  const links = [...why.matchAll(/<a href="([^"]+)" rel="nofollow noopener" target="_blank">/g)].map((m) => m[1].replace(/&amp;/g, '&'));
+  assert.equal(links.length, 1, 'exactly one example link');
+  assert.ok(cited.includes(links[0]), 'the example is a page the report really cited');
+  assert.match(why, /Check one yourself: [A-Za-z]+’s answer above used /);
   assert.ok(!rep.sources || rep.sources.length === 0, 'lock.js empties sources');
-  assert.match(html, /🔒 In the full report/);
+  assert.doesNotMatch(why, /r2-cited/);
 });
 
 test('can AI read your website: locked shows a pass/fail meter and the count, never which checks', () => {
@@ -82,7 +85,7 @@ test('can AI read your website: locked shows a pass/fail meter and the count, ne
   const failed = sc.checks - sc.passed;
   assert.equal((html.match(/<i>/g) || []).length, sc.passed);
   assert.equal((html.match(/<i class="f">/g) || []).length, failed);
-  assert.match(html, new RegExp(`${failed} ${failed === 1 ? 'problem' : 'problems'} on your website could make AI skip you`));
+  assert.match(html, new RegExp(`${failed} of ${sc.checks} website checks failed`));
   assert.match(html, /is in the audit/);
   assert.doesNotMatch(html, /robots|schema|sitemap|llms/i);
 });
@@ -124,8 +127,8 @@ test('trade names read as businesses: plumbing → plumbers', () => {
 
 test('report page ships the new script and styles under fresh cache keys', () => {
   const html = readFileSync(new URL('../../../public/report.html', import.meta.url), 'utf8');
-  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 29);
-  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 18);
+  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 31);
+  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 20);
 });
 
 // ---- the top of the page: result, the search card, the short version ----
