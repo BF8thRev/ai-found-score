@@ -888,6 +888,7 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .co-incl { margin: 10px 0 16px; font-size: 14.5px; }
 .co-incl li { padding: 3px 0 3px 24px; }
 .co-line-add { padding-top: 14px; border-top: 1px solid var(--line); margin-bottom: 4px; }
+.co-incl-add { margin-top: 8px; margin-bottom: 4px; }
 .co-total { display: flex; justify-content: space-between; margin-top: 14px; padding-top: 14px; border-top: 2px solid var(--navy); font-size: 20px; font-weight: 800; color: var(--navy); }
 .co-when { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
 .co-guarantee { margin: 14px 0 0; padding: 12px 14px; border-radius: 10px; background: #F0FAF4; color: #124A31; font-size: 14px; line-height: 1.5; }

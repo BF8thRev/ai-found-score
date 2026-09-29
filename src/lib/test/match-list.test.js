@@ -292,7 +292,7 @@ test('the wording sells the value: offer card, paid-page upsell, checkout, email
   assert.match(src, /<strong>See what they have that you don’t\.<\/strong> The Competitor Breakdown \(\$25\) is a scorecard of what the top 3 businesses AI names instead of you show that you don’t/);
   assert.match(PRODUCTS.competitor_breakdown.description, /^A scorecard of what the top 3 businesses AI names instead of you have that you don’t, a “do these first” list, and what AI said about each one, word for word\.$/);
   const checkout = readFileSync(new URL('../../../public/checkout.html', import.meta.url), 'utf8');
-  assert.match(checkout, /See what they have that you don&rsquo;t\. A scorecard of what the top 3 businesses AI names instead of you show that you don&rsquo;t/);
+  assert.match(checkout, /See what the top 3 businesses AI picks over you have that you don&rsquo;t, and what to copy first\./);
   assert.match(checkout, /Competitor Breakdown <em>\+\$25<\/em>/);
   const email = readFileSync(new URL('../email.js', import.meta.url), 'utf8');
   assert.equal((email.match(/a scorecard of what the top 3 businesses AI names instead of you have that you don’t, with a “do these first” list\./g) || []).length, 2);
