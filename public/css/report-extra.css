@@ -454,3 +454,37 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ob-navy .ob-cost { font-size: 16.5px; }
 .ob-get { gap: 8px; }
 .ob-get li { font-size: 16px; }
+
+/* Competitor Match List */
+.r2-match-score { margin: 14px 0 10px; font-size: 20px; line-height: 1.3; color: #14213A; }
+.r2-match-score b { color: #B42318; }
+.r2-match-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 12px; }
+.r2-match { border-collapse: collapse; width: 100%; font-size: 15px; }
+.r2-match th, .r2-match td { padding: 10px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.r2-match tbody tr:last-child th, .r2-match tbody tr:last-child td { border-bottom: 0; }
+.r2-match thead th { font-size: 12.5px; color: #3D4858; font-weight: 700; background: var(--wash); }
+.r2-match tbody th { font-weight: 600; min-width: 190px; color: #14213A; }
+.r2-match th:first-child { position: sticky; left: 0; background: #fff; box-shadow: 1px 0 0 var(--line); z-index: 1; }
+.r2-match thead th:first-child { background: var(--wash); }
+.r2-match .m { text-align: center; min-width: 74px; }
+.r2-match .you { background: #FFF8E6; }
+.r2-match .y { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #E2F4E8; color: #0F5A35; font-weight: 800; }
+.r2-match .n { color: #5A6577; font-weight: 700; }
+.r2-match-h { margin: 26px 0 8px; font-size: 19px; color: var(--navy); }
+.r2-first { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; counter-reset: first; }
+.r2-first li { counter-increment: first; position: relative; padding: 12px 14px 12px 52px; border: 1px solid var(--line); border-radius: 12px; background: #fff; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.r2-first li::before { content: counter(first); position: absolute; left: 14px; top: 12px; width: 28px; height: 28px; border-radius: 50%; background: #0B2A5B; color: #fff; font-weight: 800; display: grid; place-items: center; }
+.r2-first b { color: #14213A; font-size: 16.5px; }
+.r2-first span { color: #14213A; font-size: 15.5px; }
+.r2-first em { font-style: normal; color: #3D4858; font-size: 14px; }
+.r2-says { list-style: none; margin: 6px 0 12px; padding: 0; display: grid; gap: 10px; }
+.r2-says li { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.r2-says .tag { justify-self: start; font-size: 12.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #7A4A0B; background: #FFF4E0; border-radius: 999px; padding: 2px 10px; }
+.r2-says q { font-style: italic; color: #14213A; }
+.r2-says .src { font-size: 13px; color: #3D4858; }
+.r2-says a { color: #1A5FD0; text-decoration: underline; }
+.r2-match-note { margin: 18px 0 0; font-size: 14px; line-height: 1.5; color: #3D4858; }
+
+/* Match List: phone fit, and long quotes wrap. */
+@media (max-width: 600px) { .r2-match tbody th { min-width: 132px; font-size: 14px; } .r2-match .m { min-width: 64px; } }
+.r2-quote { overflow-wrap: anywhere; }

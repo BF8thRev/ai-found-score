@@ -85,7 +85,7 @@ Apply [`supabase/v8_be_the_answer.sql`](supabase/v8_be_the_answer.sql) after `v7
 
 - **Monthly re-scans:** the daily cron runs the 30-day re-check, then `startDueMonthly` (`src/lib/auto-scan.js`): for each live Be the Answer payment, month 1..12 counted from the payment, a full scan of the plan's report and each extra town, once per month (skipped when that report was scanned in the last 20 days). Scans run as the `ScanWorkflow`, so this needs Workers Paid.
 - **Monthly email** (`monthlyEmail`, `src/lib/notify.js`): what changed since the last scan, an alert when the business AI names most is a new one, and the next 3 fixes. Be the Answer buyers get it for the 30-day re-check too, instead of the Be the Answer pitch. A town's email goes to the plan's buyer.
-- **Competitor Breakdown** (`buildCompetitorBreakdown`, `shared/report-v2.js`): the top 3 competitors side by side with the owner, built at serve time from the report's own data. Served on a report paid for `competitor_breakdown` or `be_the_answer` (and on the sample); never on a locked report.
+- **Competitor Breakdown** (`buildCompetitorBreakdown`, `shared/report-v2.js`): a scorecard of what the top 3 competitors show that the owner does not, with a do-these-first list, built at serve time from the report's own data. Served on a report paid for `competitor_breakdown` or `be_the_answer` (and on the sample); never on a locked report.
 - **Fix Kit zip** for a plan also carries `directory-checklist.txt` and `google-posts.txt`.
 
 ## Refunds

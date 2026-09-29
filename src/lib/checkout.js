@@ -30,7 +30,7 @@ import { pendingReportStatus } from './auto-scan.js';
 export const PRICES = Object.freeze({ xray: 4900, competitor_breakdown: 2500, be_the_answer: 49900 });
 export const PRODUCTS = Object.freeze({
   xray: { name: 'AI Visibility Audit', description: 'Every answer word for word, every fix with the text to paste, your Fix Kit, and a free re-check in 30 days to see what your fixes changed.' },
-  competitor_breakdown: { name: 'Competitor Breakdown', description: 'The top 3 businesses AI names instead of you, side by side with you.' },
+  competitor_breakdown: { name: 'Competitor Breakdown', description: 'A scorecard of what the top 3 businesses AI names instead of you have that you don’t, a “do these first” list, and what AI said about each one, word for word.' },
   be_the_answer: { name: 'Be the Answer (one year)', description: 'A re-scan every month in up to 3 towns, a monthly email with your next 3 fixes, competitor alerts, your directory checklist and 12 Google posts.' },
 });
 /** The line under Stripe's Pay button (custom_text.submit.message, max 1,200 characters): the plan's promise. */

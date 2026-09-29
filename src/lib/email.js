@@ -178,7 +178,7 @@ export function receiptEmail(env, { token, name, tier, addons = [], ready = true
   } else if (tier === 'xray') {
     paragraphs.push('Your report is unlocked now. We’re also asking all 5 customer questions again on every AI assistant we check; we’ll email you when those answers are in, usually within the hour.');
     paragraphs.push(`Your Fix Kit is included: check your business details, then download the files and hand them to whoever runs your website. ${kitUrl}`);
-    if (addons.includes('competitor_breakdown')) paragraphs.push('Your Competitor Breakdown is in your report too: the top 3 businesses AI names instead of you, side by side with you.');
+    if (addons.includes('competitor_breakdown')) paragraphs.push('Your Competitor Breakdown is in your report too: a scorecard of what the top 3 businesses AI names instead of you have that you don’t, with a “do these first” list.');
     paragraphs.push('In 30 days we re-scan for free and email you what changed.');
     note = 'Fewer than 3 problems specific to your business? Your $49 back. Just reply.';
   } else if (tier === 'be_the_answer') {
@@ -188,7 +188,7 @@ export function receiptEmail(env, { token, name, tier, addons = [], ready = true
     url = planUrl;
     note = `Your report: ${reportUrl(env, token)}. Not useful in the first 60 days? Full refund. Just reply.`;
   } else if (tier === 'competitor_breakdown') {
-    paragraphs.push('Your Competitor Breakdown is in your report now: the top 3 businesses AI names instead of you, side by side with you.');
+    paragraphs.push('Your Competitor Breakdown is in your report now: a scorecard of what the top 3 businesses AI names instead of you have that you don’t, with a “do these first” list.');
   } else if (tier === 'fix_kit') {
     paragraphs.push('Next: check your business details, then download your Fix Kit and hand it to whoever runs your website.');
     button = 'Get my Fix Kit';

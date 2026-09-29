@@ -293,8 +293,9 @@ function sameBiz(a, b) {
 }
 
 function ownDomain(report) {
-  return String((report && report.business && report.business.website) || '')
-    .replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase();
+  const w = String((report && report.business && report.business.website) || '').trim();
+  if (!w) return '';
+  try { return new URL(/^https?:\/\//i.test(w) ? w : `https://${w}`).hostname.replace(/^www\./i, '').replace(/\.$/, '').toLowerCase(); } catch { return w.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase(); }
 }
 
 /**
@@ -418,7 +419,7 @@ const QUOTE_MIN_WORDS = 6;
 function isSentenceEnd(t, i) {
   const c = t[i];
   if (c === '\n') return true;
-  if (!'.!?'.includes(c) || (i + 1 < t.length && !/\s/.test(t[i + 1]))) return false;
+  if (!'.!?'.includes(c) || (i + 1 < t.length && !/[\s[]/.test(t[i + 1]))) return false;
   if (c !== '.') return true;
   const word = (/([A-Za-z]+)$/.exec(t.slice(Math.max(0, i - 12), i)) || [])[1] || '';
   return !ABBREV.has(word.toLowerCase());
@@ -432,10 +433,307 @@ function sentenceAt(text, pos, len = 0) {
   for (let i = pos - 1; i >= 0; i--) if (isSentenceEnd(t, i)) { start = i + 1; break; }
   let end = t.length;
   for (let i = pos + len; i < t.length; i++) if (isSentenceEnd(t, i)) { end = t[i] === '\n' ? i : i + 1; break; }
-  const out = t.slice(start, end).replace(/^\s*(?:\d+[.)]|[-*•#>])\s*/, '').replace(/\*\*/g, '').trim();
+  const out = t.slice(start, end).replace(/\*\*/g, '').replace(/^\s*(?:#{1,6}\s+)?(?:(?:\d+[.)]|[-*•>])\s+)*/, '').trim();
   const words = out.split(/\s+/).length;
   if (!out || words < QUOTE_MIN_WORDS || words > QUOTE_MAX_WORDS) return null;
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Match List: what the businesses AI names have that the owner doesn't, built ONLY from the report's own
+// answers and the pages AI cited in them. Nothing is fetched. Every "yes" carries its evidence (a
+// sentence an assistant wrote, word for word, or a page AI cited); a "no" only ever means "not seen in
+// this scan", never "they don't have it".
+// ---------------------------------------------------------------------------
+
+const MATCH_STOP = new Set(['the', 'and', 'of', 'inc', 'co', 'llc', 'ltd', 'corp', 'company', 'plumbing', 'plumber', 'plumbers', 'heating',
+  'cooling', 'hvac', 'home', 'homes', 'service', 'services', 'solutions', 'group', 'contractors', 'contracting', 'sewer', 'drain', 'drains',
+  'ny', 'long', 'island', 'suffolk', 'nassau', 'branch', 'county', 'roofing', 'electric', 'electrical', 'air', 'pro', 'pros']);
+
+/** The distinctive letters of a business name ("Rubber Duck Plumbing" → "rubberduck"), or '' when too short to trust. */
+export function nameKey(name, extraStop = []) {
+  const stop = new Set(extraStop.map((x) => String(x).toLowerCase()));
+  const words = String(name || '').toLowerCase().replace(/\([^)]*\)/g, ' ').split(/[^a-z0-9]+/).filter(Boolean)
+    .filter((w) => !MATCH_STOP.has(w) && !stop.has(w));
+  const key = words.join('');
+  return key.length >= 5 ? key : '';
+}
+
+function domainRoot(domain) {
+  const parts = String(domain || '').toLowerCase().replace(/^www\./, '').split('.').filter(Boolean);
+  return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
+}
+
+const COMMUNITY_RE = /(^|\.)(reddit|facebook|nextdoor|quora|youtube|instagram|tiktok|twitter|x|pinterest)\.com$/i;
+const DIRECTORY_RE = /(^|\.)(yelp|angi|angieslist|bbb|homeadvisor|thumbtack|yellowpages|mapquest|porch|networx|manta|superpages|foursquare|buildzoom|houzz|birdeye)\.(com|org)$/i;
+// A blog post, news item or dated archive is never "a page for the town", even when it names the town.
+const NOT_A_PAGE_RE = /(?:^|\/)(?:blogs?|news|posts?|articles?|category|tags?|author|press)(?:\/|$)|\/(?:19|20)\d\d\//i;
+
+const TOWN_FILLER = new Set(['ny', 'new', 'york', 'plumber', 'plumbers', 'plumbing', 'service', 'services', 'near', 'me', 'in', 'emergency', 'hvac',
+  'heating', 'drain', 'and', 'of', 'the', 'contractor', 'contractors', 'company', 'best', 'local', '24', '7']);
+
+// "smithtown-ny-plumber" and "plumber-smithtown-ny" are the town's page; "central-islip" is not "islip"; "smithtown-fire-news" is not a page.
+function labelIsTown(label, town) {
+  const toks = String(label).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const tt = (town.tokens && town.tokens.length) ? town.tokens : [town.compact];
+  if (!toks.length || toks.length > tt.length + 4) return false;
+  for (let i = 0; i + tt.length <= toks.length; i++) {
+    if (tt.every((w, k) => toks[i + k] === w)) return toks.filter((_, k) => k < i || k >= i + tt.length).every((w) => TOWN_FILLER.has(w));
+  }
+  return false;
+}
+
+/**
+ * Is this URL a page for the owner's town? The town must be a whole path segment (or a subdomain), possibly with a
+ * few plain words around it ("smithtown-ny", "smithtownny", "plumber-smithtown-ny"), never a piece of another place
+ * name ("central-islip" is not "islip") and never a blog or news path. A listing page like /locations/ or
+ * /service-areas/ with no town in it is NOT a page for the town.
+ * town = { compact: 'smithtown', tokens: ['smithtown'], state: 'ny' } | null
+ */
+export function isTownPagePath(pathname, town, host = '') {
+  if (!town || !town.compact) return false;
+  const path = String(pathname || '').toLowerCase();
+  if (NOT_A_PAGE_RE.test(path)) return false;
+  const t = town.compact;
+  const st = String(town.state || '').toLowerCase();
+  const labels = String(host || '').toLowerCase().split('.').filter(Boolean);
+  const sub = labels.length >= 3 ? labels[0] : '';
+  return [...path.split('/').filter(Boolean), ...(sub ? [sub] : [])].some((seg) => {
+    const c = seg.replace(/[^a-z0-9]/g, '');
+    return c === t || c === `${t}newyork` || (st && c === `${t}${st}`) || labelIsTown(seg, town);
+  });
+}
+
+/** 'community' | 'directory' | 'town-page' | 'site' | 'other' for a cited page; the owner/competitor checks happen in the caller. */
+export function classifyCitation(url, town = null) {
+  let u;
+  try { u = new URL(String(url)); } catch { return { kind: 'other', domain: '' }; }
+  if (!/^https?:$/.test(u.protocol)) return { kind: 'other', domain: '' };
+  const domain = u.hostname.replace(/^www\./, '').replace(/\.$/, '').toLowerCase();
+  if (COMMUNITY_RE.test(domain)) return { kind: 'community', domain };
+  if (DIRECTORY_RE.test(domain)) return { kind: 'directory', domain };
+  return { kind: isTownPagePath(u.pathname, town, domain) ? 'town-page' : 'site', domain };
+}
+
+// A domain belongs to a business only when the name is the WHOLE domain, or the domain adds only a plain word or
+// state code around it ("rubberduckplumbinginc", "varsityhomeservice", "abcplumbingnyc"). "rubberduckpaper" does not.
+const DOMAIN_FILLER = /^(?:inc|llc|co|corp|nyc|ny|li|and|plumbing|plumber|plumbers|heating|cooling|hvac|services?|home|homes|pro|pros|the|of)*$/;
+function domainMatchesKey(root, key) {
+  if (!key || !root) return false;
+  if (root === key) return true;
+  if (root.startsWith(key) && DOMAIN_FILLER.test(root.slice(key.length))) return true;
+  if (root.endsWith(key) && DOMAIN_FILLER.test(root.slice(0, root.length - key.length))) return true;
+  return false;
+}
+
+/** What an assistant can say about a business that a customer (and AI) cares about. Order = priority. */
+export const MATCH_SIGNALS = Object.freeze([
+  { key: 'townPage', label: 'A page just for {town}', action: 'Add a page for {town} that says what you do there, and link to it from your home page.' },
+  { key: 'emergency', label: 'Says it does emergency or 24/7 work', action: 'Say plainly on your website and Google listing that you take emergency calls, and when.', re: /\b(?:24\s*\/\s*7|24[- ]hours?|around[- ]the[- ]clock|emergency (?:service|services|plumb\w*|repairs?|calls?|dispatch|response|work|help))\b/i },
+  { key: 'pricing', label: 'Says how it prices (upfront, flat-rate, free estimates)', action: 'State how you price on your website: upfront prices, flat rates or free estimates, whichever is true for you.', re: /\b(?:up-?front|flat[- ]rate|transparent pric\w*|no (?:hidden|surprise) (?:fees|charges|costs)|free estimates?)\b/i },
+  { key: 'licensed', label: 'States it is licensed, insured or certified', action: 'Put your license number, insurance and certifications on your website.', re: /\b(?:licensed|insured|bonded|certified|master plumber|master license)\b/i },
+  { key: 'bbb', label: 'A Better Business Bureau profile', action: 'Claim or check your Better Business Bureau profile and keep it accurate.', re: /\b(?:BBB|Better Business Bureau)\b/ },
+  { key: 'awards', label: 'Awards or “best of” wins', action: 'List any awards or “best of” wins you have earned on your website. Only real ones.', re: /\b(?:award[- ]winning|awards?|best of [A-Z][a-z]+|winner of)\b/i },
+  { key: 'experience', label: 'Says how long it has been in business or who owns it', action: 'Say how long you have been in business and who owns it, on your home page.', re: /\b(?:\d{2,3}\+? years|decades|since (?:19|20)\d\d|family[- ](?:owned|operated)|locally owned|generations?)\b/i },
+  { key: 'reviews', label: 'Described as highly reviewed', action: 'Ask every happy customer for a Google review, and send them the link right after the job.', re: /\b(?:highly[- ]reviewed|five[- ]star|5[- ]star|great reviews|positive reviews|excellent (?:reviews|reputation)|top[- ]rated)\b/i },
+  { key: 'reviewsCount', label: 'More Google reviews than you', action: 'Ask every happy customer for a Google review, and send them the link right after the job.' },
+  { key: 'directories', label: 'Listed on sites AI read that don’t list you', action: 'Claim your profile on the sites AI reads (Yelp, Angi and similar), and match your name, phone and address to your website.' },
+]);
+
+const MAX_ANSWER_CHARS = 20000;
+const MAX_MENTIONS = 200;
+// A sentence that hedges, negates, questions, or is advice about hiring in general says nothing about one business.
+const NEGATED_RE = /\b(?:not|no|non|never|nor|neither|without|lacks?|lacking|hardly|rarely|seldom|barely|few|little|fails?|failed|unable|cannot|only|except|unless|if|may|might|could|would|should|claims?|claimed|allegedly|reportedly|supposedly|possibly|probably|perhaps|least|expired|lapsed|revoked|suspended|used to|formerly|unclear|unknown|whether)\b|\w+n['’]t\b|\bun-?(?:licensed|insured|certified|bonded)\b/i;
+const ADVICE_RE = /^\s*(?:always|look for|choose|pick|hire|ensure|check|ask|verify|beware|remember|note|make sure|be sure|you (?:should|can|may|will|need|must)|when |if )|\b(?:requires?|required|by law|state law|whoever you hire|any (?:plumber|contractor|company)|tips?)\b/i;
+// Never quote a sentence about complaints or legal trouble under a positive label.
+const RISKY_RE = /\b(?:complaints?|lawsuits?|sued|scam|fraud|fined|violations?|f rating|unresolved|warning|accused)\b/i;
+// "A is 24/7 while B is not", "unlike A, B is licensed": a comparison says nothing safe about either.
+const COMPARE_RE = /\b(?:unlike|whereas|while|vs\.?|versus|compared (?:to|with)|than|instead of|rather than|but|however)\b/i;
+const FOLLOW_UP_RE = /^\s*(?:however|but|although|though|yet)\b/i;
+const LIST_JOIN_RE = /^\s*(?:,\s*(?:and\s+|or\s+)?|\s+and\s+|\s+or\s+|\s*&\s*)$/i;
+const BULLET_LINE_RE = /^\s*(?:[-*•]|\d+[.)])\s+/;
+
+function lineStartOf(text, pos) {
+  return text.lastIndexOf('\n', pos - 1) + 1;
+}
+
+function sentenceBounds(text, at, len) {
+  let start = 0;
+  for (let i = at - 1; i >= 0; i--) if (isSentenceEnd(text, i)) { start = i + 1; break; }
+  let end = text.length;
+  for (let i = at + len; i < text.length; i++) if (isSentenceEnd(text, i)) { end = text[i] === '\n' ? i : i + 1; break; }
+  return { start, end };
+}
+
+const cleanSentence = (x) => x.replace(/\*\*/g, '').replace(/^\s*(?:#{1,6}\s+)?(?:(?:\d+[.)]|[-*•>])\s+)*/, '').trim();
+
+// Businesses joined by ", " / " and " / " or " ("A, B and C") form one group: a descriptor after the group is about all of them.
+function mentionGroups(text, list) {
+  const gid = [];
+  let g = 0;
+  for (let i = 0; i < list.length; i++) {
+    if (i > 0) {
+      const prev = list[i - 1];
+      const gap = text.slice(prev.pos + String(prev.name || '').length, list[i].pos);
+      if (!(gap.length <= 80 && !gap.includes('\n') && LIST_JOIN_RE.test(gap.replace(/\*\*/g, '')))) g++;
+    }
+    gid[i] = g;
+  }
+  return gid;
+}
+
+// The signals an assistant attached to one business across the answers that name it: { key → { text, engine } }.
+// A signal counts ONLY when (a) the same sentence names that business and the words come right after its name (or
+// before it, when it is the only business in the sentence), or (b) it sits in that business's own bullet lines
+// directly under a heading line that is only its name. Standalone sentences (tips, other businesses' lines) never
+// count, comparisons and hedges never count, and a bullet block ends at a blank line, a heading or another name.
+function signalsFor(answers, isThis) {
+  const found = new Map();
+  for (const a of answers) {
+    const text = String((a && a.text) || '');
+    if (!text || text.length > MAX_ANSWER_CHARS) continue;
+    const list = ((a && a.businessesNamed) || []).filter((b) => b && typeof b.pos === 'number').slice().sort((x, y) => x.pos - y.pos).slice(0, MAX_MENTIONS);
+    const gid = mentionGroups(text, list);
+    const idOf = (b) => String(b.entityId || b.name);
+    const accept = (sig, key, sb) => {
+      if (found.has(key)) return;
+      const clause = text.slice(sb.start, sb.end);
+      if (NEGATED_RE.test(clause) || ADVICE_RE.test(cleanSentence(clause)) || RISKY_RE.test(clause) || /\?\s*$/.test(clause)) return;
+      if (FOLLOW_UP_RE.test(text.slice(sb.end, sb.end + 40))) return;
+      const quote = cleanSentence(clause);
+      if (quote.length < 12 || quote.length > 400) return;
+      found.set(key, { text: quote, engine: a.engine || null });
+    };
+    list.forEach((b, i) => {
+      if (!isThis(b)) return;
+      const nameLen = String(b.name || '').length;
+      // (a) the sentence holding this name
+      const sb = sentenceBounds(text, b.pos, nameLen);
+      const inSentence = list.map((_x, k) => k).filter((k) => list[k].pos >= sb.start && list[k].pos < sb.end);
+      const distinct = new Set(inSentence.map((k) => idOf(list[k])));
+      const sentence = text.slice(sb.start, sb.end);
+      if (!(distinct.size >= 2 && COMPARE_RE.test(sentence))) {
+        for (const sig of MATCH_SIGNALS) {
+          if (!sig.re || found.has(sig.key)) continue;
+          const re = new RegExp(sig.re.source, sig.re.flags.includes('g') ? sig.re.flags : `${sig.re.flags}g`);
+          for (const m of sentence.matchAll(re)) {
+            const at = sb.start + m.index;
+            let owner = -1;
+            for (const k of inSentence) if (list[k].pos <= at) owner = k;
+            if (owner === -1 && distinct.size === 1) owner = inSentence[0];
+            if (owner < 0 || gid[owner] !== gid[i]) continue;
+            accept(sig, sig.key, sb);
+            break;
+          }
+        }
+      }
+      // (b) bullet lines under a heading line that holds only this name
+      const ls = lineStartOf(text, b.pos);
+      const nl = text.indexOf('\n', b.pos);
+      const le = nl === -1 ? text.length : nl;
+      const residual = (text.slice(ls, b.pos) + text.slice(b.pos + nameLen, le)).replace(/[*#>:\-\d.)\s]/g, '');
+      if (residual.length > 70 || nl === -1) return;
+      let pos = le + 1;
+      for (let n = 0; n < 12 && pos < text.length; n++) {
+        const e2 = text.indexOf('\n', pos);
+        const lineEnd = e2 === -1 ? text.length : e2;
+        const line = text.slice(pos, lineEnd);
+        if (!line.trim() || /^\s*(?:#{1,6}\s|---+|\*\*\*)/.test(line)) break;
+        if (list.some((x) => x.pos >= pos && x.pos < lineEnd)) break;
+        if (!BULLET_LINE_RE.test(line) && !/^\s+\S/.test(line)) break;
+        for (const sig of MATCH_SIGNALS) {
+          if (!sig.re || found.has(sig.key)) continue;
+          const re = new RegExp(sig.re.source, sig.re.flags.includes('g') ? sig.re.flags : `${sig.re.flags}g`);
+          for (const m of line.matchAll(re)) {
+            accept(sig, sig.key, sentenceBounds(text, pos + m.index, m[0].length));
+            break;
+          }
+        }
+        pos = lineEnd + 1;
+      }
+    });
+  }
+  return found;
+}
+
+/**
+ * buildMatchList(report, competitors, youReviews) → null | { total, youCount, avgRivals, rows, first, pages, townPages, youTownPage }
+ *   rows    one per signal at least one rival shows: { key, label, action, rivals: [{ has, evidence }], you, rivalCount }
+ *   first   up to 5 rows the owner lacks, most rivals first: { key, label, action, rivalCount }
+ *   pages   the pages AI cited, classified: { url, domain, kind, competitor, engine } (own-site pages matched by name)
+ */
+export function buildMatchList(report, competitors, youReviews) {
+  if (!competitors.length) return null;
+  const answers = ((report && report.answers) || []).filter(Boolean);
+  const biz = (report && report.business) || {};
+  const town = String(biz.town || biz.city || '').trim();
+  const compact = town.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const townInfo = compact.length >= 4 ? { compact, tokens: town.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean), state: String(biz.state || '').toLowerCase() } : null;
+  const own = ownDomain(report);
+  const keys = competitors.map((c) => nameKey(c.name, town.toLowerCase().split(/[^a-z]+/)));
+
+  // Pages AI cited, deduped by address, attributed to a competitor only when the domain is that business's name.
+  const seen = new Set();
+  const pages = [];
+  for (const a of answers) {
+    for (const c of a.citations || []) {
+      if (!c || typeof c.url !== 'string' || seen.has(c.url)) continue;
+      const cls = classifyCitation(c.url, townInfo);
+      if (!cls.domain) continue;
+      seen.add(c.url);
+      let competitor = null;
+      const mine = !!(own && (cls.domain === own || cls.domain.endsWith('.' + own)));
+      if (!mine && (cls.kind === 'site' || cls.kind === 'town-page')) {
+        const root = domainRoot(cls.domain);
+        const hits = keys.map((k, i) => (domainMatchesKey(root, k) ? i : -1)).filter((i) => i >= 0);
+        if (hits.length === 1) competitor = competitors[hits[0]].name;
+      }
+      pages.push({ url: c.url, domain: cls.domain, kind: mine ? 'you' : cls.kind, competitor, engine: a.engine || null });
+    }
+  }
+  const townPageOf = (c) => pages.find((p) => p.competitor === c.name && p.kind === 'town-page') || null;
+  const youTownPage = pages.some((p) => p.kind === 'you' && isTownPagePath(new URL(p.url).pathname, townInfo, p.domain));
+
+  const isYouMention = (b) => b.isYou === true || b.entityId === 'you';
+  const yourSignals = signalsFor(answers, isYouMention);
+  const rivalSignals = competitors.map((c) => signalsFor(answers, (b) => b.entityId === c.id && !b.isYou));
+
+  const rows = [];
+  for (const sig of MATCH_SIGNALS) {
+    let rivals;
+    let you = false;
+    if (sig.key === 'townPage') {
+      rivals = competitors.map((c) => { const p = townPageOf(c); return { has: !!p, evidence: p ? { url: p.url, domain: p.domain } : null }; });
+      you = youTownPage;
+    } else if (sig.key === 'reviewsCount') {
+      // Only a real number from Google counts. No owner listing found is said as such, never as "your 0".
+      const yc = youReviews && Number.isInteger(youReviews.count) ? youReviews.count : null;
+      rivals = competitors.map((c) => {
+        const r = c.reviews;
+        const has = !!(r && Number.isInteger(r.count) && r.count > 0 && (yc === null || r.count > yc));
+        if (!has) return { has: false, evidence: null };
+        const stars = typeof r.rating === 'number' ? ` at ${r.rating} stars` : '';
+        return { has, evidence: { text: yc === null ? `${r.count} Google reviews${stars}. We couldn't find yours.` : `${r.count} Google reviews${stars}, to your ${yc}.` } };
+      });
+    } else if (sig.key === 'directories') {
+      rivals = competitors.map((c) => ({ has: c.sources.length > 0, evidence: c.sources.length ? { domains: c.sources.slice(0, 3).map((x) => x.domain) } : null }));
+    } else {
+      rivals = rivalSignals.map((m) => { const e = m.get(sig.key); return { has: !!e, evidence: e || null }; });
+      you = yourSignals.has(sig.key);
+    }
+    const rivalCount = rivals.filter((r) => r.has).length;
+    if (!rivalCount) continue;
+    rows.push({ key: sig.key, label: sig.label.replace('{town}', town || 'your town'), action: sig.action.replace(/\{town\}/g, town || 'your town'), rivals, you, rivalCount });
+  }
+  if (!rows.length) return null;
+  const youCount = rows.filter((r) => r.you).length;
+  const avgRivals = Math.round((competitors.reduce((n, _c, i) => n + rows.filter((r) => r.rivals[i].has).length, 0) / competitors.length) * 10) / 10;
+  const order = new Map(MATCH_SIGNALS.map((x, i) => [x.key, i]));
+  const first = rows.filter((r) => !r.you).slice()
+    .sort((a, b) => b.rivalCount - a.rivalCount || order.get(a.key) - order.get(b.key)).slice(0, 5)
+    .map((r) => ({ key: r.key, label: r.label, action: r.action, rivalCount: r.rivalCount }));
+  const townPages = competitors.filter((c) => townPageOf(c)).length;
+  return { total: rows.length, youCount, avgRivals, rows, first, pages: pages.slice(0, 16), townPages, youTownPage };
 }
 
 /**
@@ -479,10 +777,21 @@ export function buildCompetitorBreakdown(report) {
     if (c.sources.length) edges.push(`Listed on ${c.sources.length} ${c.sources.length === 1 ? 'site' : 'sites'} AI cited that ${c.sources.length === 1 ? "doesn't" : "don't"} list you: ${c.sources.slice(0, 3).map((x) => x.domain).join(', ')}.`);
     if (winsQuestions.length) edges.push(`Named for “${winsQuestions[0]}”, where no answer named you.`);
     return {
-      name: c.name, named: c.named, first: c.first, quote, reviews: r, sources: c.sources, winsQuestions, edges: edges.slice(0, 3),
+      id: c.id, name: c.name, named: c.named, first: c.first, quote, reviews: r, sources: c.sources, winsQuestions, edges: edges.slice(0, 5),
     };
   });
-  return { you: { named: t.namedYou, first: t.firstYou, answers: t.answers, reviews: youReviews }, competitors };
+  const match = buildMatchList(report, competitors.map((c) => ({ ...c, answerIds: [] })), youReviews);
+  // A rival's own Smithtown page is the most concrete gap AI shows: lead each rival's list with it.
+  if (match) {
+    const town = String((report && report.business && (report.business.town || report.business.city)) || 'your town');
+    competitors.forEach((c) => {
+      const p = match.pages.find((x) => x.competitor === c.name && x.kind === 'town-page');
+      if (p && !match.youTownPage) c.edges = [`AI cited their page for ${town} (${p.domain}). It cited none from your site.`, ...c.edges].slice(0, 5);
+      c.pages = match.pages.filter((x) => x.competitor === c.name);
+      c.says = MATCH_SIGNALS.filter((sg) => sg.re).map((sg) => { const row = match.rows.find((rw) => rw.key === sg.key); const cell = row && row.rivals[competitors.indexOf(c)]; return cell && cell.has ? { key: sg.key, label: sg.label, text: cell.evidence.text, engine: cell.evidence.engine } : null; }).filter(Boolean);
+    });
+  }
+  return { you: { named: t.namedYou, first: t.firstYou, answers: t.answers, reviews: youReviews }, competitors, match };
 }
 
 /** Most "how AI describes you" phrases a report may carry. */

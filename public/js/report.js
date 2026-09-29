@@ -425,7 +425,7 @@ function xrayOffer(lead = '', { breakdown = true } = {}) {
   // The $25 Competitor Breakdown rides along as a checkbox (config.js wireCheckout sends ticked add-ons),
   // only when someone was named often enough to compare (checkout refuses it otherwise).
   const addon = breakdown && tierOn('competitor_breakdown')
-    ? '<p class="r2-addon"><label><input type="checkbox" data-addon="competitor_breakdown"> Add the Competitor Breakdown, +$25: the top 3 businesses AI names instead of you, side by side with you.</label></p>'
+    ? '<p class="r2-addon"><label><input type="checkbox" data-addon="competitor_breakdown"> Add the Competitor Breakdown, +$25: a scorecard of what the top 3 businesses AI picks over you have that you don’t, and what to copy first.</label></p>'
     : '';
   return `
     <div class="cta-band r2-xray-offer" id="offer" data-offer-band>
@@ -1498,7 +1498,7 @@ function xrayV2({ report, aById, cw, N }) {
         : `No other business was named in 2 or more of the ${num(N)} ${cw.unit}, so there is no competitor gap to show.`}</p>
       ${checkedNote && comps.length ? `<p class="r2-note">${escapeHtml(checkedNote)}</p>` : ''}
       ${cards}
-      ${comps.length && !report.breakdown && !report.plan && !isDemoReport(report) ? `<div class="r2-upsell"><p><strong>Want to know why AI picks them?</strong> The Competitor Breakdown ($25) puts the top 3 businesses AI names instead of you side by side with you: what AI said about them, how often they’re named and named first, their Google reviews against yours, the questions they win, and the sites AI cited that list them and not you. Each ends with up to 3 things they have that you don’t.</p>${tierOn('competitor_breakdown') ? `<a class="btn-secondary" data-tier="competitor_breakdown" href="#">Get my Competitor Breakdown — $25</a>${trustRow({ promise: 'Ready the moment you pay' })}` : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a>`}</div>` : ''}
+      ${comps.length && !report.breakdown && !report.plan && !isDemoReport(report) ? `<div class="r2-upsell"><p><strong>See what they have that you don’t.</strong> The Competitor Breakdown ($25) is a scorecard of what the top 3 businesses AI names instead of you show that you don’t: a page for your town, how they price, licenses, awards, reviews and directories. It shows how many of those you match, a “do these first” list in the order to copy them, what AI said about each one word for word, and the pages AI read for them.</p>${tierOn('competitor_breakdown') ? `<a class="btn-secondary" data-tier="competitor_breakdown" href="#">Get my Competitor Breakdown — $25</a>${trustRow({ promise: 'Ready the moment you pay' })}` : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a>`}</div>` : ''}
       <h2 class="r2-xray-h2">Your fix checklist</h2>
       <p class="sub">${checklist.length} ${plural(checklist.length, 'fix', 'fixes')}, in order. Ticks are saved in this browser.</p>
       <ul class="r2-check">${checklist.map((i, n) => {
@@ -1518,10 +1518,41 @@ function breakdownV2(report) {
     return `
     <section class="report-section r2-xray">
       <h2>Competitor Breakdown</h2>
-      <p class="sub">No other business was named in 2 or more answers, so there is nobody to break down this time.</p>
+      <p class="sub">No other business was named in 2 or more answers, so there is nobody to match this time.</p>
     </section>`;
   }
+  const m = bd.match || null;
   const rev = (r) => (r && Number.isInteger(r.count) ? `${typeof r.rating === 'number' && r.count > 0 ? `${r.rating.toFixed(1)}★ from ` : ''}${num(r.count)} Google ${plural(r.count, 'review', 'reviews')}` : 'not found on Google');
+  const kindLabel = { 'town-page': 'Their page for your town', site: 'Their website', directory: 'Directory', community: 'Community thread', other: 'Other page' };
+
+  // A. The scorecard: what each top business shows, and you. A tick has evidence behind it; a dash only means "not seen in this scan".
+  const scorecard = m && m.rows.length ? `
+      <p class="r2-match-score"><b>You match ${num(m.youCount)} of ${num(m.total)}.</b> The top ${comps.length === 1 ? 'business' : comps.length} match ${escapeHtml(String(m.avgRivals))} of ${num(m.total)} on average.</p>
+      <div class="r2-match-wrap"><table class="r2-match">
+        <thead><tr><th scope="col">What we saw</th>${comps.map((c) => `<th scope="col" class="m">${escapeHtml(c.name)}</th>`).join('')}<th scope="col" class="m you">You</th></tr></thead>
+        <tbody>${m.rows.map((r) => `<tr><th scope="row">${escapeHtml(r.label)}</th>${r.rivals.map((x) => `<td class="m">${x.has ? '<span class="y" aria-label="Seen">✓</span>' : '<span class="n" aria-label="Not seen">–</span>'}</td>`).join('')}<td class="m you">${r.you ? '<span class="y" aria-label="Seen">✓</span>' : '<span class="n" aria-label="Not seen">–</span>'}</td></tr>`).join('')}</tbody>
+      </table></div>` : '';
+
+  // B. Do these first: the rows you lack, most rivals first, each with one plain action.
+  const first = m && m.first.length ? `
+      <h3 class="r2-match-h">Do these first</h3>
+      <ol class="r2-first">${m.first.map((f) => `<li><b>${escapeHtml(f.label)}</b><span>${escapeHtml(f.action)}</span><em>${num(f.rivalCount)} of ${comps.length} ${plural(comps.length, 'business', 'businesses')} ${f.rivalCount === 1 ? 'has' : 'have'} it</em></li>`).join('')}</ol>` : '';
+
+  // C. How AI describes each one, word for word, and the pages AI cited for them.
+  const describe = comps.map((c) => {
+    const says = (c.says || []).map((x) => `<li><span class="tag">${escapeHtml(x.label)}</span><q>${escapeHtml(x.text)}</q><span class="src">As ${escapeHtml(engineName(x.engine))} wrote it</span></li>`).join('');
+    const pages = (c.pages || []).map((p2) => `<li><span class="tag">${escapeHtml(kindLabel[p2.kind] || 'Page')}</span><a href="${safeHref(p2.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(shortUrl(p2.url))}</a></li>`).join('');
+    if (!says && !pages) return '';
+    return `
+      <div class="listing-card r2-gap">
+        <h3>${escapeHtml(c.name)}</h3>
+        ${says ? `<p><strong>What AI said about them:</strong></p><ul class="r2-says">${says}</ul>` : ''}
+        ${pages ? `<p><strong>Pages AI cited for them:</strong></p><ul class="r2-says">${pages}</ul>` : ''}
+      </div>`;
+  }).join('');
+  const describeBlock = describe ? `<h3 class="r2-match-h">What AI says about them, and the pages it read</h3>${describe}` : '';
+
+  // D. One by one: their numbers next to yours, the question they win, what they have that you don't.
   const cards = comps.map((c) => `
       <div class="listing-card r2-gap">
         <h3>${escapeHtml(c.name)}</h3>
@@ -1533,14 +1564,19 @@ function breakdownV2(report) {
         ${c.quote ? `<p><strong>What ${escapeHtml(engineName(c.quote.engine))} said${c.quote.question ? ` when asked “${escapeHtml(c.quote.question)}”` : ''}:</strong></p><blockquote class="r2-quote">${escapeHtml(c.quote.text)}</blockquote>` : ''}
         ${(c.winsQuestions || []).length ? `<p><strong>Questions where AI named them and not you:</strong></p><ul class="r2-gap-list">${c.winsQuestions.map((q) => `<li>${escapeHtml(q)}</li>`).join('')}</ul>` : ''}
         ${(c.edges || []).length
-          ? `<p><strong>What they have that you don’t:</strong></p><ol class="r2-gap-list">${c.edges.map((e) => `<li>${escapeHtml(e)}</li>`).join('')}</ol>`
+          ? `<p><strong>What they have that you don’t:</strong></p><ol class="r2-gap-list">${c.edges.map((e2) => `<li>${escapeHtml(e2)}</li>`).join('')}</ol>`
           : '<p class="r2-muted">We found nothing they have that you don’t in this scan.</p>'}
       </div>`).join('');
   return `
-    <section class="report-section r2-xray">
+    <section class="report-section r2-xray r2-matchlist">
       <h2>Competitor Breakdown</h2>
-      <p class="sub">The ${comps.length === 1 ? 'business' : `${comps.length} businesses`} AI named most instead of you, side by side with you. Every line comes from this scan.</p>
+      <p class="sub">${m ? `What the ${comps.length === 1 ? 'business' : `${comps.length} businesses`} AI names instead of you have that you don’t, in the order to copy them.` : `The ${comps.length === 1 ? 'business' : `${comps.length} businesses`} AI names instead of you, one by one.`}</p>
+      ${scorecard}
+      ${first}
+      ${describeBlock}
+      <h3 class="r2-match-h">One by one</h3>
       ${cards}
+      <p class="r2-match-note">Built from the answers and the pages AI cited in this scan. A dash means we didn’t see it there, not that it doesn’t exist. These are things that appear next to businesses AI recommends. We can’t promise that copying them changes what AI says.</p>
     </section>`;
 }
 
@@ -1566,7 +1602,7 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
   const addon = hasCompetitors && tierOn('competitor_breakdown') ? `
           <label class="ob-addon">
             <input type="checkbox" data-addon="competitor_breakdown" data-addon-price="25">
-            <span><b>Add the Competitor Breakdown <em>+$25</em></b>The top 3 businesses AI names, side by side with you.</span>
+            <span><b>Add the Competitor Breakdown <em>+$25</em></b>A scorecard of what the top 3 businesses AI picks over you have that you don’t, and what to copy first.</span>
           </label>` : '';
   // What they get, in numbers the free report already shows. Nothing here names a fix or a step.
   const totalFixes = num(severity.high) + num(severity.medium) + num(severity.low);
