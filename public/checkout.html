@@ -134,7 +134,7 @@
 </footer>
 
 <script src="/js/config.js?v=12"></script>
-<script src="/js/analytics.js?v=9"></script>
+<script src="/js/analytics.js?v=10"></script>
 <script src="/js/site-gate.js?v=1"></script>
 <script>
 (function () {
@@ -396,7 +396,7 @@
             fail(res.body && res.body.error ? esc(res.body.error) : 'We couldn\'t start checkout just now. Try again in a minute, or email ' + HELLO + '.');
             return;
           }
-          push({ event: 'report_request', trade: data.trade, offer: 'full_audit' });
+          push({ event: 'report_request', trade: data.trade, offer: 'full_audit', email_token: window.afsEmailToken && window.afsEmailToken() });
           return openStripe(token).then(function (co) {
             if (co === true) return;
             fail((co.body && co.body.error ? esc(co.body.error) + ' ' : 'We couldn\'t open payment just now. ')

@@ -627,7 +627,8 @@ async function submitLead(e, token, { pending = false } = {}) {
     status.className = 'lead-status ok';
     f.querySelector('.lead-row').hidden = true;
     f.querySelector('label')?.setAttribute('hidden', '');
-    window.dataLayer?.push({ event: 'generate_lead', report_token: token });
+    // Never the report token: it is the private link to the report. email_token is the cold-email key.
+    window.dataLayer?.push({ event: 'generate_lead', email_token: window.afsEmailToken?.() });
     return true;
   } catch (err) {
     status.textContent = err.message;

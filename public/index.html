@@ -406,7 +406,7 @@
 </footer>
 
 <script src="/js/config.js?v=12"></script>
-<script src="/js/analytics.js?v=9"></script>
+<script src="/js/analytics.js?v=10"></script>
 <script src="/js/site-gate.js?v=1"></script>
 <script>
 (function () {
@@ -508,7 +508,7 @@
     converted = true;
     var offer = '';
     try { offer = sessionStorage.getItem('afs_offer') || ''; } catch (err) {}
-    push({ event: 'report_request', trade: biz.trade, offer: offer });
+    push({ event: 'report_request', trade: biz.trade, offer: offer, email_token: window.afsEmailToken && window.afsEmailToken() });
   }
 
   // Proof line under the hero: shown only once the Worker has enough real reports (/api/proof).

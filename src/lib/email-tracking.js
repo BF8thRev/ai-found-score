@@ -2,7 +2,9 @@
 // carries a click through to a free-report request. Tables and views: supabase/v12_email_tracking.sql.
 //
 //   GET /e/open?token=…              1x1 GIF; logs 'opened' (first one wins)
-//   GET /e/click?token=…&to=<url>    logs 'clicked', sets the afs_ref cookie, 302 to <url>?ref=…
+//   GET /e/click?token=…&to=<url>    logs 'clicked', sets the afs_ref cookie, 302 to <url>?ref=…&utm_…
+//                                    (utm_source=email, utm_medium=cold_email, utm_campaign from the
+//                                    'sent' row, utm_content=token; UTMs already on <url> are kept)
 //                                    (aifoundscore.com only: anything else goes to the homepage)
 //   /stop?ref=…                      the unsubscribe link (worker.js handleUnsubscribe → logEmailEvent)
 //
@@ -107,18 +109,51 @@ export function handleEmailOpen(request, url, env, ctx, deps = {}) {
   return new Response(GIF, { headers: { 'Content-Type': 'image/gif', 'Content-Length': String(GIF.length), ...NO_STORE } });
 }
 
-/** GET /e/click: 302 to an allowed destination (else the homepage) with ?ref=, and the afs_ref cookie. */
-export function handleEmailClick(request, url, env, ctx, deps = {}) {
+/**
+ * The campaign on a token's 'sent' row (service key), for utm_campaign. null when the token is
+ * unknown, the key is missing, or the lookup is slow or fails: the redirect never waits long.
+ */
+export async function campaignForToken(env, token, { fetchImpl = fetch, timeoutMs = 1500 } = {}) {
+  if (!validToken(token)) return null;
+  const s = service(env);
+  if (!s) return null;
+  try {
+    const q = `email_events?select=campaign&token=eq.${encodeURIComponent(token)}&event=eq.sent&limit=1`;
+    const r = await fetchImpl(`${s.base}/${q}`, { headers: s.headers, signal: AbortSignal.timeout(timeoutMs) });
+    if (!r.ok) return null;
+    const [row] = await r.json();
+    return row?.campaign ? String(row.campaign) : null;
+  } catch (e) {
+    console.error('[email-tracking] campaign lookup', String(e?.message || e).slice(0, 200));
+    return null;
+  }
+}
+
+/** Fill the utm_* params GA4 reads, keeping any the destination already has (only blanks are filled). */
+export function addUtms(dest, { token, campaign }) {
+  const utm = { utm_source: 'email', utm_medium: 'cold_email', utm_campaign: campaign, utm_content: token };
+  for (const [k, v] of Object.entries(utm)) {
+    if (v && !dest.searchParams.get(k)) dest.searchParams.set(k, v);
+  }
+  return dest;
+}
+
+/**
+ * GET /e/click: 302 to an allowed destination (else the homepage) with ?ref=, the utm_* params (the
+ * campaign from the token's 'sent' row, the token as utm_content) and the afs_ref cookie.
+ */
+export async function handleEmailClick(request, url, env, ctx, deps = {}) {
   const token = url.searchParams.get('token') || '';
   const dest = safeDestination(url.searchParams.get('to'), url) || new URL('/', url.origin);
   const headers = { ...NO_STORE, 'Referrer-Policy': 'no-referrer' };
   if (validToken(token)) {
-    dest.searchParams.set(REF_PARAM, token);
-    headers['Set-Cookie'] = refCookie(token, url);
     const ua = request.headers.get('User-Agent') || '';
     if (request.method === 'GET' && !BOT_UA.test(ua)) {
       later(ctx, logEmailEvent(env, { token, event: 'clicked', detail: dest.pathname, userAgent: ua }, deps));
     }
+    dest.searchParams.set(REF_PARAM, token);
+    addUtms(dest, { token, campaign: await campaignForToken(env, token, deps) });
+    headers['Set-Cookie'] = refCookie(token, url);
   }
   headers.Location = dest.toString();
   return new Response(null, { status: 302, headers });

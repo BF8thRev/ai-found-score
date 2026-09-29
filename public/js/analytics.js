@@ -6,6 +6,21 @@
   var params = new URLSearchParams(window.location.search);
   var arm = params.get('arm') || '';
 
+  // Cold-email token: /e/click lands here with utm_content=<token>. Kept for the tab so the lead,
+  // request and purchase events carry it (an exact email -> lead -> purchase join in GA4). It is our
+  // own random key, never a name, email or report token, so only token-shaped values are kept.
+  var EMAIL_TOKEN_KEY = 'afs_email_token';
+  var EMAIL_TOKEN_RE = /^[A-Za-z0-9_-]{12,64}$/;
+  var landedToken = params.get('utm_medium') === 'cold_email' ? params.get('utm_content') || '' : '';
+  if (EMAIL_TOKEN_RE.test(landedToken)) {
+    try { sessionStorage.setItem(EMAIL_TOKEN_KEY, landedToken); } catch (err) {}
+  }
+  window.afsEmailToken = function () {
+    var t = '';
+    try { t = sessionStorage.getItem(EMAIL_TOKEN_KEY) || ''; } catch (err) {}
+    return EMAIL_TOKEN_RE.test(t) ? t : undefined;
+  };
+
   // --- Ad-pixel placeholders (do NOT invent IDs) ---
   // paste IDs when ad accounts exist; loaders no-op while empty
   var GOOGLE_ADS_ID = ''; // e.g. 'AW-123456789'
@@ -70,6 +85,7 @@
         arm: arm,
         value: isFinite(charged) && params.get('v') !== null ? charged : TIER_PRICE[tier] || 0,
         currency: 'USD',
+        email_token: window.afsEmailToken(),
       });
       try { if (sessionId) sessionStorage.setItem('afs_purchase_' + sessionId, '1'); } catch (err) {}
     }

@@ -2,9 +2,12 @@
 // free-report requests (never blocking), and the 'sent' row (one token per business + campaign).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { register } from 'node:module';
 import {
   safeDestination, refCookie, readRefToken, newTrackingToken, validToken, handleEmailOpen, handleEmailClick,
-  logEmailEvent, recordEmailSent, trackingSnippet, clickUrl, FOOTER_ADDRESS,
+  logEmailEvent, recordEmailSent, trackingSnippet, clickUrl, FOOTER_ADDRESS, addUtms, campaignForToken,
 } from '../email-tracking.js';
 import { recordReportRequest } from '../db.js';
 import { handleReportRequest } from '../report-request.js';
@@ -55,7 +58,7 @@ test('/e/click: logs the click after the redirect, sets the ref cookie and ?ref=
   const f = fakeFetch();
   const c = ctx();
   const url = new URL(clickUrl('https://aifoundscore.com', TOKEN, 'https://aifoundscore.com/#request'));
-  const res = handleEmailClick(new Request(url, { headers: { 'User-Agent': 'Mozilla/5.0 Chrome' } }), url, ENV, c, { fetchImpl: f.impl });
+  const res = await handleEmailClick(new Request(url, { headers: { 'User-Agent': 'Mozilla/5.0 Chrome' } }), url, ENV, c, { fetchImpl: f.impl });
   assert.equal(res.status, 302);
   const loc = new URL(res.headers.get('Location'));
   assert.equal(loc.origin + loc.pathname + loc.hash, 'https://aifoundscore.com/#request');
@@ -63,10 +66,10 @@ test('/e/click: logs the click after the redirect, sets the ref cookie and ?ref=
   assert.match(res.headers.get('Set-Cookie'), new RegExp(`^afs_ref=${TOKEN}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly; Secure; Domain=aifoundscore.com$`));
   assert.match(res.headers.get('Cache-Control'), /no-store/);
   await Promise.all(c.waits);
-  assert.equal(f.calls.length, 1);
-  assert.equal(f.calls[0].url, 'https://db.example/rest/v1/rpc/log_email_event');
-  assert.deepEqual({ t: f.calls[0].body.p_token, e: f.calls[0].body.p_event, d: f.calls[0].body.p_detail }, { t: TOKEN, e: 'clicked', d: '/' });
-  assert.equal(f.calls[0].headers.apikey, 'anon');
+  const logs = f.calls.filter((x) => x.url.endsWith('/rpc/log_email_event'));
+  assert.equal(logs.length, 1);
+  assert.deepEqual({ t: logs[0].body.p_token, e: logs[0].body.p_event, d: logs[0].body.p_detail }, { t: TOKEN, e: 'clicked', d: '/' });
+  assert.equal(logs[0].headers.apikey, 'anon');
 });
 
 test('/e/click: a link scanner or HEAD is redirected but not counted; bad token / bad destination still land safely', async () => {
@@ -74,16 +77,16 @@ test('/e/click: a link scanner or HEAD is redirected but not counted; bad token 
     const f = fakeFetch();
     const c = ctx();
     const url = new URL(clickUrl('https://aifoundscore.com', TOKEN, 'https://aifoundscore.com/'));
-    const res = handleEmailClick(new Request(url, { method, headers: { 'User-Agent': ua } }), url, ENV, c, { fetchImpl: f.impl });
+    const res = await handleEmailClick(new Request(url, { method, headers: { 'User-Agent': ua } }), url, ENV, c, { fetchImpl: f.impl });
     assert.equal(res.status, 302);
     assert.equal(c.waits.length, 0, `${ua} ${method}`);
   }
   const off = new URL(clickUrl('https://aifoundscore.com', TOKEN, 'https://evil.example/phish'));
-  const r1 = handleEmailClick(new Request(off), off, ENV, ctx(), { fetchImpl: fakeFetch().impl });
+  const r1 = await handleEmailClick(new Request(off), off, ENV, ctx(), { fetchImpl: fakeFetch().impl });
   assert.equal(new URL(r1.headers.get('Location')).hostname, 'aifoundscore.com', 'never off-site');
   const bad = new URL('https://aifoundscore.com/e/click?token=nope&to=https%3A%2F%2Faifoundscore.com%2F');
   const c2 = ctx();
-  const r2 = handleEmailClick(new Request(bad), bad, ENV, c2, { fetchImpl: fakeFetch().impl });
+  const r2 = await handleEmailClick(new Request(bad), bad, ENV, c2, { fetchImpl: fakeFetch().impl });
   assert.equal(r2.headers.get('Location'), 'https://aifoundscore.com/');
   assert.equal(r2.headers.get('Set-Cookie'), null);
   assert.equal(c2.waits.length, 0);
@@ -95,11 +98,152 @@ test('/e/click: a failed log never breaks the redirect', async () => {
   const errors = [];
   const orig = console.error; console.error = (...a) => errors.push(a.join(' '));
   try {
-    const res = handleEmailClick(new Request(url), url, ENV, c, { fetchImpl: async () => { throw new Error('db down'); } });
+    const res = await handleEmailClick(new Request(url), url, ENV, c, { fetchImpl: async () => { throw new Error('db down'); } });
     assert.equal(res.status, 302);
     await Promise.all(c.waits);
   } finally { console.error = orig; }
   assert.match(errors.join(''), /db down/);
+});
+
+// ---- UTMs on the redirect (GA4 ties the session to the email) ----
+const sentRow = (campaign) => ['GET', /\/rest\/v1\/email_events\?select=campaign&token=eq\./, Response.json(campaign ? [{ campaign }] : [])];
+
+test('/e/click: adds utm_source/medium, utm_campaign from the sent row, utm_content = token; keeps ?ref= and other params', async () => {
+  const f = fakeFetch([sentRow('exp001')]);
+  const url = new URL(clickUrl('https://aifoundscore.com', TOKEN, 'https://aifoundscore.com/?x=1#request'));
+  const res = await handleEmailClick(new Request(url, { headers: { 'User-Agent': 'Mozilla/5.0 Chrome' } }), url, ENV, ctx(), { fetchImpl: f.impl });
+  assert.equal(res.status, 302);
+  const loc = new URL(res.headers.get('Location'));
+  assert.equal(loc.hash, '#request');
+  assert.deepEqual(Object.fromEntries(loc.searchParams), {
+    x: '1', ref: TOKEN, utm_source: 'email', utm_medium: 'cold_email', utm_campaign: 'exp001', utm_content: TOKEN,
+  });
+  const lookup = f.calls.find((c) => c.url.includes('/email_events?'));
+  assert.equal(lookup.headers.apikey, 'service', 'the sent row is read with the service key');
+  assert.match(lookup.url, new RegExp(`token=eq\\.${TOKEN}&event=eq\\.sent`));
+});
+
+test('/e/click: UTMs already on the destination win (only blanks are filled); values are URL-encoded', async () => {
+  const f = fakeFetch([sentRow('spring wave & co')]);
+  const url = new URL(clickUrl('https://aifoundscore.com', TOKEN, 'https://aifoundscore.com/?utm_source=newsletter&utm_campaign='));
+  const res = await handleEmailClick(new Request(url), url, ENV, ctx(), { fetchImpl: f.impl });
+  const raw = res.headers.get('Location');
+  const loc = new URL(raw);
+  assert.equal(loc.searchParams.get('utm_source'), 'newsletter', 'not overwritten');
+  assert.equal(loc.searchParams.getAll('utm_source').length, 1);
+  assert.equal(loc.searchParams.get('utm_campaign'), 'spring wave & co', 'a blank one is filled');
+  assert.equal(loc.searchParams.get('utm_medium'), 'cold_email');
+  assert.ok(!raw.includes(' ') && !raw.includes('& co'), `encoded: ${raw}`);
+});
+
+test('/e/click: unknown token, failing lookup, or no service key → still a 302 with the other UTMs, no campaign', async () => {
+  const cases = [
+    ['unknown token', ENV, fakeFetch([sentRow(null)]).impl],
+    ['lookup 500', ENV, fakeFetch([['GET', /email_events/, new Response('x', { status: 500 })]]).impl],
+    ['lookup throws', ENV, async (u) => { if (String(u).includes('email_events')) throw new Error('timeout'); return Response.json(true); }],
+    ['no service key', { SUPABASE_URL: 'https://db.example', SUPABASE_ANON_KEY: 'anon' }, fakeFetch().impl],
+  ];
+  const orig = console.error; console.error = () => {};
+  try {
+    for (const [name, env, impl] of cases) {
+      const url = new URL(clickUrl('https://aifoundscore.com', TOKEN, 'https://aifoundscore.com/'));
+      const res = await handleEmailClick(new Request(url), url, env, ctx(), { fetchImpl: impl });
+      assert.equal(res.status, 302, name);
+      const loc = new URL(res.headers.get('Location'));
+      assert.equal(loc.searchParams.get('utm_source'), 'email', name);
+      assert.equal(loc.searchParams.get('utm_content'), TOKEN, name);
+      assert.equal(loc.searchParams.has('utm_campaign'), false, name);
+    }
+  } finally { console.error = orig; }
+  // A malformed token is not a tracked click: plain homepage, no UTMs, no lookup.
+  const f = fakeFetch();
+  const bad = new URL('https://aifoundscore.com/e/click?token=nope&to=https%3A%2F%2Faifoundscore.com%2F');
+  const r = await handleEmailClick(new Request(bad), bad, ENV, ctx(), { fetchImpl: f.impl });
+  assert.equal(r.headers.get('Location'), 'https://aifoundscore.com/');
+  assert.equal(f.calls.length, 0);
+});
+
+test('addUtms / campaignForToken: unit behaviour', async () => {
+  const d = addUtms(new URL('https://aifoundscore.com/?utm_content=keep'), { token: TOKEN, campaign: null });
+  assert.equal(d.searchParams.get('utm_content'), 'keep');
+  assert.equal(d.searchParams.has('utm_campaign'), false);
+  assert.equal(await campaignForToken(ENV, 'bad'), null);
+  assert.equal(await campaignForToken(ENV, TOKEN, { fetchImpl: async () => Response.json([{ campaign: 'exp002' }]) }), 'exp002');
+});
+
+test('GET /e/click through the real router: 302 with the UTMs and the campaign from the sent row', async () => {
+  globalThis.HTMLRewriter ||= class { on() { return this; } onDocument() { return this; } transform(res) { return res; } };
+  register('data:text/javascript,' + encodeURIComponent(`
+    export async function resolve(spec, ctx, next) {
+      if (spec === 'cloudflare:workers') return { url: 'data:text/javascript,export class WorkflowEntrypoint {}', shortCircuit: true };
+      return next(spec, ctx);
+    }`));
+  const { default: worker } = await import('../../worker.js');
+  const orig = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (u) => {
+    seen.push(String(u));
+    if (String(u).includes('/rest/v1/email_events?')) return Response.json([{ campaign: 'test-attribution' }]);
+    return Response.json(true);
+  };
+  const waits = [];
+  try {
+    const link = clickUrl('https://aifoundscore.com', TOKEN, 'https://aifoundscore.com/');
+    const res = await worker.fetch(new Request(link, { headers: { 'User-Agent': 'Mozilla/5.0 Chrome' } }),
+      { ...ENV, ASSETS: { fetch: async () => new Response('nf', { status: 404 }) } }, { waitUntil: (p) => waits.push(p) });
+    assert.equal(res.status, 302);
+    const loc = new URL(res.headers.get('Location'));
+    assert.equal(loc.origin + loc.pathname, 'https://aifoundscore.com/');
+    assert.equal(loc.searchParams.get('utm_source'), 'email');
+    assert.equal(loc.searchParams.get('utm_medium'), 'cold_email');
+    assert.equal(loc.searchParams.get('utm_campaign'), 'test-attribution');
+    assert.equal(loc.searchParams.get('utm_content'), TOKEN);
+    assert.equal(loc.searchParams.get('ref'), TOKEN);
+    await Promise.all(waits);
+    assert.ok(seen.some((u) => u.endsWith('/rpc/log_email_event')), 'the click is still logged');
+  } finally { globalThis.fetch = orig; }
+});
+
+// ---- the page side: public/js/analytics.js keeps the token for the tab; events carry it ----
+function runAnalytics(href, store = new Map()) {
+  const code = readFileSync(new URL('../../../public/js/analytics.js', import.meta.url), 'utf8');
+  const u = new URL(href);
+  const win = { location: { search: u.search, pathname: u.pathname }, dataLayer: [] };
+  const sessionStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) };
+  const document = { addEventListener() {}, createElement() { return {}; }, head: { appendChild() {} }, getElementsByTagName: () => [] };
+  vm.runInNewContext(code, { window: win, document, sessionStorage, URLSearchParams });
+  return { win, store };
+}
+
+test('analytics.js: a cold-email landing stores utm_content; a purchase later in the tab carries email_token', () => {
+  const { store } = runAnalytics(`https://aifoundscore.com/?ref=${TOKEN}&utm_source=email&utm_medium=cold_email&utm_campaign=exp001&utm_content=${TOKEN}`);
+  assert.equal(store.get('afs_email_token'), TOKEN);
+  const { win } = runAnalytics('https://aifoundscore.com/success?tier=xray&v=49&session_id=cs_test_1', store);
+  const p = win.dataLayer.find((e) => e.event === 'purchase');
+  assert.equal(p.email_token, TOKEN);
+  assert.equal(win.afsEmailToken(), TOKEN);
+});
+
+test('analytics.js: only token-shaped values from a cold_email landing are kept (no emails, no junk)', () => {
+  for (const q of [
+    '?utm_medium=cold_email&utm_content=someone%40example.com',
+    '?utm_medium=cold_email&utm_content=short',
+    `?utm_medium=cpc&utm_content=${TOKEN}`,
+  ]) {
+    const { store, win } = runAnalytics(`https://aifoundscore.com/${q}`);
+    assert.equal(store.has('afs_email_token'), false, q);
+    assert.equal(win.afsEmailToken(), undefined, q);
+  }
+});
+
+test('events carry email_token, and generate_lead no longer sends the private report token', () => {
+  const src = (f) => readFileSync(new URL(`../../../public/${f}`, import.meta.url), 'utf8');
+  const report = src('js/report.js');
+  assert.doesNotMatch(report, /report_token\s*:\s*token/, 'the report token is never an analytics field');
+  assert.match(report, /event: 'generate_lead', email_token: window\.afsEmailToken\?\.\(\)/);
+  for (const page of ['index.html', 'checkout.html']) {
+    assert.match(src(page), /event: 'report_request'[^}]*email_token: window\.afsEmailToken && window\.afsEmailToken\(\)/, page);
+  }
 });
 
 test('/e/open: a 1x1 GIF, never cached; GET logs the open, HEAD and bad tokens do not', async () => {
