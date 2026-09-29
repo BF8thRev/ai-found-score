@@ -12,7 +12,8 @@ import { scrubKeyFragments } from '../../scanner/store.js';
 // ENV_ALIASES entries that hold secrets (model names and URLs are not secret).
 const SECRET_FIELDS = ['openaiKey', 'geminiKey', 'perplexityKey', 'anthropicKey', 'dataforseoLogin',
   'dataforseoPassword', 'supabaseServiceKey', 'adminToken'];
-const OTHER_SECRETS = ['SUPABASE_ANON_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_WEBHOOK_SECRET_TEST'];
+const OTHER_SECRETS = ['SUPABASE_ANON_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_WEBHOOK_SECRET_TEST',
+  'GMAIL_CLIENT_SECRET', 'GMAIL_REFRESH_TOKEN'];
 
 /** Every configured secret value (trimmed, >= 6 chars), longest first. */
 export function secretValues(env = {}) {
