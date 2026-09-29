@@ -488,3 +488,9 @@ details.r2-allans[open] > summary::after { content: "–"; }
 /* Match List: phone fit, and long quotes wrap. */
 @media (max-width: 600px) { .r2-match tbody th { min-width: 132px; font-size: 14px; } .r2-match .m { min-width: 64px; } }
 .r2-quote { overflow-wrap: anywhere; }
+/* Phones: long URLs in fix text and wide code stay inside their box (no sideways page scroll). */
+.r2 .r2-steps li, .r2 .issue-card p { overflow-wrap: anywhere; }
+.r2 code { overflow-wrap: anywhere; }
+.r2-copy { min-width: 0; max-width: 100%; }
+.r2-code { max-width: 100%; }
+.r2-code code { overflow-wrap: normal; }
