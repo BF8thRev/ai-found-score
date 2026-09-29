@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { pickShowcase, renderShowcase, tradeParam, validRow, showcaseTag, loadShowcaseRows, answerHtml, namedIn, namesHtml, previewStart, answerBlockHtml } from '../showcase.js';
+import { pickShowcase, renderShowcase, tradeParam, validRow, showcaseTag, loadShowcaseRows, answerHtml, namedIn, namesHtml, previewStart, answerBlockHtml, keepLastWords } from '../showcase.js';
 import { SHOWCASE_TOKENS, SHOWCASE_ALIASES } from '../checkout.js';
 
 const row = (o = {}) => ({
@@ -44,10 +44,15 @@ test('renderShowcase: exact question, escaped verbatim excerpt, names in bold, d
   const p = pickShowcase([row({ excerpt: 'Try <Acme> Plumbing now.', spans: [[4, 19]] })], null, null);
   const html = renderShowcase(p);
   assert.match(html, /<span data-sc-src>Real AI answer<\/span> &middot; asked <span data-sc-date>Sep 24, 2026<\/span>/);
-  assert.match(html, /What&#39;s the best plumber in Massapequa, NY\?/);
+  assert.match(html, /What&#39;s the best plumber in Massapequa,\xa0NY\?/);
   assert.match(html, /Try <b>&lt;Acme&gt; Plumbing<\/b> now\.<span class="sc-more"> &hellip;<\/span>/);
   assert.ok(!/<script type="application\/json" id="sc-data">[^]*<Acme/.test(html), 'JSON cannot close its <script>');
   assert.match(html, /named by AI, not by us/);
+});
+
+test('keepLastWords: the last two words of the question stay on one line', () => {
+  assert.equal(keepLastWords("What's the best laundromat in North Babylon, NY?"), "What's the best laundromat in North Babylon,\xa0NY?");
+  assert.equal(keepLastWords('Plumber'), 'Plumber');
 });
 
 test('answerHtml: no trailing ellipsis when the excerpt is the whole answer', () => {
