@@ -117,7 +117,7 @@ test('next business day skips weekends (New York time)', () => {
   assert.equal(r.nextBusinessDay(new Date('2026-09-28T16:00:00Z')), 'Tuesday, Sep 29');
 });
 
-test('ready report opens with one literal verdict line and the score', () => {
+test('ready report opens with one plain verdict line; the score sits in the top band', () => {
   const r = loadReportJs();
   const sample = Object.values(MOCK_REPORTS).find((x) => x.version === 2);
   assert.ok(sample, 'a v2 sample report');
@@ -126,8 +126,11 @@ test('ready report opens with one literal verdict line and the score', () => {
   const cw = r.countWords(report);
   const proven = r.provenEntities(report);
   const html = r.verdictV2(report, { t, N: t.answers, cw, proven, zero: t.namedYou === 0, allNamed: t.namedYou === t.answers });
-  assert.match(html, new RegExp(`AI (named you in (${t.namedYou} of|all) ${t.answers}|didn’t name you in any of the ${t.answers})`));
-  if (proven[0]) assert.ok(html.includes(`It named ${proven[0].name.replace(/&/g, '&amp;')} ${proven[0].named} time`), 'names the top competitor');
-  assert.match(html, /How we score/);
+  assert.match(html, new RegExp(`We asked AI ${t.answers} times\. It (never mentioned you|mentioned you (every time|(once|${t.namedYou} times)))\.`));
+  if (proven[0] && t.namedYou < t.answers) assert.ok(html.includes(`${proven[0].name.replace(/&/g, '&amp;')} came up ${proven[0].named === 1 ? 'once' : proven[0].named + ' times'}.`), 'names the top competitor');
+  assert.doesNotMatch(html, /r2-score/, 'the score lives in the top band now');
+  const band = r.headerV2(report, report.business, r.scoreV2(report));
+  assert.match(band, /r2-score-ring/);
+  assert.match(band, /How we score/);
   assert.ok(!/guarantee|rank/i.test(html.replace(/<[^>]+>/g, ' ')));
 });

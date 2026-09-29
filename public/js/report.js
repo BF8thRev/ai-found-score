@@ -39,9 +39,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.title = `AI Found Score — ${report.business.name}`;
-  // Someone reading their own report doesn't need "Get my free report" again. Examples keep it.
-  if (!isDemoReport(report)) setHeaderCta('Check another business');
-
   if (report.version === 2) renderV2(root, report);
   else renderV1(root, report);
 
@@ -59,6 +56,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.wireCheckout?.(root, report.sample ? null : report.id);
   root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', (e) => submitLead(e, report.id)));
   wireOfferScroll(root);
+  wireStickyCta(root);
+  setHeaderForReport(root, report);
   wireOfferTotal(root);
   focusOffer(root, new URLSearchParams(window.location.search).get('offer'));
 
@@ -129,7 +128,6 @@ function renderPending(root, token, j, prev = null) {
   const c = pendingCopy(st.status, st.hasEmail);
   const b = st.business;
   const where = b ? [b.town, b.state].filter(Boolean).join(', ') : '';
-  setHeaderCta('Check another business');
   document.title = b ? `AI Found Score — ${b.name}` : 'AI Found Score — your report is on its way';
   root.innerHTML = `
     <div class="wrap page-msg r2-pending" data-status="${escapeHtml(st.status)}">
@@ -166,9 +164,51 @@ function renderPending(root, token, j, prev = null) {
 }
 
 // The header button. On a report page "Get my free report" is redundant: it becomes "Check another business".
-function setHeaderCta(text) {
-  const a = document.querySelector('.site-header .header-cta');
-  if (a) a.textContent = text;
+// The report page's header carries one button, by state (public/report.html): the $49 audit on a real
+// report that has the offer, "Get my free report" on an example, nothing otherwise (pending, paid, no
+// offer). After the top band scrolls away it also shows the business and score. Phones use the bottom
+// bar instead (CSS hides this button there).
+function setHeaderForReport(root, report) {
+  const cta = document.querySelector('.site-header [data-hdr-cta]');
+  const ctx = document.querySelector('.site-header [data-hdr-ctx]');
+  const band = root.querySelector('[data-offer-band]');
+  if (cta) {
+    if (isDemoReport(report)) {
+      cta.textContent = 'Get my free report';
+      cta.setAttribute('href', '/#request');
+      cta.hidden = false;
+    } else if (band) {
+      cta.textContent = ctaLabel(report);
+      cta.setAttribute('href', '#offer');
+      cta.hidden = false;
+      cta.addEventListener('click', (e) => {
+        e.preventDefault();
+        band.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        band.querySelector('[data-tier]')?.focus({ preventScroll: true });
+      });
+      if (typeof IntersectionObserver !== 'undefined') {
+        new IntersectionObserver((en) => { cta.style.visibility = en[0].isIntersecting ? 'hidden' : ''; }, { threshold: 0.1 }).observe(band);
+      }
+    } else {
+      cta.hidden = true;
+    }
+  }
+  const sc = report.score;
+  if (ctx && report.business && sc && Number.isFinite(Number(sc.score))) {
+    const n = Math.max(0, Math.min(100, Math.round(Number(sc.score))));
+    const band3 = n >= 70 ? 'strong' : n >= 40 ? 'mixed' : 'weak';
+    const name = document.createElement('b');
+    name.textContent = report.business.name;
+    const chip = document.createElement('span');
+    chip.className = `chip ${band3}`;
+    chip.textContent = `${n} / 100`;
+    ctx.replaceChildren(name, chip);
+    if (typeof window.addEventListener === 'function') {
+      const onScroll = () => { ctx.hidden = !(window.scrollY > 320); };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    }
+  }
 }
 
 // ---------- v1 (legacy, no `version`): rendered exactly as before ----------
@@ -284,6 +324,34 @@ function unlockPanel() {
       <p><strong>Every problem, by name, with the exact fix.</strong> Step by step, with text you can copy and paste, in the ${XRAY.name}. ${XRAY.promise}</p>
       <a class="btn" href="#offer" data-scroll-offer>Show me the fixes</a>
     </div>`;
+}
+
+// Phones only (CSS): a bottom bar that scrolls to the offer band, shown once the reader is past the
+// first screen and hidden while the offer band itself is on screen.
+function ctaLabel(report) {
+  const n = Number(report && report.score && report.score.score);
+  return `${Number.isFinite(n) && n >= 70 ? 'See what to improve' : 'Show me the fixes'} — ${XRAY.price.split(' ')[0]}`;
+}
+
+function stickyCtaV2(report) {
+  return `<div class="r2-sticky" data-sticky-cta hidden><a class="btn ob-btn" href="#offer" data-scroll-offer>${escapeHtml(ctaLabel(report))}</a></div>`;
+}
+
+function wireStickyCta(root) {
+  const bar = root.querySelector('[data-sticky-cta]');
+  const band = root.querySelector('[data-offer-band]');
+  if (!bar || !band || typeof IntersectionObserver === 'undefined') return;
+  let past = false;
+  let inBand = false;
+  const sync = () => {
+    const show = past && !inBand;
+    bar.hidden = !show;
+    document.body.classList.toggle('has-sticky', show);
+  };
+  const onScroll = () => { past = window.scrollY > 500; sync(); };
+  new IntersectionObserver((e) => { inBand = e[0].isIntersecting; sync(); }, { threshold: 0.1 }).observe(band);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 }
 
 // "See what the audit includes" and similar links: scroll to the offer band instead of a second checkout.
@@ -617,8 +685,12 @@ function plural(n, one, many) { return n === 1 ? one : many; }
 // Numbers from the report go into HTML unescaped, so force them to be numbers.
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
+// A trade is stored as the work ("plumbing"); this is the businesses that do it ("plumbers").
+const TRADE_PEOPLE = { plumbing: 'plumbers', roofing: 'roofers', painting: 'painters', landscaping: 'landscapers', cleaning: 'cleaners', moving: 'movers', electrical: 'electricians', electric: 'electricians' };
+
 function tradePlural(trade) {
   const t = String(trade || 'business').toLowerCase();
+  if (TRADE_PEOPLE[t]) return TRADE_PEOPLE[t];
   if (/(s|sh|ch|x)$/.test(t)) return t + 'es';
   if (/[^aeiou]y$/.test(t)) return t.slice(0, -1) + 'ies';
   return t + 's';
@@ -733,7 +805,8 @@ function renderV2(root, report) {
   const intentLabel = (x) => INTENT_LABELS[x.intent] || x.intent || x.q.text;
 
   // Edge states (docs/BUILD_PLAN.md "Edge states").
-  const zero = N > 0 && t.namedYou === 0;
+  const unsureN = answers.filter((a) => a.ownerMatch === 'unsure').length;
+  const zero = N > 0 && t.namedYou === 0 && unsureN < N;
   const allNamed = N > 0 && t.namedYou === N;
   const nobodyTwice = proven.length === 0;
   // Same rule as edgeState() in shared/report-v2.js.
@@ -741,21 +814,17 @@ function renderV2(root, report) {
   const missingCount = report.sourcesSummary ? num(report.sourcesSummary.missingYou) : missingSources.length;
   const generalAdvice = answers.filter((a) => !(a.businessesNamed || []).length).length;
 
-  const trade = b.trade ? b.trade[0].toUpperCase() + b.trade.slice(1) : '';
-  const place = [b.address, b.town || b.city, [b.state, b.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-  const meta = [trade, place, b.phone].filter(Boolean).map(escapeHtml).join(' · ');
-
   root.innerHTML = [
-    headerV2(report, b, meta, xrayOk && !report.sample && !report.hasEmail),
+    headerV2(report, b, scoreV2(report)),
     '<div class="wrap r2">',
     report.fullScanPending ? fullScanNote() : '',
-    verdictV2(report, { t, N, cw, proven, zero, allNamed }),
+    verdictV2(report, { t, N, cw, proven, zero, allNamed, b, engineList, hasWho: !nobodyTwice }),
     heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
     baselineV2(report, t),
     report.plan ? planPanel(report) : '',
     paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
     shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }),
-    nobodyTwice ? '' : whoAiNamesV2({ b, t, N, cw, proven }),
+    nobodyTwice ? '' : whoAiNamesV2({ report, b, t, N, cw, proven }),
     gridV2({ questions, answers, engines, failedNote }),
     sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     factsV2({ report, b, aById }),
@@ -770,6 +839,7 @@ function renderV2(root, report) {
     methodV2({ report, method, engines, failed, questions, N, cw, listings }),
     xrayOk ? '' : bottomLead(report),
     reportTools(),
+    xrayOk ? stickyCtaV2(report) : '',
     '</div>',
   ].join('');
 
@@ -791,15 +861,20 @@ function renderV2(root, report) {
   }
 }
 
-function headerV2(report, b, meta, keepLink = false) {
+function headerV2(report, b, scoreHtml = '') {
   return `
-    <section class="report-header">
+    <section class="report-header r2-band">
       <div class="wrap r2">
         ${report.sample ? '<div class="sample-banner"><strong>Sample report.</strong> A fictional business, fictional competitors and made-up answers. Yours shows your real searches, word for word.</div>' : ''}
         ${samplesStrip(report)}
-        <h1>${escapeHtml(b.name)}</h1>
-        <p class="biz-meta">${meta}</p>
-        <p class="fine">Checked ${escapeHtml(fmtDate(report.generatedAt))}${keepLink ? ' · <a href="#keep" data-scroll-keep>Email me this report</a>' : ''}</p>
+        <div class="r2-band-grid${scoreHtml ? '' : ' noscore'}">
+          <div class="r2-band-id">
+            <p class="r2-band-k">AI Found Score report for</p>
+            <h1>${escapeHtml(b.name)}</h1>
+            <p class="fine">Checked ${escapeHtml(fmtDate(report.generatedAt))}</p>
+          </div>
+          ${scoreHtml}
+        </div>
       </div>
     </section>`;
 }
@@ -813,62 +888,86 @@ function fullScanNote() {
     </div>`;
 }
 
-// 1. Hero: one real search, and who it named.
+// 1. Hero: one real search, and who it named, in the order AI named them.
+const HERO_ROWS = 5;
 function heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }) {
   const h = aById[report.headline?.answerId] || answers[0];
   if (!h) return '';
   const q = qById[h.questionId] || { text: '' };
-  const others = (h.businessesNamed || []).filter((n) => !isYouNamed(n));
-  const shown = others.filter((n) => provenIds.has(n.entityId)).map((n) => escapeHtml(n.name));
-  const unshown = others.length - shown.length;
-  const otherText = (n) => `${n} other ${plural(n, 'business', 'businesses')}`;
-  let namedLine;
-  if (h.namedYou) {
-    namedLine = h.namedYouFirst
-      ? `It named ${escapeHtml(b.name)} first.`
-      : `It named ${escapeHtml(b.name)}, but not first.`;
-  } else if (shown.length) {
-    namedLine = `It named ${listJoin(unshown ? [...shown, otherText(unshown)] : shown)}.`;
-  } else if (unshown) {
-    namedLine = `It named ${otherText(unshown)}.`;
-  } else {
-    namedLine = 'It didn’t name any business.';
+  const named = [...(h.businessesNamed || [])].sort((x, y) => num(x.pos) - num(y.pos));
+  const youAt = named.findIndex(isYouNamed);
+  const youKnown = youAt >= 0 || h.namedYou === true;
+  const cut = youAt >= HERO_ROWS ? HERO_ROWS - 1 : HERO_ROWS; // the owner's own row is always shown
+  const shownNames = named.slice(0, cut);
+  const li = (n, i) => `<li${isYouNamed(n) ? ' class="me"' : ''}><span class="pos">${i + 1}</span><span class="nm">${escapeHtml(n.name)}${isYouNamed(n) ? ' (you)' : ''}</span></li>`;
+  const rows = shownNames.map(li);
+  if (youAt >= cut) rows.push(li(named[youAt], youAt));
+  const hidden = named.length - shownNames.length - (youAt >= cut ? 1 : 0);
+  if (hidden > 0) rows.push(`<li class="more"><span class="pos">…</span><span class="nm">and ${hidden} more</span></li>`);
+  if (youAt < 0 && h.namedYou === true) rows.push(`<li class="me"><span class="pos">✓</span><span class="nm">${escapeHtml(b.name)} (you)</span></li>`);
+  if (!youKnown) {
+    rows.push(h.ownerMatch === 'unsure'
+      ? `<li class="unsure"><span class="pos">?</span><span class="nm">${escapeHtml(b.name)}<em>We couldn’t tell</em></span></li>`
+      : `<li class="not"><span class="pos">✕</span><span class="nm">${escapeHtml(b.name)}<em>Not mentioned</em></span></li>`);
   }
-  const top = proven[0];
-  const topLine = top && num(top.first) > 0 ? ` ${escapeHtml(top.name)} was named first in ${num(top.first)}.` : '';
-  const tally = zero
-    ? '<b>You came up in 0.</b>'
-    : `<b>You came up in ${t.namedYou} and were named first in ${t.firstYou}.</b>`;
+  const eng = escapeHtml(engineName(h.engine));
+  const head = h.namedYou
+    ? (h.namedYouFirst ? `${eng} mentioned you first:` : `${eng} mentioned you, but not first:`)
+    : !named.length
+      ? (h.ownerMatch === 'unsure' ? `We couldn’t tell whether ${eng} mentioned you.` : `${eng} didn’t recommend any business.`)
+      : `${eng} recommended:`;
   return `
     <div class="r2-hero">
-      <div class="k">We searched ${escapeHtml(engineName(h.engine))} for</div>
+      <div class="k">What ${eng} told a customer who asked</div>
       <div class="q">“${escapeHtml(q.text)}”</div>
-      <p class="a">${namedLine} <a href="#ans-${escapeHtml(h.id)}" data-open="${escapeHtml(h.id)}">Read the answer</a></p>
-      ${h.namedYou ? '' : '<p class="miss">It didn’t name you.</p>'}
-      <div class="more">We ran ${cw.sameSearches} like this on ${escapeHtml(engineList)}${cw.runs > 1 ? `, ${cw.runs} times each: ${num(t.answers)} answers` : ''}. ${tally}${topLine}</div>
+      <p class="a">${head}</p>
+      <ol class="r2-hero-list">${rows.join('')}</ol>
+      <p class="r2-hero-read"><a href="#ans-${escapeHtml(h.id)}" data-open="${escapeHtml(h.id)}">Read the whole answer</a></p>
+      ${t.answers > 1 ? `<div class="more">This is one of the ${t.answers} times we asked.</div>` : ''}
     </div>`;
 }
+
+// "6 times" / "once": how often we asked.
+function N_TIMES(n) { return n === 1 ? '1 time' : `${n} times`; }
 
 // The 5-second answer, first on the page: one literal verdict line next to the AI Found Score.
 // "Named" is a literal name match in the answer text, so the line only says what the answers did.
 // The top competitor is the most-named business with proof (named in 2+ answers, provenEntities).
-function verdictV2(report, { t, N, cw, proven, zero, allNamed }) {
+function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineList = '', hasWho = false }) {
   if (!N) return '';
-  const you = zero
-    ? `AI didn’t name you in any of the ${N} ${cw.unit}.`
-    : allNamed
-      ? `AI named you in all ${N} ${cw.unit}.`
-      : `AI named you in ${t.namedYou} of ${N} ${cw.unit}.`;
+  const asked = N === 1 ? 'We asked AI once.' : `We asked AI ${N} times.`;
+  const answers = report.answers || [];
+  const allUnsure = answers.length > 0 && answers.every((a) => a.ownerMatch === 'unsure');
+  const unsureSome = answers.filter((a) => a.ownerMatch === 'unsure').length;
+  const you = allUnsure
+    ? `${asked} We couldn’t tell whether it mentioned you.`
+    : zero
+      ? (unsureSome
+        ? `${asked} It didn’t mention you in ${N - unsureSome}, and we couldn’t tell in ${unsureSome}.`
+        : `${asked} It never mentioned you.`)
+      : allNamed
+        ? `${asked} It mentioned you every time.`
+        : `${asked} It mentioned you ${t.namedYou === 1 ? 'once' : `${t.namedYou} times`}.`;
   const top = proven[0];
-  const them = top && num(top.named) > 0
-    ? ` It named ${escapeHtml(top.name)} ${num(top.named)} ${plural(num(top.named), 'time', 'times')}.`
+  const them = top && num(top.named) > 0 && !allNamed
+    ? ` ${escapeHtml(top.name)} came up ${num(top.named) === 1 ? 'once' : `${num(top.named)} times`}.`
     : '';
+  const state = zero ? 'zero' : allNamed ? 'all' : 'some';
+  const boxes = answers.map((a) => (a.ownerMatch === 'unsure'
+    ? '<i class="unsure" title="Not sure">?</i>'
+    : a.namedYou ? '<i class="yes" title="Mentioned you">✓</i>' : '<i class="no" title="Did not mention you">✕</i>')).join('');
+  const where = b.town || b.city ? ` near ${escapeHtml(b.town || b.city)}` : '';
+  const ask = engineList ? `<p class="r2-verdict-ask">We asked ${escapeHtml(engineList)} for ${escapeHtml(tradePlural(b.trade))}${where}.</p>` : '';
   return `
-    <section class="r2-verdict" aria-label="Your result">
+    <section class="r2-verdict ${state}" aria-label="Your result">
       <div class="r2-verdict-main">
+        <p class="r2-verdict-k">Your result</p>
         <p class="r2-verdict-line">${you}${them}</p>
+        ${ask}
+        <div class="r2-boxes" role="img" aria-label="${N_TIMES(N)} we asked: ${t.namedYou} mentioned you">${boxes}</div>
+        <p class="r2-verdict-key">Each box is one time we asked. <b class="y">✓ it mentioned you</b> <b class="n">✕ it didn’t</b>${allUnsure || answers.some((a) => a.ownerMatch === 'unsure') ? ' <b class="u">? not sure</b>' : ''}</p>
+        ${hasWho ? '<a class="btn r2-verdict-cta" href="#who">See who got your calls</a>' : ''}
       </div>
-      ${scoreV2(report)}
     </section>`;
 }
 
@@ -879,7 +978,8 @@ function scoreV2(report) {
   if (!sc || !Array.isArray(sc.parts) || !Number.isFinite(Number(sc.score))) return '';
   const n = Math.max(0, Math.min(100, Math.round(Number(sc.score))));
   const band = n >= 70 ? 'strong' : n >= 40 ? 'mixed' : 'weak';
-  const bandText = { strong: 'AI finds you often.', mixed: 'AI finds you sometimes.', weak: 'AI rarely finds you.' }[band];
+  const pill = { strong: 'Strong', mixed: 'Fair', weak: 'Low' }[band];
+  const bandText = { strong: 'AI recommends you often.', mixed: 'AI recommends you sometimes.', weak: 'AI almost never recommends you.' }[band];
   const rows = sc.parts.map((p) => `
         <li><span class="k">${escapeHtml(p.label)}</span><span class="v">${escapeHtml(p.detail)}</span><span class="w">${num(Math.round(p.weight * p.value))} / ${num(p.weight)}</span></li>`).join('');
   return `
@@ -887,13 +987,13 @@ function scoreV2(report) {
       <div class="r2-score-top">
         <div class="r2-score-ring ${band}" style="--pct:${n}"><span>${n}</span><small>of 100</small></div>
         <div>
-          <h2>AI Found Score<sup>*</sup></h2>
-          <p class="sub">${bandText}</p>
+          <h2>Your AI Found Score</h2>
+          <p class="r2-score-line"><span class="r2-score-pill ${band}">${pill}</span> ${bandText}</p>
         </div>
       </div>
-      <p class="r2-score-note">* The AI Found Score is our own internal measure, not a rating from any AI company.</p>
       <details class="r2-score-how">
         <summary>How we score</summary>
+        <p class="r2-score-note">Our own 0 to 100 measure, not a rating from any AI company.</p>
         <ul class="r2-score-parts">${rows}
         </ul>
         <p class="r2-score-note">We compute it only from the answers in this report: how often you were named (50%), named first (25%), whether the facts AI stated about you were right (15%) and whether AI cited your website (10%). A part we couldn&rsquo;t check is left out and the rest are scaled to 100. AI answers change, so the score can change from scan to scan.</p>
@@ -918,13 +1018,16 @@ function baselineV2(report, t) {
     </section>`;
 }
 
-// 2. The short version: three tiles and one sentence.
+// 2. The short version: did AI name you for each question a customer asks, and who took your place.
 function shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabel, proven, answers, zero, allNamed, nobodyTwice, generalAdvice }) {
   const bq = (x) => `<b>“${escapeHtml(intentLabel(x))}”</b>`;
   const bqn = (x) => `${bq(x)} (${x.named} of ${x.answers})`;
-  const lostTile = lostIntents.length
-    ? `<div class="n">${lostIntents.length}</div><div class="l">${plural(lostIntents.length, 'question', 'questions')} you lost: ${listJoin(lostIntents.map((x) => `“${escapeHtml(intentLabel(x))}”`))}</div>`
-    : '<div class="n">0</div><div class="l">questions you lost</div>';
+  const asked = intents.filter((x) => x.answers > 0);
+  const rows = asked.map((x) => `
+        <li class="${x.lost ? 'lost' : 'won'}">
+          <span class="r2-verdict-badge">${x.lost ? '✕ Lost' : '✓ Won'}</span>
+          <span class="txt"><b>“${escapeHtml(x.q.text)}”</b><span class="d">AI mentioned you in ${x.named} of ${x.answers} ${plural(x.answers, 'answer', 'answers')}.</span></span>
+        </li>`).join('');
   let line = '';
   if (allNamed) {
     line = `You’re in good shape. Every ${cw.one} named you.`;
@@ -940,38 +1043,39 @@ function shortVersionV2({ t, N, cw, intents, lostIntents, wonIntents, intentLabe
     line = 'For every question, more than half the answers named you.';
   }
   const advice = nobodyTwice && generalAdvice > 0
-    ? `<p class="r2-line">AI gave general advice without naming anyone in ${generalAdvice} of ${N} ${cw.unit}.</p>` : '';
+    ? `<p class="r2-line">AI gave general advice without naming anyone in ${generalAdvice} of ${N} ${plural(N, cw.one, cw.unit)}.</p>` : '';
   return `
     <section class="report-section">
       <h2>The short version</h2>
-      <div class="r2-tiles">
-        <div class="r2-tile"><div class="n">${t.namedYou} of ${N}</div><div class="l">${cw.unit} named you</div></div>
-        <div class="r2-tile"><div class="n">${t.firstYou} of ${N}</div><div class="l">${cw.unit} named you first</div></div>
-        <div class="r2-tile">${lostTile}</div>
-      </div>
-      ${intents.some((x) => x.answers > 1) ? '<p class="r2-muted">A question counts as lost when half or fewer of its answers named you.</p>' : ''}
+      ${rows ? `<ul class="r2-qlist">${rows}
+      </ul>` : ''}
+      ${lostIntents.some((x) => x.answers > 1) ? '<p class="r2-muted r2-qnote">Lost: AI mentioned you in half of the answers or fewer.</p>' : ''}
       ${line ? `<p class="r2-line">${line}</p>` : ''}
       ${advice}
     </section>`;
 }
 
 // 3. Who AI names: businesses named in 2+ answers. Owner always shown.
-function whoAiNamesV2({ b, t, N, cw, proven }) {
+function whoAiNamesV2({ report, b, t, N, cw, proven }) {
   const pct = (n) => (N ? Math.round((n / N) * 1000) / 10 : 0);
   const row = (name, named, first, you) => `
-    <div class="r2-row${you ? ' you' : ''}">
+    <div class="r2-row${you ? ' you' : ''}${you && !named ? ' none' : ''}">
       <span class="nm">${escapeHtml(name)}${you ? ' (you)' : ''}</span>
       <span class="c">${named} named${first ? ` · ${first} first` : ''}</span>
       <div class="t" aria-hidden="true"><i class="first" style="width:${pct(first)}%"></i><i class="named" style="width:${pct(named - first)}%"></i></div>
     </div>`;
+  // Businesses named only once are left out of the bars (a one-off may be noise) but still counted.
+  const provenIds = new Set(proven.map((e) => e.id));
+  const once = (report.entities || []).filter((e) => !e.isYou && !provenIds.has(e.id)).length;
   return `
-    <section class="report-section">
-      <h2>Who AI names for ${escapeHtml(tradePlural(b.trade))} near ${escapeHtml(b.town || b.city || 'you')}</h2>
+    <section class="report-section" id="who">
+      <h2>Who got the call instead</h2>
       <p class="sub">Every business named in at least 2 of the ${N} ${cw.unit}. Dark bar = named first.</p>
       <div class="r2-bars">
         ${row(b.name, t.namedYou, t.firstYou, true)}
         ${proven.map((e) => row(e.name, num(e.named), num(e.first), false)).join('')}
       </div>
+      ${once ? `<p class="r2-once">+ ${once} other ${plural(once, 'business', 'businesses')} named once each.</p>` : ''}
       <div class="r2-legend"><span>Named first</span><span class="n">Named, not first</span></div>
     </section>`;
 }
@@ -1017,6 +1121,27 @@ function safeHref(u) {
 }
 
 // 5. Why they got named instead: sources cited in answers the owner lost.
+// The sites cited in answers a locked report still shows in full (the headline answer keeps its citations).
+function citedDomainsV2(answers, ownDomain) {
+  const seen = new Set();
+  const engs = new Set();
+  const domains = [];
+  for (const a of answers || []) {
+    for (const c of a.citations || []) {
+      const d = String((c && c.domain) || '').replace(/^www\./, '').toLowerCase();
+      if (!d || d === ownDomain || seen.has(d)) continue;
+      seen.add(d);
+      engs.add(a.engine);
+      domains.push(d);
+    }
+  }
+  if (!domains.length) return '';
+  const label = engs.size === 1 ? `Cited in ${engineName([...engs][0])}’s answer above` : 'Cited in the answers above';
+  return `
+      <p class="r2-cited-k">${escapeHtml(label)}</p>
+      <ul class="r2-cited">${domains.slice(0, 4).map((d) => `<li>${escapeHtml(d)}</li>`).join('')}</ul>`;
+}
+
 function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
   // Locked: the cited sites are the audit's; only the tally is sent (src/lib/lock.js).
   const sum = report.sourcesSummary;
@@ -1026,7 +1151,8 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
     <section class="report-section">
       <h2>Why they got named instead</h2>
       <p class="sub">AI cited ${num(sum.cited)} ${plural(num(sum.cited), 'website', 'websites')} in the ${cw.unit} that didn’t name you.${num(sum.missingYou) ? ` <strong>${num(sum.missingYou)} of them list other ${escapeHtml(tradePlural(b.trade))} and not you.</strong>` : ''}</p>
-      <div class="listing-card">${blurred('Each site AI cited, who it lists first, and whether you’re on it, with the link.')}</div>
+      ${citedDomainsV2(report.answers, ownDomain)}
+      <div class="listing-card">${blurred('Which sites leave you out, who each lists first, and the link to each.')}</div>
     </section>`;
   }
   const order = (s) => (s.youListed === false ? 0 : s.youListed == null ? 1 : 2);
@@ -1060,6 +1186,14 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
       <p class="sub">The sites the AI cited in the ${cw.unit} that didn’t name you, and whether you’re on them.</p>
       ${cards}
     </section>`;
+}
+
+// One segment per check: green passed, red failed. Says nothing about which checks (locked).
+function siteMeterV2(total, passed) {
+  const n = Math.min(Math.max(total, 0), 30);
+  const ok = Math.min(Math.max(passed, 0), n);
+  const segs = Array.from({ length: n }, (_, i) => `<i${i < ok ? '' : ' class="f"'}></i>`).join('');
+  return `<div class="r2-meter" style="--n:${n}" role="img" aria-label="${ok} of ${n} checks passed">${segs}</div>`;
 }
 
 // 6b. How AI describes you: short phrases quoted exactly from answers that named you.
@@ -1144,7 +1278,9 @@ function siteV2(report) {
     <section class="report-section r2-site">
       <h2>Can AI read your website?</h2>
       <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI crawler would.</p>
+      ${sc.reachable && num(sc.checks) > 0 ? siteMeterV2(num(sc.checks), num(sc.passed)) : ''}
       <ul class="r2-site-list">${verdict}</ul>
+      ${sc.reachable && failedN ? `<p class="r2-site-lock">🔒 Which ${failedN === 1 ? 'one' : failedN} failed, and the exact fix for ${failedN === 1 ? 'it' : 'each'}, is in the audit.</p>` : ''}
     </section>`;
   }
   const row = (ok, text) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span> ${text}</li>`;
