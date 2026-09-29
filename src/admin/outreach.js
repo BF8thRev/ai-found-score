@@ -196,7 +196,63 @@ export function logEmailSection(d, errors = {}, { flash = '', sent = null, base 
 </section>`;
 }
 
+const SEND_STATUS_TONE = { sent: 'good', failed: 'bad', sending: 'warn' };
+
+/**
+ * "Gmail sender": the Pause switch, today's count against the cap, a test send to our own address,
+ * and the last sends. `gmail` = gmailStatus(env) (src/lib/gmail-sender.js); rows from v13.
+ */
+export function gmailSection(d, errors = {}, { flash = '', gmail = null } = {}) {
+  const g = gmail || { secrets: {}, configured: false, cap: 0, outreach: false, from: '', testTo: [] };
+  const state = Array.isArray(d.gmailState) ? d.gmailState[0] || null : null;
+  const today = Array.isArray(d.gmailToday) ? d.gmailToday[0] || null : null;
+  const sends = Array.isArray(d.gmailSends) ? d.gmailSends : [];
+  const paused = !!state?.paused;
+  const missing = Object.entries(g.secrets || {}).filter(([, v]) => !v).map(([k]) => k);
+  const errs = ['gmailState', 'gmailToday', 'gmailSends'].filter((k) => errors[k]).map((k) => `<p class="err">${esc(errors[k])}</p>`);
+  const sendingLine = errors.gmailState
+    ? badge('bad', 'unknown')
+    : paused
+      ? `${badge('bad', 'PAUSED')} ${esc(state.reason || '')} <span class="small">since ${esc(shortTime(state.changed_at))}</span>`
+      : badge('good', 'Running');
+  const toggle = paused
+    ? `<form class="inline-form" method="post" action="/admin/gmail/resume" data-confirm="Resume Gmail sending?"><button class="primary" type="submit">Resume sending</button></form>`
+    : `<form class="inline-form" method="post" action="/admin/gmail/pause" data-confirm="Pause ALL Gmail sending?"><input type="text" name="reason" maxlength="200" placeholder="Why (optional), e.g. complaints 0.25%"><button class="danger" type="submit">Pause all sending</button></form>`;
+  const table = sends.length ? `<div class="tw"><table>
+    <thead><tr><th>When</th><th>Kind</th><th>To</th><th>Subject</th><th>Result</th></tr></thead>
+    <tbody>${sends.map((r) => `<tr><td class="small">${esc(shortTime(r.created_at))}</td><td>${esc(r.kind)}</td><td>${esc(r.to_email)}</td><td class="small">${esc(r.subject || '')}</td>
+      <td>${badge(SEND_STATUS_TONE[r.status] || 'neutral', r.status || '—')}${r.message_id ? ` <span class="small">id ${esc(r.message_id)}</span>` : ''}${r.error ? `<div class="small">${esc(r.error)}</div>` : ''}</td></tr>`).join('')}</tbody>
+  </table></div>` : (errors.gmailSends ? '' : '<p class="small">Nothing sent through Gmail yet.</p>');
+  return `<section id="gmail">
+  <h2>Gmail sender</h2>
+  <p class="sub">Cold email goes out through Gmail as ${esc(g.from)}. Its access is send-only, so bounces and spam complaints never show here: watch the bounce inbox and Google Postmaster Tools, and press Pause if complaints get near 0.3%. At most one send every 5 seconds; a failed Gmail login or a Gmail sending limit pauses everything on its own and emails you.</p>
+  ${flash}
+  ${errs.join('')}
+  <ul class="gmail-facts">
+    <li><b>Sending:</b> ${sendingLine}</li>
+    <li><b>Today (ET):</b> ${esc(today?.sent_today ?? 0)} of ${esc(g.cap)}${today?.failed_today ? ` <span class="small">(${esc(today.failed_today)} failed)</span>` : ''}${today?.last_at ? ` <span class="small">· last ${esc(shortTime(today.last_at))}</span>` : ''}</li>
+    <li><b>Emails to prospects:</b> ${g.outreach ? badge('warn', 'On') : `${badge('neutral', 'Off')} <span class="small">until the EXP-001 read (Oct 5) picks the winning arm. Test sends still work.</span>`}</li>
+    <li><b>Gmail credentials:</b> ${g.configured ? badge('good', 'set') : `${badge('bad', 'missing')} ${esc(missing.join(', '))}`}</li>
+  </ul>
+  ${toggle}
+  <h3>Send a test email</h3>
+  <p class="sub">Only to our own addresses. Counts toward today’s cap and waits out the 5 seconds like any send.</p>
+  <form class="inline-form" method="post" action="/admin/gmail/test">
+    <label>To <select name="to">${(g.testTo || []).map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select></label>
+    <button class="primary" type="submit"${g.configured ? '' : ' disabled'}>Send test email</button>
+  </form>
+  <h3>Last sends</h3>
+  ${table}
+</section>`;
+}
+
 export const OUTREACH_CSS = `
+.gmail-facts{list-style:none;padding:0;margin:8px 0 12px}
+.gmail-facts li{padding:3px 0}
+.inline-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.adm .inline-form input[type="text"],.adm .inline-form select{display:inline-block;width:auto;min-width:min(320px,100%);margin:0}
+.inline-form label{display:inline-flex;gap:6px;align-items:center}
+.adm button.danger{background:var(--red);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}
 #funnel h3{margin:14px 0 4px}
 .inline-filter{display:inline-flex!important;align-items:center;gap:8px;margin:0 0 8px}
 .inline-filter select{width:auto;margin:0}

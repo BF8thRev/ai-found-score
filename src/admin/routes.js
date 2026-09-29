@@ -8,6 +8,9 @@
 //   POST /admin/scan/run        "Run now" for a queued (or failed) free-report request scan (src/lib/auto-scan.js)
 //   POST /admin/email/sent      log a hand-sent cold email → 303 /admin?sent=<token> (shows the links to paste; sends nothing)
 //   POST /admin/prospects       add a business to email (src/admin/outreach.js)
+//   POST /admin/gmail/pause     the Gmail sender's Pause switch (src/lib/gmail-sender.js) → 303 /admin?gmail=paused
+//   POST /admin/gmail/resume    turn sending back on → 303 /admin?gmail=resumed
+//   POST /admin/gmail/test      one test email through Gmail to one of our own addresses → 303 /admin?gmail=sent
 //   GET  /admin/admin.js        the page's small script
 //   /api/admin/*                see src/admin/api.js
 //
@@ -26,6 +29,7 @@ import { defaultScanEngines } from '../../scanner/config.js';
 import { runQueuedScan, cancelRequestScan, startFullScan } from '../lib/auto-scan.js';
 import { parseSentForm, parseProspectForm } from './outreach.js';
 import { recordEmailSent, validToken } from '../lib/email-tracking.js';
+import { sendViaGmail, setGmailPaused, gmailStatus } from '../lib/gmail-sender.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -113,7 +117,8 @@ export async function handleAdminRequest(request, url, env) {
   }
 
   if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/cancel' && path !== '/admin/scan/paid'
-    && path !== '/admin/email/sent' && path !== '/admin/prospects') return notFound();
+    && path !== '/admin/email/sent' && path !== '/admin/prospects'
+    && path !== '/admin/gmail/pause' && path !== '/admin/gmail/resume' && path !== '/admin/gmail/test') return notFound();
 
   const who = await adminAuth(request, adminToken);
   if (!who) {
@@ -129,7 +134,7 @@ export async function handleAdminRequest(request, url, env) {
     const n = nonce();
     const dash = await loadDashboard(env);
     const dryRun = dryRunEnabled(env) && isLocalRequest(url);
-    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env), sent, siteOrigin: url.origin }), { status, nonce: n });
+    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env), sent, siteOrigin: url.origin, gmail: gmailStatus(env) }), { status, nonce: n });
   };
 
   // Log a cold email sent by hand. Writes the 'sent' row only; the redirect shows what to paste.
@@ -160,6 +165,46 @@ export async function handleAdminRequest(request, url, env) {
     } catch (e) {
       return render({ flash: { email: { ok: false, text: `Could not save: ${redact(env, e?.message || e, 200)}` } }, status: 500 });
     }
+  }
+
+  // The Gmail sender: Pause / Resume (sender_state) and a test send to our own address.
+  if (path === '/admin/gmail/pause' || path === '/admin/gmail/resume') {
+    if (method !== 'POST') return redirect(url, '/admin#gmail');
+    const pause = path === '/admin/gmail/pause';
+    const f = await form(request);
+    const reason = String(f?.get('reason') || '').trim().slice(0, 200);
+    try {
+      await setGmailPaused(env, pause, pause ? `Paused from /admin${reason ? `: ${reason}` : ''}` : null);
+    } catch (e) {
+      return render({ flash: { gmail: { ok: false, text: `Could not save: ${redact(env, e?.message || e, 200)}` } }, status: 500 });
+    }
+    return redirect(url, `/admin?gmail=${pause ? 'paused' : 'resumed'}#gmail`);
+  }
+
+  if (path === '/admin/gmail/test') {
+    if (method !== 'POST') return redirect(url, '/admin#gmail');
+    const f = await form(request);
+    const to = String(f?.get('to') || '').trim();
+    const r = await sendViaGmail(env, {
+      to,
+      kind: 'test',
+      subject: 'AI Found Score: Gmail sender test',
+      text: 'This is a test of the Gmail sender on aifoundscore.com /admin. If it arrived, sending works. Nothing needs doing.',
+    });
+    if (r.ok) return redirect(url, `/admin?gmail=sent#gmail`);
+    const text = {
+      'not configured': 'The Gmail secrets (GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN) are not all set on this Worker.',
+      'not our address': 'Test emails only go to our own addresses.',
+      'bad address': 'Test emails only go to our own addresses.',
+      suppressed: 'That address is on the unsubscribe list (or the check failed), so nothing was sent.',
+      paused: 'Sending is paused. Resume it first.',
+      cap: 'Today’s sending cap is used up. Nothing was sent.',
+      rate: `One send every 5 seconds: try again in ${r.retryAfter || 5} s.`,
+      auth: 'Gmail refused the login, so all sending is now paused and you were emailed. The refresh token probably needs re-issuing (ask Alfred).',
+      limit: 'Gmail says the sending limit is reached, so all sending is now paused and you were emailed.',
+    }[r.reason] || `Not sent: ${redact(env, r.reason, 300)}`;
+    const status = { 'not our address': 422, 'bad address': 422, rate: 429, 'not configured': 503 }[r.reason] || (['paused', 'cap', 'suppressed'].includes(r.reason) ? 409 : 502);
+    return render({ flash: { gmail: { ok: false, text } }, status });
   }
 
   if (path === '/admin/expenses') {
@@ -228,6 +273,8 @@ export async function handleAdminRequest(request, url, env) {
   if (url.searchParams.get('prospect') === 'added') flash.email = { ok: true, text: 'Prospect added. Pick it in “Log a sent email”.' };
   if (url.searchParams.get('prospect') === 'exists') flash.email = { ok: true, text: 'A business with that exact name is already there. Pick it in “Log a sent email”.' };
   if (url.searchParams.get('again') === '1') flash.email = { ok: true, text: 'Already logged for this business and campaign: the same links as before.' };
+  const gmailFlash = { paused: 'All Gmail sending is paused.', resumed: 'Gmail sending is back on.', sent: 'Test email sent. Check the inbox; the row is under “Last sends”.' }[url.searchParams.get('gmail')];
+  if (gmailFlash) flash.gmail = { ok: true, text: gmailFlash };
   const sentParam = url.searchParams.get('sent');
   return render({ flash, watch, sent: validToken(sentParam || '') ? sentParam : null });
 }

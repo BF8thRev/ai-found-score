@@ -176,6 +176,8 @@ npm test           # scanner, extractor and outreach tests (node --test) + sampl
 | `TURNSTILE_SITE_KEY` | Free-report form bot check (`src/lib/turnstile.js`) | Public. In `wrangler.jsonc` `vars`; the Worker writes it into the homepage. See **Bot protection** |
 | `TURNSTILE_SECRET_KEY` | `POST /api/request` Siteverify | Worker secret: `npx wrangler secret put TURNSTILE_SECRET_KEY`. See **Bot protection** |
 | `RESEND_API_KEY` | Every email: receipts, "report ready", re-checks, monthly, credit alerts (`src/lib/email.js`) | Worker secret. **Required before taking payments** (no key = no receipts). The sending domain `mail.aifoundscore.com` must be verified in Resend |
+| `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | Cold email through the Gmail API as bryan@getaifoundscore.com (`src/lib/gmail-sender.js`; `supabase/v13_gmail_sender.sql`) | Worker secrets. Send-only scope. Any unset = nothing sends. Pause / Resume and a test send: /admin → Gmail sender |
+| `GMAIL_DAILY_CAP`, `GMAIL_OUTREACH` | Sends per day (ET, default 150) and whether prospects can be emailed (`on`; off until the EXP-001 read) | `wrangler.jsonc` vars |
 | `EMAIL_FROM` | Sender of every email | Optional plain var; default `AI Found Score <reports@mail.aifoundscore.com>` |
 | `SITE_URL` | Links in emails; Stripe's success/cancel URLs | Optional plain var; default `https://aifoundscore.com` (checkout falls back to the request's origin) |
 | `GOOGLE_PLACES_API_KEY` | Google listing, reviews and competitor reviews in the scan (`scanner/owner-checks.js`) | Worker secret. Unset = those checks are skipped |
@@ -230,7 +232,7 @@ The code lives at `github.com/BF8thRev/ai-found-score`.
 3. Project name: `ai-found-score`. Framework preset: **None**.
 4. Build command: `npm ci && npm test` (a failing test stops the deploy; the site keeps the last good version). Deploy command: `npx wrangler deploy`. Branch control: `master` only.
 5. Root directory: the repo root (this folder is the repo root).
-6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above: `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `ADMIN_TOKEN`, `GOOGLE_PLACES_API_KEY` and the engine keys. `SUPABASE_URL` lives in `wrangler.jsonc`. Secrets set here are available to every deployment.
+6. Under **Settings → Variables and Secrets**, add the secrets from the env var table above: `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `TURNSTILE_SECRET_KEY`, `ADMIN_TOKEN`, `GOOGLE_PLACES_API_KEY` and the engine keys. `SUPABASE_URL` lives in `wrangler.jsonc`. Secrets set here are available to every deployment.
 7. Save — Cloudflare deploys on every push to `master` from now on.
 
 Connected since Sep 2026 (Workers Builds). Every change goes through a PR into `master`; merging it is the deploy. Each build shows as the **Workers Builds: ai-found-score** check on the merge commit. No check on a merge commit means Cloudflare missed it: retry the build under the Worker's **Deployments**, or merge the next PR.

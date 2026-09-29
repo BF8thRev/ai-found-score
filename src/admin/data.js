@@ -36,6 +36,9 @@ const MIGRATION_FOR = {
   v_email_funnel: 'supabase/v12_email_tracking.sql',
   v_email_prospects: 'supabase/v12_email_tracking.sql',
   v_email_timeline: 'supabase/v12_email_tracking.sql',
+  sender_state: 'supabase/v13_gmail_sender.sql',
+  v_gmail_today: 'supabase/v13_gmail_sender.sql',
+  gmail_sends: 'supabase/v13_gmail_sender.sql',
 };
 
 const QUERIES = {
@@ -64,6 +67,10 @@ const QUERIES = {
   timeline: 'v_email_timeline?select=token,kind,at,detail&order=at.asc&limit=20000',
   // Businesses to pick from in "Log a sent email" (select=*: businesses.town only exists from v12).
   prospectBusinesses: 'businesses?select=*&order=name.asc&limit=2000',
+  // The Gmail sender (supabase/v13_gmail_sender.sql, src/lib/gmail-sender.js).
+  gmailState: 'sender_state?select=*&id=eq.gmail',
+  gmailToday: 'v_gmail_today?select=*',
+  gmailSends: 'gmail_sends?select=created_at,kind,to_email,subject,status,message_id,error&order=created_at.desc&limit=10',
 };
 
 /**

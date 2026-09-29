@@ -7,7 +7,7 @@ import {
   esc, usd, pct, moneySummary, engineVerdicts, activityFeed, shortTime, nyDate, EXPENSE_CATEGORIES,
   FIXED_COSTS, STRIPE_FEE, chargeDates, fixedCosts, unitEconomics,
 } from './metrics.js';
-import { emailFunnelTable, prospectsSection, logEmailSection, OUTREACH_CSS, OUTREACH_JS } from './outreach.js';
+import { emailFunnelTable, prospectsSection, logEmailSection, gmailSection, OUTREACH_CSS, OUTREACH_JS } from './outreach.js';
 
 const engineName = (id) => ENGINE_NAMES[id] || id;
 
@@ -478,7 +478,7 @@ export function creditBanner(credits) {
  * The dashboard. `dash` = loadDashboard() result; `flash` = { run, expense } messages
  * ({ ok: boolean, text }); `watch` = scan ids to show live status for.
  */
-export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES, sent = null, siteOrigin = 'https://aifoundscore.com' }) {
+export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES, sent = null, siteOrigin = 'https://aifoundscore.com', gmail = null }) {
   const d = dash.data || {};
   const errors = dash.errors || {};
   const flashHtml = (f) => (f ? `<p class="${f.ok ? 'ok-msg' : 'err'}" role="status">${esc(f.text)}</p>` : '');
@@ -494,7 +494,7 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
 <main class="adm wrap">
   <nav class="adm-nav" aria-label="Sections">
     <a href="#money">Money</a><a href="#costs">Costs</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
-    <a href="#funnel">Funnel</a><a href="#prospects">Prospects</a><a href="#log-email">Log email</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
+    <a href="#funnel">Funnel</a><a href="#prospects">Prospects</a><a href="#log-email">Log email</a><a href="#gmail">Gmail</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
   </nav>
   ${creditBanner(d.credits)}
   ${notConfigured}
@@ -507,6 +507,7 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
   ${funnelSection(d, errors)}
   ${prospectsSection(d, errors)}
   ${logEmailSection(d, errors, { flash: flashHtml(flash.email), sent, base: siteOrigin })}
+  ${gmailSection(d, errors, { flash: flashHtml(flash.gmail), gmail })}
   ${gatesSection(d, errors)}
   ${activitySection(d, errors)}
   ${rechecksSection(d, errors)}
