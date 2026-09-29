@@ -127,10 +127,10 @@ test('ready report opens with one plain verdict line; the score sits in the top 
   const proven = r.provenEntities(report);
   const html = r.verdictV2(report, { t, N: t.answers, cw, proven, zero: t.namedYou === 0, allNamed: t.namedYou === t.answers });
   assert.match(html, new RegExp(`We asked AI ${t.answers} times\. It (never mentioned you|mentioned you (every time|(once|${t.namedYou} times)))\.`));
-  if (proven[0] && t.namedYou < t.answers) assert.ok(html.includes(`${proven[0].name.replace(/&/g, '&amp;')} came up ${proven[0].named === 1 ? 'once' : proven[0].named + ' times'}.`), 'names the top competitor');
+  if (proven[0] && t.namedYou < t.answers) assert.ok(html.includes(`<span class="r2-rival">${proven[0].name.replace(/&/g, '&amp;')}</span> came up ${proven[0].named === 1 ? 'once' : proven[0].named + ' times'}.`), 'names the top competitor');
   assert.doesNotMatch(html, /r2-score/, 'the score lives in the top band now');
   const band = r.headerV2(report, report.business, r.scoreV2(report));
-  assert.match(band, /r2-score-ring/);
+  assert.match(band, /r2-sc-meter/);
   assert.match(band, /How we score/);
   assert.ok(!/guarantee|rank/i.test(html.replace(/<[^>]+>/g, ' ')));
 });

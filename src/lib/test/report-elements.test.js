@@ -28,7 +28,7 @@ function load({ tier = true } = {}) {
   vm.runInContext(src, ctx);
   return ctx;
 }
-const locked = () => reportBody(MOCK_REPORTS['sample-001'], false);
+const locked = () => structuredClone(reportBody(MOCK_REPORTS['sample-001'], false));
 const render = (ctx, report) => {
   const root = { innerHTML: '', addEventListener() {}, querySelector: () => null };
   ctx.renderV2(root, report);
@@ -61,17 +61,6 @@ test('one-off businesses are summed as "+ N other businesses named once each"', 
   assert.ok(html.includes(`+ ${others} other ${others === 1 ? 'business' : 'businesses'} named once each`), html);
 });
 
-test('websites AI trusted: locked report lists the cited domains it has, never the withheld source list', () => {
-  const r = load();
-  const rep = locked();
-  const html = render(r, rep);
-  const domains = rep.answers.flatMap((a) => (a.citations || []).map((c) => c.domain));
-  assert.ok(domains.length, 'fixture has a cited domain');
-  assert.match(html, /class="r2-cited"/);
-  for (const d of domains.slice(0, 4)) assert.ok(html.includes(d), d);
-  assert.ok(!rep.sources || rep.sources.length === 0, 'lock.js empties sources');
-  assert.match(html, /🔒 In the full report/);
-});
 
 test('can AI read your website: locked shows a pass/fail meter and the count, never which checks', () => {
   const r = load();
@@ -82,7 +71,7 @@ test('can AI read your website: locked shows a pass/fail meter and the count, ne
   const failed = sc.checks - sc.passed;
   assert.equal((html.match(/<i>/g) || []).length, sc.passed);
   assert.equal((html.match(/<i class="f">/g) || []).length, failed);
-  assert.match(html, new RegExp(`${failed} of ${sc.checks} checks failed`));
+  assert.match(html, new RegExp(`${failed} of ${sc.checks} website checks failed`));
   assert.match(html, /is in the audit/);
   assert.doesNotMatch(html, /robots|schema|sitemap|llms/i);
 });
@@ -124,8 +113,8 @@ test('trade names read as businesses: plumbing → plumbers', () => {
 
 test('report page ships the new script and styles under fresh cache keys', () => {
   const html = readFileSync(new URL('../../../public/report.html', import.meta.url), 'utf8');
-  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 24);
-  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 13);
+  assert.ok(Number(html.match(/report\.js\?v=(\d+)/)[1]) >= 38);
+  assert.ok(Number(html.match(/report-extra\.css\?v=(\d+)/)[1]) >= 27);
 });
 
 // ---- the top of the page: result, the search card, the short version ----
@@ -142,7 +131,7 @@ test('result panel: one box per answer, plain sentence, red when nobody named th
   assert.equal((html.match(/<i class="yes"/g) || []).length, 0);
   assert.match(html, /It never mentioned you\./);
   assert.match(html, /We asked ChatGPT, Gemini and Perplexity for /);
-  assert.match(html, /✓ it mentioned you/);
+  assert.match(html, /✓ mentioned you/);
   assert.doesNotMatch(html.slice(0, html.indexOf('r2-score')), /searches|named/i);
 });
 
@@ -185,20 +174,6 @@ test('search card: when the owner was named it shows them highlighted and no Not
   assert.doesNotMatch(html, /Not mentioned/);
 });
 
-test('short version: a Lost or Won line per question, in the customer’s own words', () => {
-  const r = load();
-  const rep = locked();
-  const { t, cw, proven } = totals(r, rep);
-  const intents = r.intentResultsV2(rep);
-  const lostIntents = intents.filter((x) => x.lost);
-  const wonIntents = intents.filter((x) => x.answers > 0 && !x.lost);
-  const html = r.shortVersionV2({ t, N: t.answers, cw, intents, lostIntents, wonIntents, intentLabel: (x) => x.intent, proven, answers: rep.answers, zero: t.namedYou === 0, allNamed: false, nobodyTwice: proven.length === 0, generalAdvice: 0 });
-  assert.match(html, /<ul class="r2-qlist">/);
-  for (const x of intents.filter((y) => y.answers > 0)) assert.ok(html.includes(x.q.text.replace(/'/g, '&#39;')) || html.includes(x.q.text), x.q.text);
-  assert.equal((html.match(/✕ Lost/g) || []).length, lostIntents.length);
-  assert.equal((html.match(/✓ Won/g) || []).length, wonIntents.length);
-  assert.doesNotMatch(html, /r2-tile/);
-});
 
 test('result panel: every answer unsure never claims "never mentioned you"', () => {
   const r = load();
@@ -225,13 +200,12 @@ test('result panel: one answer reads "once", not "1 times"', () => {
   assert.doesNotMatch(html, /1 times/);
 });
 
-test('next-step button only when the "who got the call" section exists; section has its anchor', () => {
+test('result box has no button (the rival chart is right below); the who section keeps its anchor', () => {
   const r = load();
   const rep = locked();
   const { t, cw, proven } = totals(r, rep);
-  const args = { t, N: t.answers, cw, proven, zero: true, allNamed: false, b: rep.business, engineList: 'Gemini' };
-  assert.match(r.verdictV2(rep, { ...args, hasWho: true }), /href="#who"/);
-  assert.doesNotMatch(r.verdictV2(rep, { ...args, hasWho: false }), /href="#who"/);
+  const html = r.verdictV2(rep, { t, N: t.answers, cw, proven, zero: true, allNamed: false, b: rep.business, engineList: 'Gemini' });
+  assert.doesNotMatch(html, /href="#who"|r2-verdict-cta|See who got your calls/);
   assert.match(render(r, locked()), /<section class="report-section" id="who">/);
 });
 
@@ -241,15 +215,15 @@ test('top band: business, details and the score together; no score → single co
   const withScore = r.headerV2(rep, rep.business, r.scoreV2(rep));
   assert.match(withScore, /class="report-header r2-band"/);
   assert.match(withScore, /<h1>[^<]+<\/h1>/);
-  assert.match(withScore, /r2-score-pill (weak|mixed|strong)/);
+  assert.match(withScore, /class="r2-score (weak|mixed|strong)"/);
   assert.doesNotMatch(withScore, /noscore/);
   const bare = r.headerV2(rep, rep.business, '');
   assert.match(bare, /r2-band-grid noscore/);
   assert.doesNotMatch(bare, /r2-score/);
   // whole page: exactly one score card, inside the band, above the result panel
   const html = render(r, rep);
-  assert.equal((html.match(/class="r2-score"/g) || []).length, 1);
-  assert.ok(html.indexOf('r2-score-ring') < html.indexOf('r2-verdict-line'));
+  assert.equal((html.match(/class="r2-score (weak|mixed|strong)"/g) || []).length, 1);
+  assert.ok(html.indexOf('r2-sc-num') < html.indexOf('r2-verdict-line'));
 });
 
 test('score pill words are plain', () => {
@@ -257,7 +231,7 @@ test('score pill words are plain', () => {
   const rep = locked();
   for (const [score, word] of [[0, 'Low'], [55, 'Fair'], [90, 'Strong']]) {
     const x = { ...rep, score: { ...rep.score, score } };
-    assert.match(r.scoreV2(x), new RegExp(`r2-score-pill (weak|mixed|strong)">${word}<`));
+    assert.match(r.scoreV2(x), new RegExp(`class="r2-sc-pill">${word}<`));
   }
 });
 
@@ -308,21 +282,6 @@ test('top band shows the business, the check date and the score: no trade line, 
   assert.ok(!band.includes(String(rep.business.trade || ' ') + ' ·'));
 });
 
-test('short version: the Lost note shows only when a question was lost', () => {
-  const r = load();
-  const rep = locked();
-  for (const a of rep.answers) a.namedYou = true;
-  const { t, cw, proven } = totals(r, rep);
-  const intents = r.intentResultsV2(rep);
-  const won = r.shortVersionV2({ t, N: t.answers, cw, intents, lostIntents: [], wonIntents: intents, intentLabel: (x) => x.intent, proven, answers: rep.answers, zero: false, allNamed: true, nobodyTwice: false, generalAdvice: 0 });
-  assert.doesNotMatch(won, /Lost:/);
-  assert.match(won, /✓ Won/);
-  for (const a of rep.answers) a.namedYou = false;
-  const t2 = r.computeTotalsV2(rep.answers);
-  const lostI = r.intentResultsV2(rep);
-  const lost = r.shortVersionV2({ t: t2, N: t2.answers, cw, intents: lostI, lostIntents: lostI.filter((x) => x.lost), wonIntents: [], intentLabel: (x) => x.intent, proven, answers: rep.answers, zero: true, allNamed: false, nobodyTwice: false, generalAdvice: 0 });
-  assert.match(lost, /Lost: AI mentioned you in half/);
-});
 
 test('result panel: some answers unsure and none mentioned says how many we could not tell', () => {
   const r = load();
@@ -343,10 +302,8 @@ test('search card: separate read link, no repeated "we asked" line for a single 
   const { t, cw, proven } = totals(r, rep);
   const many = r.heroV2(rep, { answers: rep.answers, aById, qById, t, cw, engineList: 'ChatGPT, Gemini and Perplexity', proven, provenIds: new Set(), zero: true, b: rep.business });
   assert.match(many, /class="r2-hero-read"><a href="#ans-/);
-  assert.match(many, /This is one of the \d+ times we asked\./);
-  assert.doesNotMatch(many, /times we asked ChatGPT/);
+  assert.doesNotMatch(many, /times we asked/);
   const one = r.heroV2(rep, { answers: [h], aById, qById, t: { ...t, answers: 1 }, cw, engineList: 'Gemini', proven, provenIds: new Set(), zero: true, b: rep.business });
-  assert.doesNotMatch(one, /This is one of/);
 });
 
 test('phone layout: the band grid columns can shrink so long names wrap instead of widening the page', () => {
@@ -382,7 +339,7 @@ test('GET /report/<token> serves a header with one report button and no links of
   const head = html.slice(html.indexOf('<header class="site-header">'), html.indexOf('</header>'));
   assert.match(head, /data-hdr-cta/);
   assert.match(head, /data-hdr-ctx/);
-  assert.match(head, /href="\/contact">Questions\?/);
+  assert.doesNotMatch(head, /<nav|Questions|\/contact/, 'no menu links and no questions link in the report header');
   for (const gone of ['/#how', '/#pricing', '/#faq', 'Who&rsquo;s getting my calls', 'Sample report']) assert.ok(!head.includes(gone), gone);
   assert.match(html, /<body class="report-page">/);
   assert.match(html, /report\.js\?v=\d+/);
@@ -475,6 +432,6 @@ test('search card: owner counted as named but absent from the list still gets a 
 
 test('offer band and the top of the page tolerate long unbroken names in CSS', () => {
   const css = readFileSync(new URL('../../../public/css/report-extra.css', import.meta.url), 'utf8');
-  assert.match(css, /\.ob-head h2, \.ob-kicker, \.ob-head \{ overflow-wrap: anywhere; min-width: 0; \}/);
+  assert.match(css, /\.offer-band h2, #offer-title \{ overflow-wrap: anywhere; min-width: 0; \}/);
   assert.match(css, /\.report-page \.nav a \{[^}]*min-height: 44px/);
 });

@@ -84,29 +84,29 @@
 
 /* Offer band (report.js offerV2): findings first, what $49 buys, a price card, the one email box. */
 .offer-band { margin: 56px 0 48px; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(180deg, #F4F7FB 0%, #FFFFFF 100%); border: 1px solid var(--line); box-shadow: var(--shadow); }
-.ob-head { max-width: 640px; }
-.ob-kicker { margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--blue); }
+
+
 .offer-band h2 { font-size: clamp(26px, 3.4vw, 34px); line-height: 1.15; margin: 0 0 10px; color: var(--navy); }
-.ob-lede { margin: 0; font-size: 17px; color: var(--ink); }
-.ob-found { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
-.ob-found li { position: relative; padding: 12px 14px 12px 40px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 15.5px; color: var(--ink); }
-.ob-found li::before { content: '!'; position: absolute; left: 12px; top: 12px; width: 20px; height: 20px; border-radius: 50%; font-size: 13px; font-weight: 800; line-height: 20px; text-align: center; color: #fff; background: var(--amber); }
-.ob-found li.high::before { background: var(--red); }
-.ob-found q { font-weight: 700; }
-.ob-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; margin-top: 26px; align-items: start; }
-.ob-gets h3 { margin: 4px 0 12px; font-size: 18px; color: var(--navy); }
+
+
+
+
+
+
+
+
 .ob-buy { background: #fff; border: 2px solid var(--blue); border-radius: 16px; padding: 22px 20px 18px; text-align: center; box-shadow: var(--shadow-lg); }
-.ob-price { margin: 0; font-size: 16px; font-weight: 700; color: var(--muted); }
-.ob-price span { font-size: 48px; font-weight: 800; color: var(--navy); letter-spacing: -.02em; vertical-align: -4px; margin-right: 4px; }
-.ob-price-note { margin: 2px 0 14px; font-size: 14px; color: var(--muted); }
+
+
+
 .ob-addon { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 12px; margin: 0 0 14px; border: 1px dashed #C9D4E3; border-radius: 10px; cursor: pointer; font-size: 14px; color: var(--muted); }
 .ob-addon:has(input:checked) { border-style: solid; border-color: var(--blue); background: #EEF4FE; }
 .ob-addon input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--blue); }
 .ob-addon b { display: block; color: var(--ink); font-size: 15px; }
 .ob-addon em { font-style: normal; color: var(--blue); }
 .ob-btn { display: block; width: 100%; box-sizing: border-box; text-align: center; }
-.ob-secure { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--navy); }
-.ob-secure svg { width: 15px; height: 15px; color: var(--green); flex: none; }
+
+
 .ob-buy .trust-cards { margin-top: 8px; }
 .ob-promise { display: flex; gap: 10px; align-items: flex-start; text-align: left; margin-top: 16px; padding: 12px; border-radius: 10px; background: #E9F6EE; font-size: 14px; color: var(--ink); }
 .ob-promise svg { width: 22px; height: 22px; color: var(--green); flex: none; }
@@ -115,24 +115,22 @@
 .ob-next summary { cursor: pointer; font-weight: 700; color: var(--navy); font-size: 15px; }
 .ob-next .trust-next { margin: 12px 0 0; max-width: none; }
 .ob-next .trust-foot { text-align: left; }
-.ob-keep { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
-.ob-keep > p { margin: 0 0 8px; color: var(--ink); }
-.ob-keep .lead-form { margin: 0; }
-.ob-keep .lead-form label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+
+
+
 @media (min-width: 901px) { .ob-buy { position: sticky; top: 88px; } }
-@media (max-width: 900px) { .ob-grid { grid-template-columns: 1fr; } }
+
 @media (max-width: 760px) { .offer-band { padding: 26px 18px 20px; margin: 40px 0; } }
 
-.ob-bridge { margin: 20px 0 0; font-size: 17px; font-weight: 600; color: var(--navy); }
-.ob-bridge em { font-style: normal; background: #FFE7B8; padding: 0 3px; border-radius: 3px; }
-.ob-stack { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: stk; }
-.ob-stack li { counter-increment: stk; display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
-.ob-stack li::before { content: counter(stk); flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
-.ob-stack li > div { flex: 1; min-width: 0; }
-.ob-stack b { color: var(--ink); font-size: 16px; }
-.ob-stack p { margin: 2px 0 0; font-size: 14.5px; color: var(--muted); }
-.ob-tag { display: inline-block; vertical-align: 2px; margin-left: 6px; font-size: 11.5px; font-weight: 800; color: var(--green); background: #E2F4E8; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
-.ob-anchor { margin: 14px 0 0; font-size: 14.5px; color: var(--muted); }
+
+
+
+
+
+
+
+
 .ob-urgent { margin: 12px 0 0; font-size: 13.5px; color: var(--red); font-weight: 600; }
 .ob-small { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
 
@@ -284,6 +282,175 @@
 .report-page .btn:hover, .report-page .header-cta:hover { background: #154FB0; }
 .report-page .nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; }
 .r2-score-how summary { padding: 8px 0; color: #3D4858; font-weight: 600; font-size: 14px; }
-.ob-head h2, .ob-kicker, .ob-head { overflow-wrap: anywhere; min-width: 0; }
-.ob-buy, .ob-gets { min-width: 0; overflow-wrap: anywhere; }
+
+.ob-buy { min-width: 0; overflow-wrap: anywhere; }
 .hdr-ctx b { min-width: 60px; }
+
+/* What to fix: big severity tiles. */
+.r2-fixtiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 14px 0 6px; }
+.r2-fixtile { border-radius: 14px; padding: 16px 12px; text-align: center; border: 2px solid; }
+.r2-fixtile .n { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+.r2-fixtile .l { margin-top: 6px; font-size: 16px; font-weight: 700; }
+.r2-fixtile.high { background: #FDECEA; border-color: #B42318; color: #8A1C13; }
+.r2-fixtile.medium { background: #FFF4E0; border-color: #B45309; color: #7A4A0B; }
+.r2-fixtile.low { background: #EEF1F6; border-color: #8A94A6; color: #2F3A4D; }
+@media (max-width: 480px) { .r2-fixtile .n { font-size: 36px; } .r2-fixtile .l { font-size: 14px; } }
+
+/* Early offer strip under the short version. */
+.r2-strip { margin: 26px 0 0; padding: 16px 20px; border-radius: 14px; background: #E8F0FE; border: 2px solid #1A5FD0; }
+.r2-strip-main { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.r2-strip-t { flex: 1 1 260px; min-width: 0; color: #14213A; font-size: 17px; }
+.r2-strip-t b { display: block; font-size: 19px; color: #0B2A5B; }
+.r2-strip-t span { font-size: 15px; }
+.r2-strip .btn { flex: none; }
+@media (max-width: 560px) { .r2-strip .btn { width: 100%; text-align: center; } }
+
+.ob-sample { display: block; margin-top: 10px; text-align: center; font-weight: 700; color: #1A5FD0; padding: 8px 0; }
+
+/* How we searched: one quiet line until opened. */
+details.r2-method { margin: 36px 0 24px; }
+details.r2-method summary { cursor: pointer; font-weight: 700; color: var(--navy); padding: 8px 0; }
+details.r2-method p { margin: 8px 0 0; }
+
+/* Page skeleton while the report loads (report.html). */
+.r2-skel { min-height: 70vh; }
+.r2-skel-band { height: 210px; background: linear-gradient(160deg, #071C40, #0B2A5B 60%, #123B7A); }
+.r2-skel-card { max-width: 820px; margin: -34px auto 0; height: 190px; border-radius: 16px; background: #fff; border: 2px solid var(--line); box-shadow: 0 10px 30px rgba(11, 42, 91, .08); }
+.r2-skel-line { max-width: 700px; height: 14px; border-radius: 7px; background: #E6EBF3; margin: 26px auto 0; }
+.r2-skel-line.s { max-width: 520px; }
+@media (prefers-reduced-motion: no-preference) { .r2-skel-card, .r2-skel-line { animation: r2-pulse 1.4s ease-in-out infinite; } }
+@keyframes r2-pulse { 50% { opacity: .55; } }
+.r2-skel .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* The competitor in the result sentence: amber highlight, dark text (never orange text on white). */
+.r2-rival { background: #FFC857; color: #14213A; padding: 0 8px; border-radius: 8px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+
+/* ---- Score: compact card with a three-zone meter (report.js scoreV2) ---- */
+.r2-band-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 300px); }
+.r2-band-grid.noscore { grid-template-columns: minmax(0, 1fr); }
+.r2-band .r2-score { --c: #B42318; --t: #FDECEA; --tx: #9B1C12; display: block; border: 0; border-radius: 14px; padding: 14px 16px 6px; background: #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, .28); }
+.r2-band .r2-score.mixed { --c: #B45309; --t: #FFF4E0; --tx: #7A4A0B; }
+.r2-band .r2-score.strong { --c: #1E7B4F; --t: #E2F4E8; --tx: #0F5A35; }
+.r2-sc-k { margin: 0; font-size: 12.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #14213A; }
+.r2-sc-num { margin: 2px 0 10px; display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; line-height: 1; color: var(--c); }
+.r2-sc-num b { font-size: 46px; font-weight: 800; letter-spacing: -.03em; }
+.r2-sc-num span { font-size: 18px; font-weight: 700; color: #3D4858; }
+.r2-sc-pill { font-style: normal; font-size: 14px; font-weight: 800; padding: 3px 10px; border-radius: 999px; margin-left: 8px; background: var(--t); color: var(--tx); align-self: center; }
+.r2-sc-meter { position: relative; display: grid; grid-template-columns: 40fr 30fr 30fr; gap: 3px; height: 10px; }
+.r2-sc-meter i { border-radius: 5px; background: #E6EAF1; }
+.r2-sc-meter i:nth-child(1) { background: #F4B8B0; }
+.r2-sc-meter i:nth-child(2) { background: #F7D9A4; }
+.r2-sc-meter i:nth-child(3) { background: #A9D8BE; }
+.r2-sc-meter::after { content: ""; position: absolute; top: -4px; left: calc(var(--n) * 1%); width: 6px; height: 18px; border-radius: 3px; background: var(--c); box-shadow: 0 0 0 2px #fff; transform: translateX(calc(var(--n) * -1%)); }
+.r2-sc-scale { display: grid; grid-template-columns: 40fr 30fr 30fr; margin-top: 5px; font-size: 12.5px; font-weight: 700; color: #3D4858; }
+.r2-sc-scale span:nth-child(2) { padding-left: 3px; }
+.r2-sc-verdict { margin: 8px 0 0; font-size: 15.5px; line-height: 1.3; font-weight: 700; color: #14213A; }
+.r2-band .r2-score-how { margin: 4px 0 0; }
+.r2-band .r2-score-how summary { color: #1A5FD0; text-decoration: underline; }
+@media (max-width: 720px) { .r2-band-grid { grid-template-columns: minmax(0, 1fr); } .r2-sc-num b { font-size: 40px; } }
+
+/* ---- Won / Lost line under each question in "Every question, every answer" ---- */
+.r2-qv { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px; font-size: 15.5px; color: #14213A; }
+.r2-qv .r2-verdict-badge { flex: none; min-width: 70px; text-align: center; font-weight: 800; font-size: 14px; border-radius: 8px; padding: 4px 10px; color: #fff; }
+.r2-qv.lost .r2-verdict-badge { background: #B42318; }
+.r2-qv.won .r2-verdict-badge { background: #1E7B4F; }
+
+/* ---- review fixes: long names wrap; blue text on light grey passes; 44px tap targets ---- */
+.report-section .sub, .r2-ans p, .r2-ans, .r2-line { overflow-wrap: anywhere; min-width: 0; }
+.report-page .site-footer .footer-brand a { color: inherit; }
+.report-page summary { min-height: 44px; display: flex; align-items: center; }
+.report-page .btn-secondary, .report-page .r2-src a { min-height: 44px; display: inline-flex; align-items: center; }
+details.r2-method { border-top: 0; padding-top: 0; }
+
+/* Email capture inside the offer strip. */
+.r2-strip-lead { margin-top: 14px; padding-top: 14px; border-top: 1px solid #A9C2EE; }
+.r2-strip .lead-form { border: 0; padding: 0; margin: 0; background: transparent; }
+.r2-strip .lead-form label { font-size: 16px; margin-bottom: 8px; }
+.r2-strip .lead-form[hidden] { display: none; }
+
+/* Round 2 review fixes */
+.r2-strip-lead[hidden] { display: none; }
+.r2-hero .q, h3.r2-q { overflow-wrap: anywhere; }
+.ob-small, .trust-foot { font-size: 14px; }
+.r2-hero-read a { min-height: 44px; display: inline-flex; align-items: center; }
+.ob-sample { padding: 12px 0; }
+.r2-site-listing { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: #FDF1EF; font-size: 15.5px; line-height: 1.45; color: #14213A; overflow-wrap: anywhere; }
+.r2-site-listing span { font-weight: 800; color: #B42318; margin-right: 6px; }
+
+/* Why AI skips you: three short lines. */
+.r2-why-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); }
+.r2-why-row:first-of-type { border-top: 0; }
+.r2-why-row .x, .r2-why-row .ok { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 15px; margin-top: 1px; }
+.r2-why-row .x { background: #FDECEA; color: #9B1C12; }
+.r2-why-row .ok { background: #E2F4E8; color: #0F5A35; }
+.r2-why-row > div { min-width: 0; flex: 1; }
+.r2-why-row p { margin: 0; font-size: 17px; line-height: 1.45; color: #14213A; overflow-wrap: anywhere; }
+.r2-why-row .r2-why-eg { margin-top: 6px; font-size: 15px; color: #3D4858; }
+.r2-why-row .r2-why-eg a { color: #1A5FD0; text-decoration: underline; overflow-wrap: anywhere; }
+.r2-why .r2-meter { margin: 10px 0 4px; }
+.r2-why .r2-site-listing { margin-top: 6px; }
+
+/* Round 3 review fixes */
+.r2-why-eg a, .ob-small a { display: inline-block; padding: 10px 0; }
+.r2-qans { margin-top: 6px; }
+.r2-qans > summary { cursor: pointer; font-weight: 700; color: #1A5FD0; text-decoration: underline; }
+
+/* Where the problems are: short lines under the severity tiles. */
+.r2-fixwhere { list-style: none; margin: 12px 0 4px; padding: 0; display: grid; gap: 8px; }
+.r2-fixwhere li { display: flex; gap: 10px; align-items: flex-start; font-size: 16.5px; line-height: 1.4; color: #14213A; overflow-wrap: anywhere; }
+.r2-fixwhere li > span:first-child { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #FDECEA; color: #9B1C12; font-weight: 800; font-size: 14px; margin-top: 1px; }
+.r2-fixwhere li > span:last-child { min-width: 0; }
+
+/* The offer: a headline, one sentence, one card. */
+
+/* Offer: tighter still. */
+
+/* Final review round */
+.report-page .site-footer a { color: #1A5FD0; }
+.report-page .site-footer .footer-brand a { color: inherit; }
+.offer-band h2, #offer-title { overflow-wrap: anywhere; min-width: 0; }
+.ob-small a { padding: 11px 0; }
+.lead-form label[hidden] { display: none; }
+
+/* Every question, every answer: one line until opened. */
+details.r2-allans > summary { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; list-style: none; padding: 6px 0; }
+details.r2-allans > summary::-webkit-details-marker { display: none; }
+details.r2-allans > summary h2 { margin: 0; }
+details.r2-allans > summary::after { content: "+"; font-size: 24px; font-weight: 700; color: var(--navy); }
+details.r2-allans[open] > summary::after { content: "–"; }
+.r2-allans-n { margin-left: auto; font-size: 15px; color: #3D4858; white-space: nowrap; }
+
+/* ---- The offer: a navy closing card that echoes the top band and the search card ---- */
+.offer-band.ob-navy { margin: 28px 0 32px; padding: 26px 20px 20px; border: 0; border-radius: 20px; color: #fff; background: linear-gradient(170deg, #123B7A 0%, #0B2A5B 55%, #071C40 100%); box-shadow: 0 16px 40px rgba(7, 28, 64, .28); }
+.ob-eyebrow { margin: 0 0 8px; font-size: 12.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #FFC857; }
+.ob-navy h2 { margin: 0 0 8px; color: #fff; font-size: clamp(28px, 6vw, 36px); line-height: 1.1; letter-spacing: -.02em; }
+.ob-rival { color: #FFC857; }
+.ob-cost { margin: 0 0 16px; font-size: 18px; font-weight: 700; color: #FFE0A3; }
+.ob-get { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.ob-get li { position: relative; padding-left: 30px; font-size: 16.5px; line-height: 1.4; color: #fff; overflow-wrap: anywhere; }
+.ob-get li::before { content: "✓"; position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; background: #FFC857; color: #071C40; font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+.ob-easy { margin: 0 0 16px; font-size: 15.5px; line-height: 1.45; color: #DCE6F5; }
+.ob-navy .ob-urgent { margin: 0 0 14px; color: #FFE0A3; font-weight: 600; }
+.report-page .ob-navy .ob-btn { display: block; width: 100%; box-sizing: border-box; text-align: center; background: #FFC857; color: #071C40; font-weight: 800; font-size: 19px; padding: 17px 12px; border-radius: 14px; box-shadow: 0 5px 0 #B45309; }
+.report-page .ob-navy .ob-btn:hover { background: #FFD27A; }
+.ob-navy .ob-promise { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 15px; }
+.ob-navy .ob-promise svg { width: 22px; height: 22px; flex: none; color: #A9D8BE; }
+.ob-navy .ob-promise p { margin: 0; }
+.ob-navy .ob-addon { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; padding: 10px 12px; border: 1px dashed rgba(255, 255, 255, .4); border-radius: 12px; background: transparent; color: #DCE6F5; font-size: 14px; cursor: pointer; }
+.ob-navy .ob-addon:has(input:checked) { border-style: solid; border-color: #FFC857; background: rgba(255, 200, 87, .1); }
+.ob-navy .ob-addon input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: #FFC857; }
+.ob-navy .ob-addon b { display: block; color: #fff; font-size: 15px; }
+.ob-navy .ob-addon em { font-style: normal; color: #FFC857; }
+.ob-navy .ob-small { margin: 14px 0 0; font-size: 14px; line-height: 1.5; color: #CFE0FA; }
+.ob-navy .ob-small svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; color: #A9D8BE; }
+.ob-navy .ob-small a, .ob-navy .ob-sample { color: #fff; text-decoration: underline; display: inline-block; padding: 12px 0; }
+
+/* Trimmed offer card */
+.ob-navy .ob-promise { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; padding: 0; background: none; border-radius: 0; font-size: 14.5px; line-height: 1.4; color: #DCE6F5; }
+.ob-navy .ob-promise svg { width: 18px; height: 18px; margin-top: 1px; }
+.ob-navy .ob-promise b { color: #fff; }
+.ob-navy .ob-promise span, .ob-navy .ob-easy, .ob-navy .ob-urgent, .ob-navy .ob-small, .ob-navy .ob-addon span, .ob-navy .ob-cost, .ob-navy h2 { overflow-wrap: anywhere; min-width: 0; }
+.ob-navy .ob-urgent { font-size: 15px; }
+.ob-navy .ob-cost { font-size: 16.5px; }
+.ob-get { gap: 8px; }
+.ob-get li { font-size: 16px; }
