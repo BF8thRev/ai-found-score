@@ -39,6 +39,9 @@ const MIGRATION_FOR = {
   sender_state: 'supabase/v13_gmail_sender.sql',
   v_gmail_today: 'supabase/v13_gmail_sender.sql',
   gmail_sends: 'supabase/v13_gmail_sender.sql',
+  v_followup_funnel: 'supabase/v14_followups.sql',
+  v_followup_candidates: 'supabase/v14_followups.sql',
+  outreach_templates: 'supabase/v14_followups.sql',
 };
 
 const QUERIES = {
@@ -71,6 +74,10 @@ const QUERIES = {
   gmailState: 'sender_state?select=*&id=eq.gmail',
   gmailToday: 'v_gmail_today?select=*',
   gmailSends: 'gmail_sends?select=created_at,kind,to_email,subject,status,message_id,error&order=created_at.desc&limit=10',
+  // The EXP-002 follow-ups (supabase/v14_followups.sql, src/lib/followups.js, src/admin/followups.js).
+  followupFunnel: 'v_followup_funnel?select=*',
+  followupCandidates: 'v_followup_candidates?select=*&campaign=ilike.exp002&order=sent_at.desc&limit=500',
+  followupTemplates: 'outreach_templates?select=*',
 };
 
 /**

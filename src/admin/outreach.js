@@ -28,6 +28,7 @@ const EVENT_LABEL = {
   payment_test: 'Test payment (not counted)',
   payment_refunded: 'Paid, then refunded (not counted)',
   unsubscribed: 'Unsubscribed',
+  replied: 'Replied (marked on /admin)',
 };
 export const eventLabel = (kind) => EVENT_LABEL[kind] || String(kind || '—');
 
@@ -110,7 +111,8 @@ export function emailFunnelTable(rows, errors = {}) {
 
 /** Prospects: read-only table + a timeline drawer per row (admin.js opens it). No buttons that change anything. */
 export function prospectsSection(d, errors = {}) {
-  const rows = Array.isArray(d.prospects) ? d.prospects : [];
+  // One row per prospect: follow-ups (v14 parent_token) are in the Follow-ups section.
+  const rows = Array.isArray(d.prospects) ? d.prospects.filter((r) => r && !r.parent_token) : [];
   const timeline = groupTimeline(d.timeline);
   const arms = [...new Set(rows.map((r) => r.arm || '—'))].sort();
   const filter = arms.length > 1

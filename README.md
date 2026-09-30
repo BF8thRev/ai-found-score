@@ -178,6 +178,7 @@ npm test           # scanner, extractor and outreach tests (node --test) + sampl
 | `RESEND_API_KEY` | Every email: receipts, "report ready", re-checks, monthly, credit alerts (`src/lib/email.js`) | Worker secret. **Required before taking payments** (no key = no receipts). The sending domain `mail.aifoundscore.com` must be verified in Resend |
 | `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | Cold email through the Gmail API as bryan@getaifoundscore.com (`src/lib/gmail-sender.js`; `supabase/v13_gmail_sender.sql`) | Worker secrets. Send-only scope. Any unset = nothing sends. Pause / Resume and a test send: /admin → Gmail sender |
 | `GMAIL_DAILY_CAP`, `GMAIL_OUTREACH` | Sends per day (ET, default 150) and whether prospects can be emailed (`on`; off until the EXP-001 read) | `wrangler.jsonc` vars |
+| `GMAIL_FOLLOWUPS` | `on` lets the half-hourly cron send the EXP-002 follow-ups (`src/lib/followups.js`; `supabase/v14_followups.sql`). Needs `GMAIL_OUTREACH=on` too | `wrangler.jsonc` var, off. Turn on after the real copy is saved on /admin → Follow-ups |
 | `EMAIL_FROM` | Sender of every email | Optional plain var; default `AI Found Score <reports@mail.aifoundscore.com>` |
 | `SITE_URL` | Links in emails; Stripe's success/cancel URLs | Optional plain var; default `https://aifoundscore.com` (checkout falls back to the request's origin) |
 | `GOOGLE_PLACES_API_KEY` | Google listing, reviews and competitor reviews in the scan (`scanner/owner-checks.js`) | Worker secret. Unset = those checks are skipped |

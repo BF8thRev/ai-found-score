@@ -181,7 +181,8 @@ export async function recordEmailSent(env, sent, { fetchImpl = fetch } = {}) {
   const campaign = String(sent.campaign || '').trim().slice(0, 80);
   if (!sent.businessId || !CAMPAIGN_RE.test(campaign)) throw new Error('businessId and a campaign name (letters, numbers, spaces, . _ -) are required');
   const find = async () => {
-    const q = `email_events?select=token&event=eq.sent&business_id=eq.${encodeURIComponent(sent.businessId)}&campaign=ilike.${encodeURIComponent(campaign.replace(/[%_\\]/g, '\\$&'))}&limit=1`;
+    // Oldest first: follow-ups (supabase/v14_followups.sql) share the business + campaign and always come later.
+    const q = `email_events?select=token&event=eq.sent&business_id=eq.${encodeURIComponent(sent.businessId)}&campaign=ilike.${encodeURIComponent(campaign.replace(/[%_\\]/g, '\\$&'))}&order=occurred_at.asc&limit=1`;
     const r = await fetchImpl(`${s.base}/${q}`, { headers: s.headers });
     if (!r.ok) throw new Error(`email_events read failed: ${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
     const [row] = await r.json();

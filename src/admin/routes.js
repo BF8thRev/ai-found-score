@@ -11,6 +11,9 @@
 //   POST /admin/gmail/pause     the Gmail sender's Pause switch (src/lib/gmail-sender.js) → 303 /admin?gmail=paused
 //   POST /admin/gmail/resume    turn sending back on → 303 /admin?gmail=resumed
 //   POST /admin/gmail/test      one test email through Gmail to one of our own addresses → 303 /admin?gmail=sent
+//   POST /admin/followups/run       send every EXP-002 follow-up due now (src/lib/followups.js) → 303 /admin?followups=ran…
+//   POST /admin/followups/replied   "Mark replied" on a prospect: no more follow-ups → 303 /admin?followups=replied
+//   POST /admin/followups/template  save (or reset=1: drop) one follow-up template → 303 /admin?followups=saved
 //   GET  /admin/admin.js        the page's small script
 //   /api/admin/*                see src/admin/api.js
 //
@@ -29,7 +32,8 @@ import { defaultScanEngines } from '../../scanner/config.js';
 import { runQueuedScan, cancelRequestScan, startFullScan } from '../lib/auto-scan.js';
 import { parseSentForm, parseProspectForm } from './outreach.js';
 import { recordEmailSent, validToken } from '../lib/email-tracking.js';
-import { sendViaGmail, setGmailPaused, gmailStatus } from '../lib/gmail-sender.js';
+import { sendViaGmail, setGmailPaused, gmailStatus, outreachEnabled } from '../lib/gmail-sender.js';
+import { runFollowups, markReplied, saveTemplate, resetTemplate, followupsEnabled } from '../lib/followups.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -118,7 +122,8 @@ export async function handleAdminRequest(request, url, env) {
 
   if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/cancel' && path !== '/admin/scan/paid'
     && path !== '/admin/email/sent' && path !== '/admin/prospects'
-    && path !== '/admin/gmail/pause' && path !== '/admin/gmail/resume' && path !== '/admin/gmail/test') return notFound();
+    && path !== '/admin/gmail/pause' && path !== '/admin/gmail/resume' && path !== '/admin/gmail/test'
+    && path !== '/admin/followups/run' && path !== '/admin/followups/replied' && path !== '/admin/followups/template') return notFound();
 
   const who = await adminAuth(request, adminToken);
   if (!who) {
@@ -134,7 +139,7 @@ export async function handleAdminRequest(request, url, env) {
     const n = nonce();
     const dash = await loadDashboard(env);
     const dryRun = dryRunEnabled(env) && isLocalRequest(url);
-    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env), sent, siteOrigin: url.origin, gmail: gmailStatus(env) }), { status, nonce: n });
+    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env), sent, siteOrigin: url.origin, gmail: gmailStatus(env), followups: { enabled: followupsEnabled(env), outreach: outreachEnabled(env) } }), { status, nonce: n });
   };
 
   // Log a cold email sent by hand. Writes the 'sent' row only; the redirect shows what to paste.
@@ -207,6 +212,45 @@ export async function handleAdminRequest(request, url, env) {
     return render({ flash: { gmail: { ok: false, text } }, status });
   }
 
+  // EXP-002 follow-ups (src/lib/followups.js): run now, mark a prospect replied, save / reset the copy.
+  if (path === '/admin/followups/run') {
+    if (method !== 'POST') return redirect(url, '/admin#followups');
+    const r = await runFollowups(env);
+    if (r.error) return render({ flash: { followups: { ok: false, text: `Nothing sent: ${redact(env, r.error, 300)}` } }, status: 500 });
+    if (r.skipped) return redirect(url, `/admin?followups=skipped&why=${encodeURIComponent(r.skipped)}#followups`);
+    const q = new URLSearchParams({ followups: 'ran', sent: String(r.sent), due: String(r.due) });
+    if (r.stopped) q.set('stopped', r.stopped);
+    const failed = [...new Set(r.results.filter((x) => !x.ok).map((x) => x.reason))].slice(0, 5).join(', ');
+    if (failed) q.set('failed', failed);
+    return redirect(url, `/admin?${q}#followups`);
+  }
+
+  if (path === '/admin/followups/replied') {
+    if (method !== 'POST') return redirect(url, '/admin#followups');
+    const f = await form(request);
+    const token = String(f?.get('token') || '').trim();
+    if (!validToken(token)) return render({ flash: { followups: { ok: false, text: 'Bad prospect.' } }, status: 422 });
+    try {
+      if (!(await markReplied(env, token))) return render({ flash: { followups: { ok: false, text: 'That prospect isn’t in the database.' } }, status: 422 });
+    } catch (e) {
+      return render({ flash: { followups: { ok: false, text: `Could not save: ${redact(env, e?.message || e, 200)}` } }, status: 500 });
+    }
+    return redirect(url, '/admin?followups=replied#followups');
+  }
+
+  if (path === '/admin/followups/template') {
+    if (method !== 'POST') return redirect(url, '/admin#followups');
+    const f = await form(request);
+    const t = { stage: String(f?.get('stage') || ''), variant: String(f?.get('variant') || ''), subject: f?.get('subject'), body: f?.get('body') };
+    try {
+      const r = f?.get('reset') === '1' ? await resetTemplate(env, t) : await saveTemplate(env, t);
+      if (!r.ok) return render({ flash: { followups: { ok: false, text: `Not saved. ${r.errors.join(' ')}` } }, status: 422 });
+    } catch (e) {
+      return render({ flash: { followups: { ok: false, text: `Could not save: ${redact(env, e?.message || e, 200)}` } }, status: 500 });
+    }
+    return redirect(url, `/admin?followups=${f?.get('reset') === '1' ? 'reset' : 'saved'}#followups`);
+  }
+
   if (path === '/admin/expenses') {
     if (method !== 'POST') return redirect(url, '/admin#expenses');
     const f = await form(request);
@@ -275,6 +319,15 @@ export async function handleAdminRequest(request, url, env) {
   if (url.searchParams.get('again') === '1') flash.email = { ok: true, text: 'Already logged for this business and campaign: the same links as before.' };
   const gmailFlash = { paused: 'All Gmail sending is paused.', resumed: 'Gmail sending is back on.', sent: 'Test email sent. Check the inbox; the row is under “Last sends”.' }[url.searchParams.get('gmail')];
   if (gmailFlash) flash.gmail = { ok: true, text: gmailFlash };
+  const fu = url.searchParams;
+  const followupFlash = {
+    ran: () => `Follow-ups sent: ${Number(fu.get('sent')) || 0} of ${Number(fu.get('due')) || 0} due.${fu.get('failed') ? ` Not sent: ${fu.get('failed').slice(0, 200)}.` : ''}${fu.get('stopped') ? ` Stopped early: ${fu.get('stopped').slice(0, 60)}.` : ''}`,
+    skipped: () => `Nothing sent: ${{ 'followups off': 'follow-ups are off (GMAIL_FOLLOWUPS)', 'outreach off': 'emails to prospects are off (GMAIL_OUTREACH)', 'not configured': 'the Gmail secrets are not all set', 'outside hours': 'follow-ups only go out on weekdays, 9am–5pm New York time' }[fu.get('why')] || 'the Supabase service key is not set'}.`,
+    replied: () => 'Marked replied. No more follow-ups go to them.',
+    saved: () => 'Copy saved. The next follow-up uses it.',
+    reset: () => 'Back to the placeholder copy.',
+  }[fu.get('followups')];
+  if (followupFlash) flash.followups = { ok: fu.get('followups') !== 'skipped', text: followupFlash() };
   const sentParam = url.searchParams.get('sent');
   return render({ flash, watch, sent: validToken(sentParam || '') ? sentParam : null });
 }

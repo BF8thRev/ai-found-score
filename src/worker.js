@@ -30,6 +30,8 @@
 //   GET  /plan/[token]        -> the Be the Answer page (public/plan.html)
 //   cron (daily)              -> the free 30-day re-check of every paid report (src/lib/auto-scan.js startDueRechecks),
 //                                then Be the Answer's monthly re-scans (startDueMonthly)
+//   cron (every 30 min)       -> scan recovery + credit alerts, and the EXP-002 follow-up emails (src/lib/followups.js;
+//                                GMAIL_FOLLOWUPS=on, weekdays 9-5 New York)
 //   GET  /api/proof           -> homepage proof line (src/lib/proof.js), hidden below PROOF_MIN_SCANS; cached 1 h
 //   GET  /                    -> homepage; the hero's real AI answer card comes from showcase_answers
 //                                (src/lib/showcase.js, filled by `node scanner/showcase.js`), cached 1 h
@@ -57,6 +59,7 @@ import {
   retryFailedScans, startAbandonedCheckout, REQUEST_TOKEN_RE,
 } from './lib/auto-scan.js';
 import { sendCreditAlerts, sendPaidScanAlert } from './lib/alerts.js';
+import { runFollowups } from './lib/followups.js';
 
 /** wrangler.jsonc triggers: this one is the half-hourly recovery + credit check; the other is daily. */
 const RECOVERY_CRON = '*/30 * * * *';
@@ -210,6 +213,10 @@ export default {
         .then((r) => console.log('[recovery]', JSON.stringify(r)))
         .then(() => sendCreditAlerts(env))
         .then((r) => console.log('[credits]', JSON.stringify({ checked: r?.checked, alerts: r?.alerts }))));
+      // Separate from the chain above: a failed scan retry never holds back a follow-up, or the reverse.
+      ctx.waitUntil(runFollowups(env)
+        .then((r) => console.log('[followups]', JSON.stringify({ skipped: r.skipped, error: r.error, due: r.due, sent: r.sent, stopped: r.stopped })))
+        .catch((e) => console.error('[followups]', String(e?.message || e).slice(0, 200))));
       return;
     }
     // Daily. One after the other: a plan's month 1 is skipped when the re-check just scanned that report.

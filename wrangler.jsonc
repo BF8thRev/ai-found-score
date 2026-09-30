@@ -48,7 +48,10 @@
     // GMAIL_REFRESH_TOKEN are in the dashboard. GMAIL_DAILY_CAP: sends per day (ET), the warm-up cap.
     // GMAIL_OUTREACH "on" lets it email prospects: off until the EXP-001 read (Oct 5) picks the winning arm.
     "GMAIL_DAILY_CAP": "150",
-    "GMAIL_OUTREACH": "off"
+    "GMAIL_OUTREACH": "off",
+    // EXP-002 follow-ups (src/lib/followups.js, /admin #followups): "on" lets the half-hourly cron send
+    // them (GMAIL_OUTREACH must be on too). Off until the real copy is saved on /admin after the Oct 5 read.
+    "GMAIL_FOLLOWUPS": "off"
   },
   // PR preview builds (Workers Builds on non-production branches). Wrangler requires this block and
   // never copies production vars or ratelimits into it. Preview-safe values: Cloudflare's always-pass

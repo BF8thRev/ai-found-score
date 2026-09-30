@@ -8,6 +8,7 @@ import {
   FIXED_COSTS, STRIPE_FEE, chargeDates, fixedCosts, unitEconomics,
 } from './metrics.js';
 import { emailFunnelTable, prospectsSection, logEmailSection, gmailSection, OUTREACH_CSS, OUTREACH_JS } from './outreach.js';
+import { followupsSection, FOLLOWUPS_CSS } from './followups.js';
 
 const engineName = (id) => ENGINE_NAMES[id] || id;
 
@@ -68,6 +69,7 @@ const CSS = `
 .login h1{font-size:22px;margin-bottom:12px}
 .login button{margin-top:12px;width:100%}
 ${OUTREACH_CSS}
+${FOLLOWUPS_CSS}
 @media (max-width:600px){.adm.wrap,.adm-top .wrap{padding-left:16px;padding-right:16px}.adm section{padding:14px 12px 10px}.adm th,.adm td{padding:6px 6px}}
 `;
 
@@ -478,7 +480,7 @@ export function creditBanner(credits) {
  * The dashboard. `dash` = loadDashboard() result; `flash` = { run, expense } messages
  * ({ ok: boolean, text }); `watch` = scan ids to show live status for.
  */
-export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES, sent = null, siteOrigin = 'https://aifoundscore.com', gmail = null }) {
+export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES, sent = null, siteOrigin = 'https://aifoundscore.com', gmail = null, followups = {} }) {
   const d = dash.data || {};
   const errors = dash.errors || {};
   const flashHtml = (f) => (f ? `<p class="${f.ok ? 'ok-msg' : 'err'}" role="status">${esc(f.text)}</p>` : '');
@@ -494,7 +496,7 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
 <main class="adm wrap">
   <nav class="adm-nav" aria-label="Sections">
     <a href="#money">Money</a><a href="#costs">Costs</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
-    <a href="#funnel">Funnel</a><a href="#prospects">Prospects</a><a href="#log-email">Log email</a><a href="#gmail">Gmail</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
+    <a href="#funnel">Funnel</a><a href="#prospects">Prospects</a><a href="#log-email">Log email</a><a href="#gmail">Gmail</a><a href="#followups">Follow-ups</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
   </nav>
   ${creditBanner(d.credits)}
   ${notConfigured}
@@ -508,6 +510,7 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
   ${prospectsSection(d, errors)}
   ${logEmailSection(d, errors, { flash: flashHtml(flash.email), sent, base: siteOrigin })}
   ${gmailSection(d, errors, { flash: flashHtml(flash.gmail), gmail })}
+  ${followupsSection(d, errors, { flash: flashHtml(flash.followups), status: followups, now })}
   ${gatesSection(d, errors)}
   ${activitySection(d, errors)}
   ${rechecksSection(d, errors)}

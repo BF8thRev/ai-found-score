@@ -366,6 +366,8 @@ test('recordEmailSent: a new row (arm email, token, sent_at); the same business 
   assert.equal(at.calls[1].body.sent_at, '2026-09-28T10:00:00Z', 'a sender may pass its own');
   assert.match(f.calls[0].url, /campaign=ilike\.test20%5C_a/, 'underscore is escaped, not a wildcard');
   assert.equal(f.calls[0].headers.apikey, 'service');
+  // Follow-ups (supabase/v14_followups.sql) share the business + campaign: the first email (oldest) wins.
+  assert.match(f.calls[0].url, /&order=occurred_at\.asc&limit=1$/);
 
   const again = fakeFetch([['GET', /email_events\?/, Response.json([{ token: TOKEN }])]]);
   assert.deepEqual(await recordEmailSent(ENV, { businessId: BIZ, campaign: 'TEST20_A' }, { fetchImpl: again.impl }), { token: TOKEN, existing: true });
