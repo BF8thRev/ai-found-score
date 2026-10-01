@@ -106,6 +106,59 @@
   </div>
 </section>
 
+<!-- Results of the hero form (right under it, where "See it below" points): the live answer, the report link, the questions, optional email. -->
+<section class="section" id="results" hidden>
+  <div class="wrap">
+    <div class="request done">
+      <div class="request-next" id="request-next" hidden>
+        <!-- Live answer: on submit we ask the first question to one assistant right away
+             (POST /api/live-preview) and show its answer word for word. -->
+        <div class="rq-block rq-live" id="rq-live" hidden tabindex="-1">
+          <div class="live-wait" id="live-wait" hidden>
+            <p class="live-asking">Asking AI: <strong id="live-wait-q"></strong></p>
+            <div class="live-bar" aria-hidden="true"><span></span></div>
+          </div>
+          <div class="live-out" id="live-out" hidden>
+            <p class="live-named" id="live-named"></p>
+            <p class="live-head" id="live-head"></p>
+            <p class="live-q" id="live-q"></p>
+            <div class="live-answer" id="live-answer"></div>
+            <p class="live-cites" id="live-cites"></p>
+            <p class="live-note" id="live-note"></p>
+          </div>
+        </div>
+        <!-- The one next step: their private report page. The heading follows the live answer
+             (named / not named / no answer); the button appears once the request is saved. -->
+        <div class="rq-block rq-next" id="rq-next" tabindex="-1">
+          <h3 id="next-title">Your free report asks every question</h3>
+          <p class="rq-sub" id="next-sub">Whether AI names you, who it names instead, and your AI Found Score.</p>
+          <p class="rq-actions" id="next-actions" hidden>
+            <a class="btn" id="next-open" href="#">Open my free report</a>
+            <button type="button" class="link-btn" id="next-copy">Copy link</button>
+          </p>
+          <p class="rq-count" id="next-note" hidden>Private to you. It fills in as soon as it&rsquo;s ready, so bookmark it.</p>
+        </div>
+        <div class="rq-block" id="rq-questions" tabindex="-1">
+          <h3 id="rq-title">Here's exactly what we'll ask</h3>
+          <p class="rq-sub" id="rq-sub">We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.</p>
+          <button type="button" class="link-btn rq-toggle" id="rq-toggle" hidden aria-expanded="false" aria-controls="rq-list">Show them</button>
+          <ol class="rq-list" id="rq-list"></ol>
+        </div>
+        <p class="status" id="request-save" role="status"></p>
+        <form class="rq-block rq-email" id="email-form" novalidate>
+          <h3>Want the link by email too?</h3>
+          <p class="rq-sub">Optional. We&rsquo;ll email you the moment your report is ready. No sales call.</p>
+          <label><span>Email <small class="opt">(optional)</small></span> <input name="email" type="email" maxlength="160" autocomplete="email" placeholder="you@yourbusiness.com"></label>
+          <div class="ts-box" id="ts-email"></div>
+          <button class="btn-secondary" type="submit">Email me the link</button>
+          <p class="status" id="email-status" role="status"></p>
+          <p class="form-note">We only email you about this report. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="stats-band" aria-label="How many people use AI to find businesses">
   <div class="wrap">
     <h2 class="stats-head">The shift already happened.</h2>
@@ -312,59 +365,6 @@
     <p class="intro">Your business name and website. Your report opens right away.</p>
     <a class="btn big" href="#request">Show me who&rsquo;s getting my calls</a>
     <p class="fine">Free &middot; No email to start</p>
-  </div>
-</section>
-
-<!-- Results of the hero form: the live answer, the report link, the questions, optional email. -->
-<section class="section" id="results" hidden>
-  <div class="wrap">
-    <div class="request done">
-      <div class="request-next" id="request-next" hidden>
-        <!-- Live answer: on submit we ask the first question to one assistant right away
-             (POST /api/live-preview) and show its answer word for word. -->
-        <div class="rq-block rq-live" id="rq-live" hidden tabindex="-1">
-          <div class="live-wait" id="live-wait" hidden>
-            <p class="live-asking">Asking AI: <strong id="live-wait-q"></strong></p>
-            <div class="live-bar" aria-hidden="true"><span></span></div>
-          </div>
-          <div class="live-out" id="live-out" hidden>
-            <p class="live-named" id="live-named"></p>
-            <p class="live-head" id="live-head"></p>
-            <p class="live-q" id="live-q"></p>
-            <div class="live-answer" id="live-answer"></div>
-            <p class="live-cites" id="live-cites"></p>
-            <p class="live-note" id="live-note"></p>
-          </div>
-        </div>
-        <!-- The one next step: their private report page. The heading follows the live answer
-             (named / not named / no answer); the button appears once the request is saved. -->
-        <div class="rq-block rq-next" id="rq-next" tabindex="-1">
-          <h3 id="next-title">Your free report asks every question</h3>
-          <p class="rq-sub" id="next-sub">Whether AI names you, who it names instead, and your AI Found Score.</p>
-          <p class="rq-actions" id="next-actions" hidden>
-            <a class="btn" id="next-open" href="#">Open my free report</a>
-            <button type="button" class="link-btn" id="next-copy">Copy link</button>
-          </p>
-          <p class="rq-count" id="next-note" hidden>Private to you. It fills in as soon as it&rsquo;s ready, so bookmark it.</p>
-        </div>
-        <div class="rq-block" id="rq-questions" tabindex="-1">
-          <h3 id="rq-title">Here's exactly what we'll ask</h3>
-          <p class="rq-sub" id="rq-sub">We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.</p>
-          <button type="button" class="link-btn rq-toggle" id="rq-toggle" hidden aria-expanded="false" aria-controls="rq-list">Show them</button>
-          <ol class="rq-list" id="rq-list"></ol>
-        </div>
-        <p class="status" id="request-save" role="status"></p>
-        <form class="rq-block rq-email" id="email-form" novalidate>
-          <h3>Want the link by email too?</h3>
-          <p class="rq-sub">Optional. We&rsquo;ll email you the moment your report is ready. No sales call.</p>
-          <label><span>Email <small class="opt">(optional)</small></span> <input name="email" type="email" maxlength="160" autocomplete="email" placeholder="you@yourbusiness.com"></label>
-          <div class="ts-box" id="ts-email"></div>
-          <button class="btn-secondary" type="submit">Email me the link</button>
-          <p class="status" id="email-status" role="status"></p>
-          <p class="form-note">We only email you about this report. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
-        </form>
-      </div>
-    </div>
   </div>
 </section>
 
