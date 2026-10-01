@@ -734,6 +734,8 @@
       .then(function (res) {
         if (sitePending && sitePending.site === site) sitePending = null;
         if (!res || res.ok === false) { note('', ''); return res || { ok: true }; }
+        // The owner kept typing: this answer is for an address that is no longer in the box.
+        if (website() !== site) return res;
         siteChecked = site;
         var got = [];
         if (setIf(nameInput, 'name', res.name)) got.push('your name');
@@ -746,10 +748,20 @@
     sitePending = { site: site, p: p };
     return p;
   }
-  form.elements.website.addEventListener('change', function () {
+  // The boxes fill in while the owner types: half a second after the last keystroke, once the
+  // text reads as an address (a dot and a 2+ letter ending). A half-typed "pr73.co" just comes
+  // back "unreachable" and is ignored; the popup only ever shows on the button.
+  var typeTimer = null;
+  function siteTyped() {
     var site = website();
-    if (/^\S+\.\S+$/.test(site) && site !== siteChecked) checkSite(site);
+    if (!/^\S+\.[a-z]{2,}(?:[/?#]\S*)?$/i.test(site) || site === siteChecked) return;
+    checkSite(site);
+  }
+  form.elements.website.addEventListener('input', function () {
+    clearTimeout(typeTimer);
+    typeTimer = setTimeout(siteTyped, 500);
   });
+  form.elements.website.addEventListener('change', function () { clearTimeout(typeTimer); siteTyped(); });
 
   // The area box takes a town ("Massapequa"), a town and state ("Stamford, CT"), an area ("Long
   // Island") or a ZIP; a ZIP is swapped for its town as soon as /api/zip answers.
