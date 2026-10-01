@@ -49,10 +49,10 @@ test('getRequestInfo: business from the scans row, hasEmail without the address'
     report_requests: [{ id: 'r1', report_token: 'tok123456', email: 'owner@example.com' }],
   });
   const info = await getRequestInfo(ENV, 'tok123456', { fetchImpl: f });
-  assert.deepEqual(info, { business: { name: 'Glenwayne Bakery', town: 'Bohemia', state: 'NY' }, hasEmail: true });
+  assert.deepEqual(info, { business: { name: 'Glenwayne Bakery', town: 'Bohemia', state: 'NY', trade: null, zip: '11716' }, hasEmail: true, progress: null });
   assert.ok(!JSON.stringify(info).includes('owner@'), 'never returns the address');
   const none = await getRequestInfo(ENV, 'other-token', { fetchImpl: f });
-  assert.deepEqual(none, { business: null, hasEmail: false });
+  assert.deepEqual(none, { business: null, hasEmail: false, progress: null });
   assert.equal(await requestHasEmail(ENV, 'tok123456', { fetchImpl: f }), true);
   assert.equal(await requestHasEmail(ENV, 'other-token', { fetchImpl: f }), false);
 });

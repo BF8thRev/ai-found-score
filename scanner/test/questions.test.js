@@ -86,3 +86,49 @@ test('tradeOrKind: known trades, else the plain words the owner typed, never jun
 test('town is required', () => {
   assert.throws(() => buildQuestions({ trade: 'plumbing' }), /town/);
 });
+
+// ---- kinds we have no tuned questions for: offices get no "open now" question; acronyms read right ----
+import { kindClass, caseKind, PROFESSIONAL_RE, freeQuestions } from '../questions.js';
+
+test('kindClass: home-service trades, offices (professional), everything else a storefront', () => {
+  assert.equal(kindClass('plumbing'), 'trade');
+  assert.equal(kindClass('plumber'), 'trade');
+  assert.equal(kindClass('PR agency'), 'professional');
+  assert.equal(kindClass('law firm'), 'professional');
+  assert.equal(kindClass('marketing agency'), 'professional');
+  assert.equal(kindClass('IT company'), 'professional');
+  assert.equal(kindClass('accountant'), 'professional');
+  assert.equal(kindClass('bakery'), 'storefront');
+  assert.equal(kindClass('painter'), 'storefront');
+  assert.equal(kindClass(''), 'storefront');
+  for (const walkIn of ['nail salon', 'yoga studio', 'dance studio', 'massage therapist', 'photographer', 'print shop', 'web cafe', 'coffee shop']) {
+    assert.equal(kindClass(walkIn), 'storefront', `${walkIn} keeps its "open now" question`);
+  }
+  assert.ok(!PROFESSIONAL_RE.test('nail salon'));
+});
+
+test('a professional kind gets "Top rated …" instead of "open now near …"; storefronts keep it', () => {
+  const pr = freeQuestions({ trade: 'pr agency', town: 'New York City', state: 'NY', zip: '10001' }).map((q) => q.text);
+  assert.deepEqual(pr, [
+    "What's the best PR agency in New York City, NY?",
+    'Top rated PR agency in New York City, NY',
+    'Can you recommend a PR agency in New York City NY?',
+  ]);
+  assert.ok(!pr.some((t) => /open now/.test(t)), 'no "open now" for an office');
+  const bakery = freeQuestions({ trade: 'bakery', town: 'Bohemia', state: 'NY' }).map((q) => q.text);
+  assert.equal(bakery[1], 'Bakery open now near Bohemia NY');
+  assert.equal(freeQuestions({ trade: 'it company', town: 'Islip', state: 'NY' })[2].text, 'Can you recommend an IT company in Islip NY?');
+});
+
+test('caseKind / tradeOrKind: acronyms upper-cased, whole words only, the rest unchanged', () => {
+  assert.equal(caseKind('pr agency'), 'PR agency');
+  assert.equal(caseKind('hvac contractor'), 'HVAC contractor');
+  assert.equal(caseKind('print shop'), 'print shop', '"print" is not "pr"');
+  assert.equal(caseKind('sprinkler repair'), 'sprinkler repair');
+  assert.equal(tradeOrKind('pr agency'), 'PR agency');
+  assert.equal(tradeOrKind('PR Agency'), 'PR agency');
+  assert.equal(tradeOrKind('cpa firm'), 'CPA firm');
+  assert.equal(tradeOrKind('3d printing'), '3D printing', 'a kind may start with a digit');
+  assert.equal(tradeOrKind('73'), null, 'but not be only digits');
+  assert.equal(tradeOrKind('hvac'), 'hvac', 'a known trade stays its key');
+});

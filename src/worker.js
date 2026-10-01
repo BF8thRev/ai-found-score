@@ -48,6 +48,7 @@ import { handleReportRequest } from './lib/report-request.js';
 import { handleSiteCheck } from './lib/site-check.js';
 import { turnstileConfigured, turnstileSiteKey } from './lib/turnstile.js';
 import { rateLimit } from './lib/rate-limit.js';
+import { freeQuestions } from '../scanner/questions.js';
 import { verifyStripeSignature, tierForSession } from './lib/stripe.js';
 import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
@@ -294,11 +295,20 @@ async function handleShortCode(url, env) {
 // and report.js shows the "in progress" page, re-checking every 30 s. The status is passed through as
 // pendingReportStatus gives it (report.js also knows 'failed' and 'paid'). `business` {name, town, state}
 // lets the owner see the page is theirs; `hasEmail` hides the email box (the address is never sent).
+// 202 while the report is being made: { status, business?: {name, town, state}, hasEmail?,
+// questions?: [{id, text}] (the ones this scan asks), progress?: {done, total} (answers in so far) }.
 function pendingResponse(status, info = {}) {
   const body = { status };
-  if (info.business) body.business = info.business;
+  const b = info.business;
+  if (b) {
+    body.business = { name: b.name, town: b.town ?? null, state: b.state ?? null };
+    if (b.trade && b.town) {
+      try { body.questions = freeQuestions({ trade: b.trade, town: b.town, state: b.state || 'NY', zip: b.zip || '' }).map(({ id, text }) => ({ id, text })); } catch { /* no questions line */ }
+    }
+  }
   if (typeof info.hasEmail === 'boolean') body.hasEmail = info.hasEmail;
-  return Response.json(body, { status: 202, headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' } });
+  if (info.progress && info.progress.total > 0) body.progress = { done: info.progress.done, total: info.progress.total };
+  return Response.json(body, { status: 202, headers: { 'Cache-Control': 'no-store', 'Retry-After': '10' } });
 }
 
 async function pendingInfo(env, token) {

@@ -30,6 +30,16 @@
     else { window.alert(message); dialog.onclose(); }
   }
 
+  // Show the Worker's answer to a site check that failed: the popup, and the cursor in that field.
+  window.siteGateShow = function (form, res) {
+    var field = form.elements[res && res.field === 'business_name' ? 'business_name' : 'website'];
+    if (field) {
+      field.setAttribute('aria-invalid', 'true');
+      field.addEventListener('input', function () { field.removeAttribute('aria-invalid'); }, { once: true });
+    }
+    popup((res && res.error) || 'Please check your details.', field);
+  };
+
   window.siteGate = function (form, data) {
     var qs = new URLSearchParams({ website: data.website || '', name: data.business_name || '' });
     return fetch('/api/site-check?' + qs.toString(), { headers: { Accept: 'application/json' } })
@@ -39,12 +49,7 @@
         // The ZIP on the business's own website, when it shows one (the hero form doesn't ask for it).
         if (res && typeof res.zip === 'string' && /^\d{5}$/.test(res.zip)) data.siteZip = res.zip;
         if (!res || res.ok !== false) return true;
-        var field = form.elements[res.field === 'business_name' ? 'business_name' : 'website'];
-        if (field) {
-          field.setAttribute('aria-invalid', 'true');
-          field.addEventListener('input', function () { field.removeAttribute('aria-invalid'); }, { once: true });
-        }
-        popup(res.error || 'Please check your details.', field);
+        window.siteGateShow(form, res);
         return false;
       });
   };

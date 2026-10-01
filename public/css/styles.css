@@ -595,6 +595,12 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .hero-form[hidden], .hero-form .status:empty, .hero-form [hidden] { display: none; }
 .hero-form .status { margin: 0; font-size: 15px; }
 .hero-form .status.error { color: var(--red); font-weight: 600; }
+.hero-form .status.note { color: var(--navy); font-weight: 600; }
+/* Under the website box: what /api/site-check read from the site. */
+.hero-form .field-note { margin: -6px 0 0; font-size: 14px; color: var(--muted); }
+.hero-form .field-note.ok { color: var(--green); font-weight: 600; }
+.hero-form .field-note.busy::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--navy); vertical-align: -1px; animation: afs-spin 1s linear infinite; }
+@keyframes afs-spin { to { transform: rotate(360deg); } }
 @media (max-width: 520px) {
   .hero-form { grid-template-columns: 1fr; }
   .hero-form #zip-field { max-width: none; }

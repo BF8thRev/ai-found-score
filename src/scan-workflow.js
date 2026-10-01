@@ -98,7 +98,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
             }
             let res;
             try {
-              res = await ENGINES[job.engine].ask({ question: q, business, env, fetchImpl });
+              res = await ENGINES[job.engine].ask({ question: q, business, env, fetchImpl, ...(p.engineTimeoutMs > 0 ? { timeoutMs: p.engineTimeoutMs } : {}) });
             } catch (e) {
               res = adapterThrew(job.engine, e);
             }
@@ -186,7 +186,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
               }
               let res;
               try {
-                res = await ENGINES[target.engine].ask({ question: q, business, env, fetchImpl });
+                res = await ENGINES[target.engine].ask({ question: q, business, env, fetchImpl, ...(p.engineTimeoutMs > 0 ? { timeoutMs: p.engineTimeoutMs } : {}) });
               } catch (e) {
                 res = adapterThrew(target.engine, e);
               }

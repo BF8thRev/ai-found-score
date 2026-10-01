@@ -100,9 +100,18 @@ export function requestScanId(token) {
   return stableUuid(`request-scan:${token}`);
 }
 
-/** Dedupe key: normalized business name + ZIP ("harborview plumbing and heating|11758"). */
+/** The free scan gives each engine this long per question (admin and paid scans: DEFAULT_TIMEOUT_MS, 120 s).
+ *  One hung engine stretched a 1-minute report to 3 (Oct 1 2026); the slow answer is dropped, the rest publish. */
+export const FREE_ENGINE_TIMEOUT_MS = 60_000;
+
+/**
+ * Dedupe key: normalized business name + where ("harborview plumbing and heating|11758"). The ZIP
+ * when the request has one, else the typed area in lower case, so "Massapequa" and "Long Island"
+ * for the same name are two different reports, not a copy of the first.
+ */
 export function requestKey(business) {
-  return `${normalizeBizName(business?.name).trim()}|${String(business?.zip || '').trim()}`;
+  const where = String(business?.zip || '').trim() || String(business?.town || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return `${normalizeBizName(business?.name).trim()}|${where}`;
 }
 
 /** What one automatic scan is reserved at: FREE_QUESTION_COUNT questions × engines × 1 run, extraction, and the headline re-ask. */
@@ -271,7 +280,7 @@ export async function startRequestScan(env, req, o = {}) {
   const business = parsed.params.business;
   const token = newRequestToken();
   const scanId = await requestScanId(token);
-  const params = { ...parsed.params, engines, scanId, reportToken: token, questionLimit: FREE_QUESTION_COUNT };
+  const params = { ...parsed.params, engines, scanId, reportToken: token, questionLimit: FREE_QUESTION_COUNT, engineTimeoutMs: FREE_ENGINE_TIMEOUT_MS };
   const on = autoScanOn(env);
 
   // ---- local dry run: fixtures, no database -------------------------------------------------
@@ -442,7 +451,7 @@ export async function runQueuedScan(env, id, { fetchImpl = (...a) => fetch(...a)
     }, { fetchImpl });
     await env.SCAN_WORKFLOW.create({
       id: scanId,
-      params: { ...parsed.params, engines, scanId, reportToken: row.report_token, questionLimit: FREE_QUESTION_COUNT, dryRun: false },
+      params: { ...parsed.params, engines, scanId, reportToken: row.report_token, questionLimit: FREE_QUESTION_COUNT, engineTimeoutMs: FREE_ENGINE_TIMEOUT_MS, dryRun: false },
     });
   } catch (e) {
     const error = String(e?.message || e).slice(0, 300);

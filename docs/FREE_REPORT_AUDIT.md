@@ -1,5 +1,7 @@
 # Free-report flow audit (Oct 1 2026)
 
+> Sections 3 to 9 were written as findings and proposals; section 2b records what was then built.
+
 Trigger: the owner ran a free report for **PR 73** (https://www.pr73.com/, a PR agency in New York
 City) and reported: the form asked for a ZIP (a PR agency isn't in one ZIP), then asked what kind of
 business it is, then sent them to `#results`, which never loaded.
@@ -52,6 +54,32 @@ Fixed in this change:
   free report button and the email box are all visible and laid out (block height 1,523 px at
   phone width; before the fix: 0 px). The PR preview build could not be reached from the sandbox
   that made this change, so please click through once on the preview before merging.
+
+## 2b. Status of the rest (second change, same day)
+
+Everything below sections 3 to 8 is now built, tested (`npm test`: 664 pass) and replayed in headless
+Chromium against `public/` with the API mocked the way the Worker answers; an adversarial code
+review of the diff raised 10 findings, all fixed (the live answer surviving a re-draw of the pending
+page, a site ZIP outliving an edited area, a "NY" default for an unknown state, a title heuristic
+that picked the town over the name, the queued/retry scan path missing the 60 s timeout, body-text
+kind guessing, an over-broad professional pattern, and the no-JS form test moved onto the real
+router). The PR preview build was not reachable from the sandbox: click through once before merging.
+
+| Item | What changed |
+|---|---|
+| One step (§6) | `public/index.html`: website first; `GET /api/site-check` prefills name, area, what you do; one press; the visitor lands on `/report/<token>`. The `#results` block stays only as the fallback when no report link came back |
+| Business name (§6) | `scanner/kind.js findName`: schema.org name → og:site_name → the name part of `<title>`; the Google listing with that website (`placeFromPlaces`) as a second source |
+| ZIP / area (§4) | One "Where your customers are" box: a town, "Town, ST", an area ("Long Island") or a ZIP (swapped for its town by `/api/zip`). The site's own "Town, ST 12345" prefills it. Dedupe key is name + ZIP, else name + area |
+| Questions (§5) | `kindClass`: offices (agency, firm, consultant, accountant, lawyer, insurance, marketing, PR, IT…) get "Top rated {kind} in {town}, {state}" instead of "open now near"; acronyms upper-cased (PR, HVAC, IT, CPA…); 30 more kinds guessed from the name and page |
+| The wait (§7) | Pending page re-checks every 5 s for a minute, then 15 s, then 30 s; shows "3 of 9 answers in" (`progress` on the 202), the questions, and the live answer handed over from the homepage; each engine gets 60 s per question on a free scan |
+| Smaller (§8) | Hero line says "Your report is on its way"; the hidden ZIP is dropped when the owner changes the place; dedupe by area; the button is restored on every stop |
+
+**Should the results be a separate page?** Yes, and that is what this change does: after one press
+the visitor is on `/report/<token>`, the page that becomes the report and carries the upsell ($49
+audit, Competitor Breakdown, Be the Answer) the moment the scan finishes. The homepage no longer
+tries to be a results page; the live answer, the questions and the progress are on the report page
+while it waits, and the email box is there too. Nothing of the upsell was on the homepage block
+before, so nothing was lost by moving it.
 
 ## 3. The three-submit chain (friction, not a crash)
 
