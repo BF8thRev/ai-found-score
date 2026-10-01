@@ -494,3 +494,22 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .r2-copy { min-width: 0; max-width: 100%; }
 .r2-code { max-width: 100%; }
 .r2-code code { overflow-wrap: normal; }
+
+/* ---------- the pending page: progress, the live answer, the questions ---------- */
+.r2-pending-progress { margin: -6px 0 14px; font-weight: 700; color: var(--navy); }
+.r2-live { margin: 20px 0 8px; padding: 18px; border-radius: 12px; background: var(--wash); border: 1px solid var(--line); }
+.r2-live-wait { margin: 0; color: var(--muted); }
+.r2-live-wait strong { color: var(--navy); }
+.r2-live-wait::before { content: ''; display: inline-block; width: 12px; height: 12px; margin-right: 8px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--navy); vertical-align: -1px; animation: r2-spin 1.1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .r2-live-wait::before { animation: none; } }
+.r2-live-named { display: inline-block; margin: 0 0 12px; padding: 8px 12px; border-radius: 999px; font-weight: 700; font-size: 15px; }
+.r2-live-named.yes { background: #DDF5E6; color: #0F6B3A; }
+.r2-live-named.no { background: #FBE3E3; color: #8A1C1C; }
+.r2-live-head { margin: 0 0 4px; font-weight: 700; color: var(--navy); }
+.r2-live-q { margin: 0 0 10px; color: var(--muted); font-style: italic; }
+.r2-live-answer { margin: 0 0 10px; padding: 12px 14px; background: #fff; border-radius: 8px; font-size: 15.5px; white-space: pre-line; overflow-wrap: anywhere; }
+.r2-live-answer mark { background: #FFE7B8; color: var(--ink); font-weight: 700; padding: 0 2px; border-radius: 3px; }
+.r2-live-note { margin: 0; font-size: 14px; color: var(--muted); }
+.r2-pending-qs { margin: 20px 0 8px; }
+.r2-pending-qs h2 { font-size: 18px; margin: 0 0 10px; color: var(--navy); }
+.r2-pending-qs .rq-list li { border: 1px solid var(--line); }

@@ -33,6 +33,16 @@ import { startRequestScan } from './auto-scan.js';
 import { checkSubmission } from './site-check.js';
 import { readRefToken } from './email-tracking.js';
 
+/** "Stamford, CT" → { town, state }; "11758" → { zip }; "Long Island" → { town }; '' → {}. */
+export function parseArea(v) {
+  const t = String(v || '').trim().replace(/\s+/g, ' ');
+  if (!t) return {};
+  if (/^\d{5}(?:-\d{4})?$/.test(t)) return { zip: t.slice(0, 5) };
+  const m = /^(.+?)\s*,\s*([A-Za-z]{2})\.?$/.exec(t);
+  if (m) return { town: m[1], state: m[2].toUpperCase() };
+  return { town: t };
+}
+
 /** Plans a visitor can head straight to checkout for (the form's `intent`). */
 export const PAID_INTENTS = ['xray'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -109,12 +119,15 @@ export async function handleReportRequest(request, url, env, deps = {}) {
 
   // A button, else the words typed in "Something else" (the no-JS form posts both).
   const rawTrade = clean(data.trade || data.trade_other, 40);
-  const zip = clean(data.zip, 10);
-  const state = clean(data.state, 2).toUpperCase() || 'NY';
+  // The form's one "where" box (a no-JS post sends it as `area`): "Stamford, CT" → town + state,
+  // "11758" → ZIP only (the town is looked up by the page when JS runs), "Long Island" → town.
+  const area = parseArea(clean(data.area, 60));
+  const zip = clean(data.zip, 10) || area.zip;
+  const state = clean(data.state, 2).toUpperCase() || area.state || 'NY';
   const req = {
     id: crypto.randomUUID(),
     businessName: clean(data.business_name, 120),
-    town: clean(data.town, 60),
+    town: clean(data.town, 60) || area.town,
     zip: zip || null,
     state: /^[A-Z]{2}$/.test(state) ? state : 'NY',
     email: emailOk ? email : null,

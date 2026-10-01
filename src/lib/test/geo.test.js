@@ -107,8 +107,9 @@ test('static index.html reads correctly for the default town', () => {
   assert.deepEqual(items, exampleQuestions(DEFAULT_GEO).map((q) => q.text));
   for (const m of INDEX.matchAll(/<span data-geo-town>([^<]*)<\/span>/g)) assert.equal(m[1], DEFAULT_GEO.town);
   for (const m of INDEX.matchAll(/<span data-geo-state>([^<]*)<\/span>/g)) assert.equal(m[1], DEFAULT_GEO.state);
-  assert.match(INDEX, /name="town"[^>]*placeholder="Massapequa"[^>]*data-geo-placeholder="town"/);
-  assert.match(INDEX, /name="zip"[^>]*placeholder="11758"[^>]*data-geo-placeholder="zip"/);
+  // The one "where" box (area) shows the visitor's town as its example; town and ZIP are hidden fields the page fills.
+  assert.match(INDEX, /name="area"[^>]*placeholder="Massapequa, NY"[^>]*data-geo-placeholder="town"/);
+  assert.match(INDEX, /name="zip" type="hidden"/);
   assert.match(INDEX, /name="state" type="hidden" value="NY" data-geo-value="state"/);
 });
 
@@ -160,8 +161,7 @@ test('HTMLRewriter: US request shows the visitor\'s town everywhere', async () =
   assert.match(list, /What&#39;s the best plumber in Hicksville, NY\?/);
   assert.match(list, /near Plainview tonight/);
   assert.ok(!/Affordable plumber/.test(list), 'the free scan asks three questions, not the price one');
-  assert.match(html, /name="town"[^>]*placeholder="Hicksville"/);
-  assert.match(html, /name="zip"[^>]*placeholder="11801"/);
+  assert.match(html, /name="area"[^>]*placeholder="Hicksville"/);
   assert.match(html, /name="state" type="hidden" value="NY"/);
   // The hero's sample card quotes the (fictional, Massapequa) sample report verbatim: it stays as is.
   const page = html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<div class="real-answer" data-sample-quote>[\s\S]*?<\/figure>/, '');
@@ -171,7 +171,7 @@ test('HTMLRewriter: US request shows the visitor\'s town everywhere', async () =
 test('HTMLRewriter: another state sets the hidden state and the town', async () => {
   const html = await render({ country: 'US', city: 'Stamford', regionCode: 'CT', postalCode: '' });
   assert.match(html, /name="state" type="hidden" value="CT"/);
-  assert.match(html, /name="zip"[^>]*placeholder="5 digits"/);
+  assert.match(html, /name="area"[^>]*placeholder="Stamford"/);
   assert.match(html, /Who can replace a water heater in Stamford CT\?/);
 });
 

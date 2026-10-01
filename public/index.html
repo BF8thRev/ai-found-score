@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=15">
+  <link rel="stylesheet" href="/css/styles.css?v=16">
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Organization", "@id": "https://aifoundscore.com/#organization", "name": "AI Found Score", "url": "https://aifoundscore.com/", "logo": {"@type": "ImageObject", "url": "https://aifoundscore.com/img/logo.svg"}, "image": "https://aifoundscore.com/img/og.png", "email": "hello@aifoundscore.com", "address": {"@type": "PostalAddress", "streetAddress": "120 Terminal Drive", "addressLocality": "Plainview", "addressRegion": "NY", "postalCode": "11803", "addressCountry": "US"}, "contactPoint": {"@type": "ContactPoint", "contactType": "customer support", "email": "hello@aifoundscore.com", "availableLanguage": "en"}, "areaServed": {"@type": "Country", "name": "United States"}, "description": "AI Found Score checks whether AI assistants recommend a local business when customers ask, shows who they name instead, and gives the business ready-to-install fixes.", "knowsAbout": ["AI search visibility", "Generative engine optimization", "Local SEO", "Business listings", "Structured data"]}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "@id": "https://aifoundscore.com/#website", "name": "AI Found Score", "url": "https://aifoundscore.com/", "publisher": {"@id": "https://aifoundscore.com/#organization"}}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Service", "name": "AI Found Score report", "serviceType": "AI visibility audit", "provider": {"@type": "Organization", "name": "AI Found Score"}, "areaServed": {"@type": "Country", "name": "US"}, "description": "Asks the AI assistants local customers use the questions they ask, and shows who got named and who got named first. The audit adds every answer word for word and which websites the AI cited. Each report lists exactly which assistants were asked and when.", "offers": [{"@type": "Offer", "name": "Snapshot", "price": "0", "priceCurrency": "USD"}, {"@type": "Offer", "name": "AI Visibility Audit", "price": "49", "priceCurrency": "USD", "description": "All 5 customer questions asked fresh on every assistant we check, every answer word for word and every website AI cited, exactly what's wrong on your website and Google listing, every fix with copy-paste text, your Fix Kit of ready-to-install files, the competitor gap sheet, your fix checklist, and a free re-check 30 days later. Fewer than 3 problems specific to your business? Your $49 back."}, {"@type": "Offer", "name": "Competitor Breakdown", "price": "25", "priceCurrency": "USD", "description": "Optional add-on at checkout for the AI Visibility Audit: the top 3 businesses AI names instead of you, side by side with you, and up to 3 things they have that you don't."}]}</script>
@@ -59,20 +59,19 @@
       <div class="hero-copy">
         <h1>Your customers are asking AI now. <span class="h1-accent">Is it sending your calls to someone else?</span></h1>
         <p class="lede">Do you know what it tells them? We ask AI your customers&rsquo; questions and show you every word.</p>
-        <!-- The free-report form (the only one on the page; /#request links land here). Business name +
-             website: the website check (/js/site-gate.js) also brings back the ZIP from the business's own
-             site, so the ZIP box only appears when the site doesn't show one (or is a Facebook/Yelp page). -->
+        <!-- The free-report form (the only one on the page; /#request links land here). One step:
+             the website first. GET /api/site-check reads the business's own page (and its Google
+             listing) and fills in the name, the area and what it does; the owner checks the three
+             boxes and presses the button once. Whatever the page can't tell stays an empty box. -->
         <div class="hero-start" id="request">
         <form class="hero-form" id="request-form" method="post" action="/api/request" novalidate>
-          <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="e.g. Joe’s Plumbing"></label>
           <label class="full"><span>Your website <small class="hint">(or Facebook page)</small></span> <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
-          <label class="full" id="zip-field" hidden>Your ZIP code <input name="zip" type="text" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" placeholder="11758" data-geo-placeholder="zip"></label>
-          <p class="full field-found" id="zip-found" hidden><span id="zip-town"></span> <button type="button" class="link-btn" id="zip-change">change</button></p>
-          <label class="full" id="town-field" hidden>Town <input name="town" type="text" maxlength="60" autocomplete="address-level2" placeholder="Massapequa" data-geo-placeholder="town"></label>
+          <p class="full field-note" id="site-note" hidden role="status"></p>
+          <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="The way customers know it"></label>
+          <label class="full"><span>Where your customers are <small class="hint">(town, city or area)</small></span> <input name="area" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa, NY" data-geo-placeholder="town"></label>
+          <input name="zip" type="hidden">
           <input name="state" type="hidden" value="NY" data-geo-value="state">
-          <fieldset class="full trade-pick" id="trade-pick" hidden>
-            <label class="trade-other">What kind of business is it? <input name="trade_other" id="trade-other" type="text" maxlength="40" autocomplete="off" placeholder="bakery, dentist, plumber, salon…"></label>
-          </fieldset>
+          <label class="full">What you do <input name="trade_other" id="trade-other" type="text" required maxlength="40" autocomplete="off" placeholder="bakery, dentist, plumber, PR agency…"></label>
           <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
           <button class="btn big" type="submit">Show me who&rsquo;s getting my calls</button>
           <p class="status" id="request-status" role="status"></p>
@@ -82,7 +81,7 @@
              empty = not configured, no widget. Outside the form so a challenge stays visible after the form hides. -->
         <p class="ts-help" id="ts-help" hidden>One quick check: tap the box below to confirm you&rsquo;re a person.</p>
         <div class="ts-box" id="ts-request" data-turnstile-sitekey=""></div>
-        <p class="hero-done" id="hero-done" hidden>Asking AI about your business now. <a href="#results">See it below &darr;</a></p>
+        <p class="hero-done" id="hero-done" hidden>Your report is on its way. <a href="#results">See it below &darr;</a></p>
         </div>
         <p class="proof-line" id="proof-line" hidden></p>
       </div>
@@ -101,6 +100,59 @@
           <p class="sc-lost"><b>Every other laundromat in North Babylon</b><span>Not mentioned. ChatGPT didn&rsquo;t give this customer their name.</span></p>
           <p class="sc-ask"><b>Would it give yours?</b> <a href="#request" data-sc-check>Check my business free<span class="sc-arrow" aria-hidden="true"></span></a></p>
         </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Results of the hero form (right under it, where "See it below" points): the live answer, the report link, the questions, optional email. -->
+<section class="section" id="results" hidden>
+  <div class="wrap">
+    <div class="request done">
+      <div class="request-next" id="request-next" hidden>
+        <!-- Live answer: on submit we ask the first question to one assistant right away
+             (POST /api/live-preview) and show its answer word for word. -->
+        <div class="rq-block rq-live" id="rq-live" hidden tabindex="-1">
+          <div class="live-wait" id="live-wait" hidden>
+            <p class="live-asking">Asking AI: <strong id="live-wait-q"></strong></p>
+            <div class="live-bar" aria-hidden="true"><span></span></div>
+          </div>
+          <div class="live-out" id="live-out" hidden>
+            <p class="live-named" id="live-named"></p>
+            <p class="live-head" id="live-head"></p>
+            <p class="live-q" id="live-q"></p>
+            <div class="live-answer" id="live-answer"></div>
+            <p class="live-cites" id="live-cites"></p>
+            <p class="live-note" id="live-note"></p>
+          </div>
+        </div>
+        <!-- The one next step: their private report page. The heading follows the live answer
+             (named / not named / no answer); the button appears once the request is saved. -->
+        <div class="rq-block rq-next" id="rq-next" tabindex="-1">
+          <h3 id="next-title">Your free report asks every question</h3>
+          <p class="rq-sub" id="next-sub">Whether AI names you, who it names instead, and your AI Found Score.</p>
+          <p class="rq-actions" id="next-actions" hidden>
+            <a class="btn" id="next-open" href="#">Open my free report</a>
+            <button type="button" class="link-btn" id="next-copy">Copy link</button>
+          </p>
+          <p class="rq-count" id="next-note" hidden>Private to you. It fills in as soon as it&rsquo;s ready, so bookmark it.</p>
+        </div>
+        <div class="rq-block" id="rq-questions" tabindex="-1">
+          <h3 id="rq-title">Here's exactly what we'll ask</h3>
+          <p class="rq-sub" id="rq-sub">We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.</p>
+          <button type="button" class="link-btn rq-toggle" id="rq-toggle" hidden aria-expanded="false" aria-controls="rq-list">Show them</button>
+          <ol class="rq-list" id="rq-list"></ol>
+        </div>
+        <p class="status" id="request-save" role="status"></p>
+        <form class="rq-block rq-email" id="email-form" novalidate>
+          <h3>Want the link by email too?</h3>
+          <p class="rq-sub">Optional. We&rsquo;ll email you the moment your report is ready. No sales call.</p>
+          <label><span>Email <small class="opt">(optional)</small></span> <input name="email" type="email" maxlength="160" autocomplete="email" placeholder="you@yourbusiness.com"></label>
+          <div class="ts-box" id="ts-email"></div>
+          <button class="btn-secondary" type="submit">Email me the link</button>
+          <p class="status" id="email-status" role="status"></p>
+          <p class="form-note">We only email you about this report. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
+        </form>
       </div>
     </div>
   </div>
@@ -315,59 +367,6 @@
   </div>
 </section>
 
-<!-- Results of the hero form: the live answer, the report link, the questions, optional email. -->
-<section class="section" id="results" hidden>
-  <div class="wrap">
-    <div class="request done">
-      <div class="request-next" id="request-next" hidden>
-        <!-- Live answer: on submit we ask the first question to one assistant right away
-             (POST /api/live-preview) and show its answer word for word. -->
-        <div class="rq-block rq-live" id="rq-live" hidden tabindex="-1">
-          <div class="live-wait" id="live-wait" hidden>
-            <p class="live-asking">Asking AI: <strong id="live-wait-q"></strong></p>
-            <div class="live-bar" aria-hidden="true"><span></span></div>
-          </div>
-          <div class="live-out" id="live-out" hidden>
-            <p class="live-named" id="live-named"></p>
-            <p class="live-head" id="live-head"></p>
-            <p class="live-q" id="live-q"></p>
-            <div class="live-answer" id="live-answer"></div>
-            <p class="live-cites" id="live-cites"></p>
-            <p class="live-note" id="live-note"></p>
-          </div>
-        </div>
-        <!-- The one next step: their private report page. The heading follows the live answer
-             (named / not named / no answer); the button appears once the request is saved. -->
-        <div class="rq-block rq-next" id="rq-next" tabindex="-1">
-          <h3 id="next-title">Your free report asks every question</h3>
-          <p class="rq-sub" id="next-sub">Whether AI names you, who it names instead, and your AI Found Score.</p>
-          <p class="rq-actions" id="next-actions" hidden>
-            <a class="btn" id="next-open" href="#">Open my free report</a>
-            <button type="button" class="link-btn" id="next-copy">Copy link</button>
-          </p>
-          <p class="rq-count" id="next-note" hidden>Private to you. It fills in as soon as it&rsquo;s ready, so bookmark it.</p>
-        </div>
-        <div class="rq-block" id="rq-questions" tabindex="-1">
-          <h3 id="rq-title">Here's exactly what we'll ask</h3>
-          <p class="rq-sub" id="rq-sub">We ask each of these to the AI assistants your customers use. Your report lists exactly which ones and when.</p>
-          <button type="button" class="link-btn rq-toggle" id="rq-toggle" hidden aria-expanded="false" aria-controls="rq-list">Show them</button>
-          <ol class="rq-list" id="rq-list"></ol>
-        </div>
-        <p class="status" id="request-save" role="status"></p>
-        <form class="rq-block rq-email" id="email-form" novalidate>
-          <h3>Want the link by email too?</h3>
-          <p class="rq-sub">Optional. We&rsquo;ll email you the moment your report is ready. No sales call.</p>
-          <label><span>Email <small class="opt">(optional)</small></span> <input name="email" type="email" maxlength="160" autocomplete="email" placeholder="you@yourbusiness.com"></label>
-          <div class="ts-box" id="ts-email"></div>
-          <button class="btn-secondary" type="submit">Email me the link</button>
-          <p class="status" id="email-status" role="status"></p>
-          <p class="form-note">We only email you about this report. <a href="/privacy" style="color:#DCE6F4">Privacy</a></p>
-        </form>
-      </div>
-    </div>
-  </div>
-</section>
-
 </main>
 
 <footer class="site-footer">
@@ -407,7 +406,7 @@
 
 <script src="/js/config.js?v=12"></script>
 <script src="/js/analytics.js?v=10"></script>
-<script src="/js/site-gate.js?v=1"></script>
+<script src="/js/site-gate.js?v=2"></script>
 <script>
 (function () {
   // Free-report flow: business details (no email) -> show the exact questions ->
@@ -692,12 +691,105 @@
     el('live-out').hidden = false;
   }
 
-  // Did /api/questions tell us what the business is? If not (it failed, or was rate-limited) and the
-  // owner hasn't said, the request could never be scanned: ask first instead of losing it quietly.
-  function kindUnknown(res, data) {
-    if (res && res.needKind) return true;
-    return !(res && res.ok && res.trade) && !data.trade && !presetKind;
+  // ---- One form, one step. The website first: /api/site-check reads the business's own page (and
+  // its Google listing) and fills in the name, the area and what it does. The owner checks the three
+  // boxes and presses the button once. What the page can't tell is an empty box with a plain
+  // prompt, never an error. On save the visitor goes to their report page (/report/<token>), which
+  // shows the live answer, the questions and the progress while the scan runs; the #results block
+  // below the hero is the fallback when no report link came back.
+  var siteNote = el('site-note');
+  var nameInput = form.elements.business_name, areaInput = form.elements.area, kindInput = el('trade-other');
+  var zipInput = form.elements.zip, stateInput = form.elements.state;
+  var presetKind = '';   // from a link (?trade=plumbing) or the hero card's picker
+  var filled = { name: '', area: '', kind: '' }; // what we prefilled: a new site may replace it, the owner's own words never
+  var siteChecked = '';  // the website that passed /api/site-check
+  var sitePending = null; // { site, p } the running check
+  var TRADE_ALIASES = { plumber: 'plumbing', roofer: 'roofing', electrician: 'electrical', landscaper: 'landscaping', cleaner: 'cleaning', mechanic: 'auto_repair' };
+  function kindText() { return String(kindInput.value || '').trim().replace(/\s+/g, ' ').slice(0, 40); }
+  function presetTrade(v) {
+    v = String(v || '').toLowerCase().replace(/[^a-z_]/g, '');
+    if (!v) return;
+    presetKind = TRADE_ALIASES[v] || v;
+    setIf(kindInput, 'kind', presetKind.replace(/_/g, ' '));
   }
+  // Prefill a box unless the owner typed something else in it.
+  function setIf(input, key, value) {
+    value = String(value || '').trim();
+    if (!value) return false;
+    if (input.value.trim() && input.value !== filled[key]) return false;
+    input.value = value; filled[key] = value;
+    return true;
+  }
+  function note(kind, text) { siteNote.hidden = !text; siteNote.className = 'full field-note' + (kind ? ' ' + kind : ''); siteNote.textContent = text; }
+  function website() { return String(form.elements.website.value || '').trim(); }
+
+  // The website check, once per address. Resolves with the Worker's answer ({ok:true} when the check
+  // itself can't run: the Worker checks again on save).
+  function checkSite(site) {
+    if (sitePending && sitePending.site === site) return sitePending.p;
+    note('busy', 'Reading your website…');
+    var p = fetch('/api/site-check?' + new URLSearchParams({ website: site }).toString(), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : { ok: true }; })
+      .catch(function () { return { ok: true }; })
+      .then(function (res) {
+        if (sitePending && sitePending.site === site) sitePending = null;
+        if (!res || res.ok === false) { note('', ''); return res || { ok: true }; }
+        siteChecked = site;
+        var got = [];
+        if (setIf(nameInput, 'name', res.name)) got.push('your name');
+        if (res.town) { if (setIf(areaInput, 'area', res.town + (res.state ? ', ' + res.state : ''))) { got.push('your area'); zipInput.value = /^\d{5}$/.test(res.zip || '') ? res.zip : ''; } }
+        else if (/^\d{5}$/.test(res.zip || '') && setIf(areaInput, 'area', res.zip)) { got.push('your area'); lookupZip(res.zip); }
+        if (setIf(kindInput, 'kind', res.kind)) got.push('what you do');
+        note('ok', got.length ? 'From your website: ' + got.join(', ') + '. Check the boxes below and change anything.' : 'Website found. Fill in the three boxes below.');
+        return res;
+      });
+    sitePending = { site: site, p: p };
+    return p;
+  }
+  form.elements.website.addEventListener('change', function () {
+    var site = website();
+    if (/^\S+\.\S+$/.test(site) && site !== siteChecked) checkSite(site);
+  });
+
+  // The area box takes a town ("Massapequa"), a town and state ("Stamford, CT"), an area ("Long
+  // Island") or a ZIP; a ZIP is swapped for its town as soon as /api/zip answers.
+  var zipPending = null, zipAsked = '';
+  function lookupZip(z) {
+    z = String(z || '').trim();
+    if (!/^\d{5}$/.test(z)) return Promise.resolve(false);
+    if (z === zipAsked && zipPending) return zipPending;
+    zipAsked = z;
+    var p = fetch('/api/zip?zip=' + z).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (j) {
+      if (zipPending === p) zipPending = null;
+      if (zipAsked !== z) return false;
+      var place = j && j.ok && j.places && j.places[0];
+      if (!place) return false;
+      if (areaInput.value.trim() === z || areaInput.value === filled.area) { areaInput.value = place.town + ', ' + place.state; filled.area = areaInput.value; }
+      zipInput.value = z; stateInput.value = place.state;
+      return true;
+    });
+    zipPending = p;
+    return p;
+  }
+  areaInput.addEventListener('input', function () {
+    var v = this.value.trim();
+    if (/^\d{5}$/.test(v)) { lookupZip(v); return; }
+    zipAsked = '';
+    // The owner changed the place: the ZIP that came with the prefilled one no longer applies.
+    if (v !== filled.area) zipInput.value = '';
+  });
+  // "Stamford, CT" → town + state; "Long Island" → town, the hidden state (a guess from the
+  // visitor's connection); "11758" → still a ZIP (the lookup failed or is running).
+  function parseArea(v) {
+    var t = String(v || '').trim().replace(/\s+/g, ' ');
+    if (!t) return null;
+    if (/^\d{5}$/.test(t)) return { zip: t };
+    var m = /^(.+?)\s*,\s*([A-Za-z]{2})\.?$/.exec(t);
+    if (m && STATES.indexOf(m[2].toUpperCase()) >= 0) return { town: m[1], state: m[2].toUpperCase() };
+    return { town: t.replace(/,\s*(?:New York|NY)$/i, ''), state: stateInput.value || 'NY' };
+  }
+
+  function ask(text, input) { show(status, 'note', text); try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); } }
   function fetchQuestions(data) {
     var qs = new URLSearchParams({ trade: data.trade, preset: presetKind, name: data.business_name, website: data.website, town: data.town, zip: data.zip, state: data.state || 'NY' });
     return fetch('/api/questions?' + qs.toString())
@@ -708,65 +800,61 @@
       })
       .catch(function () { return null; });
   }
-  function askKindAgain(btn, btnLabel, res) {
-    btn.disabled = false; btn.textContent = btnLabel;
-    var why = res && res.limited ? esc(res.limited) + ' Meanwhile: ' : 'One quick thing: ';
-    show(status, 'error', why + 'what kind of business is it? Type it above, like bakery or dentist.');
-    askKind();
+  // Did /api/questions tell us what the business is? If not (it failed, or was rate-limited) and the
+  // owner hasn't said, the request could never be scanned: ask first instead of losing it quietly.
+  function kindUnknown(res, data) {
+    if (res && res.needKind) return true;
+    return !(res && res.ok && res.trade) && !data.trade && !presetKind;
   }
   function reportPath(res) {
     var u = res && res.body && res.body.report_url;
     return typeof u === 'string' && /^\/report\/[A-Za-z0-9_-]{8,64}$/.test(u) ? u : '';
   }
+  // Their report page shows the live answer while the scan runs: hand it what it needs (same origin,
+  // this tab only). The preview token is good for an hour.
+  function handOff(path, res) {
+    try {
+      sessionStorage.setItem('afs_live', JSON.stringify({
+        token: path.slice('/report/'.length), request_id: requestId, preview_token: previewToken || '',
+        question: questionText(LIVE_Q) || '', name: biz.business_name, at: Date.now(),
+      }));
+    } catch (err) {}
+    location.assign(path);
+  }
 
-  var gatedKey = null; // name + website that already passed /api/site-check
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    var data = {};
-    new FormData(form).forEach(function (v, k) { data[k] = String(v).trim(); });
-    // "Stamford, CT" -> town + state. The hidden state is only a guess from the visitor's connection.
-    var ts = /^(.+?)\s*,\s*([A-Za-z]{2})$/.exec(data.town || '');
-    if (ts && STATES.indexOf(ts[2].toUpperCase()) >= 0) { data.town = ts[1]; data.state = ts[2].toUpperCase(); }
-    var missing = [];
-    if (!data.business_name) missing.push('your business name');
-    if (!/^\S+\.\S+$/.test(data.website || '')) missing.push('your website (or your Facebook or Yelp page)');
-    if (missing.length) { show(status, 'error', 'Please add ' + missing.join(' and ') + '.'); return; }
-    // The gate: a real website and a real business name before anything is saved or scanned
-    // (/js/site-gate.js; the popup says what to fix). Checked once per name + website. It also
-    // brings back the ZIP from the business's own site, so the owner doesn't type one.
-    var gateKey = data.business_name + '|' + data.website;
-    if (gateKey !== gatedKey) {
-      if (!window.siteGate) { gatedKey = gateKey; form.requestSubmit(); return; }
-      var gBtn = submitBtn; var gLabel = gBtn.textContent; gBtn.disabled = true; gBtn.textContent = 'Checking your website…';
-      window.siteGate(form, data).then(function (go) {
-        gBtn.disabled = false; gBtn.textContent = gLabel;
-        if (!go) return;
-        gatedKey = gateKey;
-        if (data.siteZip) { zipInput.value = data.siteZip; lookupZip(); }
+    var site = website();
+    if (!/^\S+\.\S+$/.test(site)) { ask('Please add your website (or your Facebook or Yelp page).', form.elements.website); return; }
+    var btn = submitBtn; var btnLabel = btn.textContent;
+    function busy(on, text) { btn.disabled = on; btn.textContent = on ? text : btnLabel; }
+    // 1. The website, once per address: a real site, and what it says about the business.
+    if (siteChecked !== site) {
+      busy(true, 'Reading your website…');
+      checkSite(site).then(function (res) {
+        busy(false);
+        if (res && res.ok === false) { if (window.siteGateShow) window.siteGateShow(form, res); else ask(res.error || 'Please check your website.', form.elements.website); return; }
         form.requestSubmit();
       });
       return;
     }
-    // No ZIP on the website (or a Facebook/Yelp page): ask for it.
-    if (!/^\d{5}$/.test(data.zip)) {
-      zipField.hidden = false;
-      show(status, 'error', 'We couldn&rsquo;t find your ZIP code on your website. What&rsquo;s your ZIP?');
-      zipInput.focus();
-      return;
+    // 2. The three boxes.
+    var data = {};
+    new FormData(form).forEach(function (v, k) { data[k] = String(v).trim(); });
+    if (!data.business_name) { ask('What\'s your business called? The way customers know it.', nameInput); return; }
+    var area = parseArea(data.area);
+    if (!area) { ask('Where are your customers? A town, a city or an area, like Massapequa or Long Island.', areaInput); return; }
+    if (area.zip) {
+      if (zipPending) { busy(true, 'One moment…'); zipPending.then(function () { busy(false); form.requestSubmit(); }); return; }
+      ask('We couldn\'t find that ZIP. Type your town, city or area instead.', areaInput); return;
     }
-    // The town comes from the ZIP; if that lookup is still running, finish it first.
-    if (!data.town) {
-      lookupZip();
-      if (zipPending) { zipPending.then(function () { form.requestSubmit(); }); return; }
-      showTownField();
-      show(status, 'error', 'Please add your town.'); return;
-    }
-    // What the owner typed in "What kind of business is it?" (only shown when we couldn't tell), else a preset.
+    data.town = area.town; data.state = area.state; data.zip = zipInput.value;
+    delete data.area;
     data.trade = kindText();
     delete data.trade_other;
     status.className = 'status'; status.textContent = '';
     biz = data;
-    var btn = submitBtn; var btnLabel = btn.textContent; btn.disabled = true; btn.textContent = 'One moment…';
+    busy(true, 'One moment…');
 
     var questions = fetchQuestions(data);
     // The save waits for the kind of business (so the report and the live answer use it) and the bot check.
@@ -779,15 +867,29 @@
       });
     });
 
-    // The questions show even if the save failed: the owner still sees what we'd ask.
     questions.then(function (res) {
-      if (kindUnknown(res, data)) { askKindAgain(btn, btnLabel, res); return null; }
+      if (kindUnknown(res, data)) {
+        busy(false);
+        ask((res && res.limited ? esc(res.limited) + ' Meanwhile: ' : '') + 'What kind of business is it? One or two words, like bakery, dentist or PR agency.', kindInput);
+        return null;
+      }
       var limited = res && res.limited;
-      // With the bot check on, the save usually comes back with a live-answer token: show the
-      // waiting state now so the answer area doesn't jump in later.
-      if (TS_KEY && liveBox) { liveState = 'preparing'; liveWaiting('getting your first question ready…'); }
       renderQuestions(limited ? null : res);
       if (limited) el('rq-sub').innerHTML = '<strong>' + esc(limited) + '</strong> Your questions are three plain questions a customer in ' + esc(biz.town) + ' would ask, and every one is in your report.';
+      return saved;
+    }).then(function (res) {
+      if (!res) return;
+      if (res.ok && res.body.id) {
+        requestId = res.body.id;
+        markConverted();
+        if (typeof res.body.preview_token === 'string') previewToken = res.body.preview_token;
+        var path = reportPath(res);
+        // Their own report page: the live answer, the questions and the progress are there.
+        if (path) { busy(true, 'Opening your report…'); handOff(path, res); return; }
+      }
+      // No report link (bot check off, no database, or the save failed): the results stay on this
+      // page, and the email step can save the request again.
+      if (TS_KEY && liveBox && previewToken) { liveState = 'preparing'; liveWaiting('getting your first question ready…'); }
       form.hidden = true;
       el('hero-done').hidden = false;
       el('results').hidden = false;
@@ -796,21 +898,7 @@
       var head = liveState === 'preparing' ? liveBox : el('rq-next');
       head.scrollIntoView({ behavior: 'smooth', block: 'start' });
       try { head.focus({ preventScroll: true }); } catch (err) { head.focus(); }
-      return saved;
-    }).then(function (res) {
-      if (!res) return;
-      if (res.ok && res.body.id) {
-        requestId = res.body.id;
-        markConverted();
-        if (typeof res.body.preview_token === 'string') previewToken = res.body.preview_token;
-        // Their own report page (it says "in progress" until it's ready): the main next step.
-        var path = reportPath(res);
-        if (path) {
-          reportUrl = location.origin + path;
-          el('next-open').href = path;
-          paintNext();
-        }
-      } else {
+      if (!(res.ok && res.body.id)) {
         // 403/503 = bot check, 429 = rate limit: the Worker's message says what to do.
         var why = (res.status === 403 || res.status === 429 || res.status === 503) && res.body && res.body.error
           ? esc(res.body.error) + ' ' : 'We couldn\'t save your request just now. ';
@@ -821,52 +909,6 @@
       startLive();
     });
   });
-
-  // ---- Fewer fields: the town comes from the ZIP; what the business does, from its name or website ----
-  // /api/questions works out the kind of business (scanner/kind.js). Only when it can't tell does the
-  // form show one box, "What kind of business is it?", and the owner presses the button again.
-  var zipFound = el('zip-found'), townField = el('town-field');
-  var tradePick = el('trade-pick'), tradeOther = el('trade-other');
-  var presetKind = '';   // from a link (?trade=plumbing) or the hero card's picker
-  function kindText() { return String(tradeOther.value || '').trim().replace(/\s+/g, ' ').slice(0, 40).toLowerCase(); }
-  function askKind() { tradePick.hidden = false; tradeOther.focus(); }
-  var TRADE_ALIASES = { plumber: 'plumbing', roofer: 'roofing', electrician: 'electrical', landscaper: 'landscaping', cleaner: 'cleaning', mechanic: 'auto_repair' };
-  function presetTrade(v) {
-    v = String(v || '').toLowerCase().replace(/[^a-z_]/g, '');
-    if (v) presetKind = TRADE_ALIASES[v] || v;
-  }
-
-  var zipInput = form.elements.zip, townInput = form.elements.town, stateInput = form.elements.state;
-  var zipPending = null, zipAsked = '';
-  var zipField = el('zip-field'); // shown only when the website has no ZIP
-  function showTownField() { zipFound.hidden = true; townField.hidden = false; }
-  function lookupZip() {
-    var z = String(zipInput.value || '').trim();
-    if (!/^\d{5}$/.test(z) || z === zipAsked) return;
-    zipAsked = z;
-    townInput.value = '';
-    var p = fetch('/api/zip?zip=' + z).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (j) {
-      if (zipAsked !== z) return;
-      var place = j && j.ok && j.places && j.places[0];
-      if (place) {
-        townInput.value = place.town;
-        stateInput.value = place.state;
-        el('zip-town').textContent = place.town + ', ' + place.state + ' ✓';
-        zipFound.hidden = false;
-        townField.hidden = true;
-      } else {
-        showTownField();
-      }
-    });
-    zipPending = p.then(function () { if (zipPending === p2) zipPending = null; });
-    var p2 = zipPending;
-  }
-  zipInput.addEventListener('input', function () {
-    this.value = this.value.replace(/\D/g, '').slice(0, 5);
-    if (this.value.length === 5) lookupZip();
-    else { zipAsked = ''; zipFound.hidden = true; }
-  });
-  el('zip-change').addEventListener('click', function () { showTownField(); townInput.focus(); townInput.select(); });
 
   // Hero card: the answer shows two lines (from the sentence that names someone); the button opens
   // the whole answer, and hides itself when the answer already fits.

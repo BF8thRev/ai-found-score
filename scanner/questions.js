@@ -86,6 +86,33 @@ export const TRADES = {
   },
 };
 
+/**
+ * Kinds that are offices, not storefronts or vans: agencies, firms, consultants, professionals.
+ * "Open now near …" is a wasted question for them (Oct 1 2026: "Pr agency open now near New York
+ * City NY" got a question back from ChatGPT). They get the PROFESSIONAL templates instead.
+ */
+export const PROFESSIONAL_RE = /agenc(?:y|ies)|\bfirm\b|consulting|consultants?\b|account|\bcpa\b|attorney|lawyer|\blaw\b|legal|insurance|real estate|realt|marketing|advertis|public relations|\bpr\b|communications|software|\bit\b|\bmsp\b|staffing|recruit|architect|engineer|financial|advisor|adviser|wealth|mortgage|broker|notary|bookkeep|\btax\b|payroll|\bseo\b|\bppc\b|branding/;
+
+/** Templates for professional kinds; anything not listed falls back to TEMPLATES. */
+export const PROFESSIONAL = {
+  urgent: 'Top rated {trade} in {town}, {state}',
+};
+
+/** 'trade' (a TRADES key: home services), 'professional' (PROFESSIONAL_RE) or 'storefront' (the rest). */
+export function kindClass(kind) {
+  const k = String(kind || '').trim().toLowerCase();
+  if (!k) return 'storefront';
+  if (normalizeTrade(k)) return 'trade';
+  return PROFESSIONAL_RE.test(k) ? 'professional' : 'storefront';
+}
+
+/** Words that read as nonsense in lower case: "pr agency" → "PR agency". Whole words only. */
+export const ACRONYMS = ['pr', 'hvac', 'it', 'cpa', 'seo', 'ppc', 'ac', 'hr', 'cbd', 'rv', 'ev', 'tv', 'av', 'msp', 'saas', 'ui', 'ux', 'llc', 'pc', 'diy', 'emt', 'ems', 'iv', 'uv', 'led', 'cnc', '3d', 'b2b'];
+const ACRONYM_RE = new RegExp(`\\b(${ACRONYMS.join('|')})\\b`, 'g');
+export function caseKind(kind) {
+  return String(kind || '').replace(ACRONYM_RE, (m) => m.toUpperCase());
+}
+
 export const TRADE_ALIASES = {
   plumber: 'plumbing', plumbers: 'plumbing',
   'heating and cooling': 'hvac', 'heating & cooling': 'hvac', 'air conditioning': 'hvac', 'hvac contractor': 'hvac',
@@ -115,7 +142,7 @@ export function tradeOrKind(trade) {
   const known = normalizeTrade(trade);
   if (known) return known;
   const t = String(trade || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/’/g, "'");
-  return /^[a-z][a-z &'.-]{1,39}$/.test(t) ? t : null;
+  return /^[a-z0-9][a-z0-9 &'.-]{1,39}$/.test(t) && /[a-z]/.test(t) ? caseKind(t) : null;
 }
 
 function fill(template, slots) {
@@ -127,6 +154,12 @@ function fill(template, slots) {
 }
 
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+/** "a plumber", "an electrician", "a PR agency" (an acronym read letter by letter: "an HVAC…", "an IT…"). */
+function article(noun) {
+  const first = noun.split(' ')[0];
+  const vowelSound = /^[AEIOU]/.test(first) || (/^[A-Z0-9]{2,}$/.test(first) && /^[AEFHILMNORSX]/.test(first));
+  return /^[aeiou]/.test(noun) || vowelSound ? 'an' : 'a';
+}
 
 /**
  * Build the 5 questions for a business.
@@ -136,12 +169,15 @@ const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 export function buildQuestions(business) {
   if (!business || !business.town) throw new Error('buildQuestions: business.town is required');
   const key = normalizeTrade(business.trade);
-  const set = key ? TRADES[key] : { trade: String(business.trade || 'local business').trim().toLowerCase() };
+  // A kind we don't have tuned questions for: the owner's words (acronyms upper-cased), and the
+  // professional templates when it is an office, not a storefront or a van.
+  const plain = caseKind(String(business.trade || 'local business').trim().toLowerCase());
+  const set = key ? TRADES[key] : { trade: plain, ...(kindClass(plain) === 'professional' ? PROFESSIONAL : {}) };
   const town = String(business.town).trim();
   const near = String(business.nearbyTown || '').trim() || town;
   const state = stateAbbr(business.state);
   const zip = String(business.zip || '').trim();
-  const slots = { trade: set.trade, Trade: cap(set.trade), town, near, state, zip, urgent: `${cap(set.trade)} open now`, aTrade: `${/^[aeiou]/.test(set.trade) ? 'an' : 'a'} ${set.trade}` };
+  const slots = { trade: set.trade, Trade: cap(set.trade), town, near, state, zip, urgent: `${cap(set.trade)} open now`, aTrade: `${article(set.trade)} ${set.trade}` };
 
   return INTENTS.map((intent, i) => {
     let tpl = set[intent] || TEMPLATES[intent];

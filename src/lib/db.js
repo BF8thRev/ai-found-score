@@ -509,16 +509,27 @@ export async function getRequestInfo(env, token, { fetchImpl = (...a) => fetch(.
   const s = supaService(env);
   const t = encodeURIComponent(token);
   const [scanRes, reqRes] = await Promise.all([
-    fetchImpl(`${s.base}/scans?report_token=eq.${t}&select=business,business_name&order=created_at.desc&limit=1`, { headers: s.headers, signal: AbortSignal.timeout(8000) }),
+    fetchImpl(`${s.base}/scans?report_token=eq.${t}&select=id,status,business,business_name,calls_total&order=created_at.desc&limit=1`, { headers: s.headers, signal: AbortSignal.timeout(8000) }),
     fetchImpl(`${s.base}/${TABLES.REPORT_REQUESTS}?report_token=eq.${t}&email=not.is.null&select=id&limit=1`, { headers: s.headers, signal: AbortSignal.timeout(8000) }),
   ]);
   const [scan] = scanRes.ok ? await scanRes.json() : [];
   const reqs = reqRes.ok ? await reqRes.json() : [];
   const b = scan && scan.business && typeof scan.business === 'object' ? scan.business : {};
   const name = String(b.name || scan?.business_name || '').slice(0, 120);
+  // Answers in so far: one scan_raw row per engine call (the workflow writes each as it lands).
+  let progress = null;
+  if (scan?.id && scan.status === 'running' && Number(scan.calls_total) > 0) {
+    const raw = await fetchImpl(`${s.base}/scan_raw?scan_id=eq.${encodeURIComponent(scan.id)}&select=id`, { headers: s.headers, signal: AbortSignal.timeout(8000) }).catch(() => null);
+    const rows = raw && raw.ok ? await raw.json().catch(() => []) : [];
+    progress = { done: Math.min(rows.length, Number(scan.calls_total)), total: Number(scan.calls_total) };
+  }
   return {
-    business: name ? { name, town: String(b.town || '').slice(0, 80) || null, state: String(b.state || '').slice(0, 20) || null } : null,
+    business: name ? {
+      name, town: String(b.town || '').slice(0, 80) || null, state: String(b.state || '').slice(0, 20) || null,
+      trade: String(b.trade || '').slice(0, 60) || null, zip: String(b.zip || '').slice(0, 10) || null,
+    } : null,
     hasEmail: reqs.length > 0,
+    progress,
   };
 }
 

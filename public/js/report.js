@@ -78,8 +78,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 // report is saved. status: 'running' | 'queued' | 'failed' (failed after its automatic retry; we re-run
 // it) | 'paid' (a paid full audit is being made). Anything else is treated as 'running'.
 // Re-checks every 30 seconds and reloads once the report (or anything other than 202) is there.
-const PENDING_POLL_MS = 30000;
+// Re-check cadence: quick at first (a free scan is quick), then slower.
+const PENDING_POLL_MS = [5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 15000, 15000, 15000, 15000];
+const PENDING_POLL_LAST_MS = 30000;
 const PENDING_STATUSES = ['running', 'queued', 'failed', 'paid', 'cancelled'];
+const LIVE_KEY = 'afs_live';
+const LIVE_WAIT_MS = 50000;
 
 function pendingCopy(status, hasEmail) {
   if (status === 'queued') {
@@ -113,11 +117,30 @@ function nextBusinessDay(now = new Date()) {
 
 function pendingState(j) {
   const b = j && j.business && typeof j.business === 'object' ? j.business : null;
+  const qs = Array.isArray(j && j.questions) ? j.questions.filter((q) => q && q.text).map((q) => ({ id: String(q.id || ''), text: String(q.text) })) : [];
+  const p = j && j.progress && Number(j.progress.total) > 0 ? { done: Math.max(0, Number(j.progress.done) || 0), total: Number(j.progress.total) } : null;
   return {
     status: PENDING_STATUSES.includes(j && j.status) ? j.status : 'running',
     business: b && b.name ? b : null,
     hasEmail: !!(j && j.hasEmail),
+    questions: qs,
+    progress: p,
   };
+}
+
+/** What the homepage handed over for this token (sessionStorage, this tab only), or null. */
+function liveHandoff(token) {
+  try {
+    const d = JSON.parse(sessionStorage.getItem(LIVE_KEY) || 'null');
+    return d && d.token === token ? d : null;
+  } catch { return null; }
+}
+function saveHandoff(d) { try { sessionStorage.setItem(LIVE_KEY, JSON.stringify(d)); } catch { /* ignore */ } }
+
+function progressLine(p) {
+  if (!p) return '';
+  const n = Math.min(p.done, p.total);
+  return `<p class="r2-pending-progress" data-done="${n}" data-total="${p.total}">${n} of ${p.total} answers in</p>`;
 }
 
 function renderPending(root, token, j, prev = null) {
@@ -125,9 +148,13 @@ function renderPending(root, token, j, prev = null) {
   // Once they've given an email on this page, keep the box hidden even if the next check lags.
   if (prev && prev.hasEmail) st.hasEmail = true;
   if (!st.business && prev && prev.business) st.business = prev.business;
+  if (!st.questions.length && prev && prev.questions) st.questions = prev.questions;
   const c = pendingCopy(st.status, st.hasEmail);
   const b = st.business;
   const where = b ? [b.town, b.state].filter(Boolean).join(', ') : '';
+  const live = st.status === 'cancelled' ? null : liveHandoff(token);
+  // The first question is asked live (below); the list shows the others, numbered on from 2.
+  const rest = live && st.questions.length > 1 ? st.questions.slice(1) : st.questions;
   document.title = b ? `AI Found Score — ${b.name}` : 'AI Found Score — your report is on its way';
   root.innerHTML = `
     <div class="wrap page-msg r2-pending" data-status="${escapeHtml(st.status)}">
@@ -135,12 +162,23 @@ function renderPending(root, token, j, prev = null) {
       ${c.spin ? '<p class="r2-pending-mark" aria-hidden="true"></p>' : ''}
       <h1>${escapeHtml(c.h)}</h1>
       <p>${c.html ? c.p : escapeHtml(c.p)}</p>
-      ${st.status === 'cancelled' ? '' : `<p class="fine" role="status">We check again every 30 seconds. You can close this page and come back to the same link.</p>
+      ${st.status === 'running' ? progressLine(st.progress) : ''}
+      ${live ? `<section class="r2-live" id="r2-live" aria-live="polite">
+        <p class="r2-live-wait" id="r2-live-wait">Asking AI right now: <strong>${escapeHtml(live.question || 'your first question')}</strong></p>
+        <div class="r2-live-out" id="r2-live-out" hidden></div>
+      </section>` : ''}
+      ${rest.length ? `<section class="r2-pending-qs">
+        <h2>${live ? `${rest.length} more question${rest.length === 1 ? '' : 's'} in your report` : 'What we\u2019re asking'}</h2>
+        <ol class="rq-list" style="counter-reset: rq ${live ? 1 : 0}">${rest.map((q) => `<li>${escapeHtml(q.text)}</li>`).join('')}</ol>
+      </section>` : ''}
+      ${st.status === 'cancelled' ? '' : `<p class="fine" role="status">This page updates on its own. You can close it and come back to the same link.</p>
       ${st.hasEmail ? '' : leadForm('pending')}`}
     </div>`;
   root.querySelectorAll('form.lead-form').forEach((f) => f.addEventListener('submit', async (e) => {
     if (await submitLead(e, token, { pending: true })) st.hasEmail = true;
   }));
+  if (live) mountLive(root, live);
+  let tick = 0;
   const check = async () => {
     try {
       const res = await fetch('/api/report/' + encodeURIComponent(token), { cache: 'no-store' });
@@ -148,19 +186,110 @@ function renderPending(root, token, j, prev = null) {
         const next = pendingState(await res.json().catch(() => ({})));
         // Re-draw only when something shown changes, so a half-typed email isn't wiped.
         const bizChanged = !!next.business && !st.business;
+        const qsChanged = next.questions.length > 0 && !st.questions.length;
         const emailNow = next.hasEmail && !st.hasEmail && !root.querySelector('.lead-form input[name="email"]')?.value;
-        if (next.status !== st.status || bizChanged || emailNow) {
+        if (next.status !== st.status || bizChanged || qsChanged || emailNow) {
           renderPending(root, token, { ...next, hasEmail: next.hasEmail || st.hasEmail }, st);
           return;
         }
+        // Progress changes in place (no re-draw, no lost focus).
+        const line = root.querySelector('.r2-pending-progress');
+        if (next.progress && line) { line.textContent = `${Math.min(next.progress.done, next.progress.total)} of ${next.progress.total} answers in`; line.dataset.done = String(next.progress.done); }
+        else if (next.progress && !line && st.status === 'running') root.querySelector('h1')?.insertAdjacentHTML('afterend', progressLine(next.progress));
       } else {
         location.reload();
         return;
       }
     } catch { /* offline for a moment: try again next time */ }
-    setTimeout(check, PENDING_POLL_MS);
+    setTimeout(check, PENDING_POLL_MS[tick++] || PENDING_POLL_LAST_MS);
   };
-  setTimeout(check, PENDING_POLL_MS);
+  setTimeout(check, PENDING_POLL_MS[tick++] || PENDING_POLL_LAST_MS);
+}
+
+// The live answer on the pending page: one question to one assistant (POST /api/live-preview with
+// the token the homepage got after the bot check). The answer is third-party text: it only ever
+// goes into the page through textContent. Kept in sessionStorage so a reload shows it again.
+// LIVE is the answer's state across re-draws of the pending page (a poll that changes the status
+// rebuilds the markup): one POST per token, and the answer is painted into whatever markup is
+// there when it lands.
+const LIVE = { token: '', status: 'idle', data: null };
+function mountLive(root, live) {
+  if (LIVE.token !== live.token) Object.assign(LIVE, { token: live.token, status: 'idle', data: null });
+  if (LIVE.status !== 'done' && live.answer && typeof live.answer === 'object') Object.assign(LIVE, { status: 'done', data: live.answer });
+  if (LIVE.status === 'done') { paintLive(root, live, LIVE.data); return; }
+  if (LIVE.status === 'failed') { liveFailed(root); return; }
+  if (LIVE.status === 'running') return;
+  runLivePreview(root, live);
+}
+function liveFailed(root) {
+  const wait = root.querySelector('#r2-live-wait');
+  if (wait) wait.textContent = 'No live answer just now. Every answer is in your report below when it\u2019s ready.';
+}
+function paintLive(root, live, d) {
+  const wait = root.querySelector('#r2-live-wait');
+  const out = root.querySelector('#r2-live-out');
+  if (!wait || !out) return;
+  {
+    wait.hidden = true;
+    out.hidden = false;
+    out.textContent = '';
+    const named = document.createElement('p');
+    named.className = 'r2-live-named ' + (d.named ? 'yes' : 'no');
+    named.textContent = d.named ? 'Your name is in this answer.' : 'We didn\u2019t see your name in this answer. Check it yourself below.';
+    const head = document.createElement('p');
+    head.className = 'r2-live-head';
+    head.textContent = `AI\u2019s answer, word for word \u00b7 ${new Date(d.askedAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    const q = document.createElement('p');
+    q.className = 'r2-live-q';
+    q.textContent = `\u201c${String(d.question || live.question || '')}\u201d`;
+    const box = document.createElement('blockquote');
+    box.className = 'r2-live-answer';
+    const clean = typeof d.display === 'string' && d.display && Array.isArray(d.displayRanges);
+    const text = String(clean ? d.display : d.answer);
+    const ranges = clean ? d.displayRanges : (Array.isArray(d.ranges) ? d.ranges : []);
+    let at = 0;
+    for (const r of ranges) {
+      const s = Number(r && r[0]); const e = Number(r && r[1]);
+      if (!(s >= at && e > s && e <= text.length)) continue;
+      if (s > at) box.appendChild(document.createTextNode(text.slice(at, s)));
+      const m = document.createElement('mark'); m.textContent = text.slice(s, e); box.appendChild(m);
+      at = e;
+    }
+    if (at < text.length) box.appendChild(document.createTextNode(text.slice(at)));
+    const note = document.createElement('p');
+    note.className = 'r2-live-note';
+    const cites = Array.isArray(d.citations) ? d.citations.map(String) : [];
+    note.textContent = `${cites.length ? 'Websites it cited: ' + cites.join(', ') + '. ' : 'It didn\u2019t cite any websites. '}Asked through ${String(d.assistant || 'the assistant')}, with web search on. Answers change from day to day.`;
+    out.append(named, head, q, box, note);
+  }
+}
+async function runLivePreview(root, live) {
+  if (!live.preview_token || !live.request_id) { LIVE.status = 'failed'; const w = root.querySelector('#r2-live-wait'); if (w) w.hidden = true; return; }
+  LIVE.status = 'running';
+  try { if (window.dataLayer) window.dataLayer.push({ event: 'live_preview_start' }); } catch { /* ignore */ }
+  let d = null;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), LIVE_WAIT_MS);
+    const res = await fetch('/api/live-preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
+      body: JSON.stringify({ request_id: live.request_id, question_id: 'q1', token: live.preview_token }),
+    });
+    clearTimeout(timer);
+    const j = await res.json().catch(() => ({}));
+    if (res.ok && j.ok === true && typeof j.answer === 'string' && j.answer) d = j;
+  } catch { /* no live answer: the report has every answer */ }
+  if (!d) {
+    // No live answer (daily cap, every engine down): one calm line, the report has every answer.
+    LIVE.status = 'failed';
+    liveFailed(root);
+    try { if (window.dataLayer) window.dataLayer.push({ event: 'live_preview_failed' }); } catch { /* ignore */ }
+    return;
+  }
+  Object.assign(LIVE, { status: 'done', data: d });
+  saveHandoff({ ...live, answer: d });
+  paintLive(root, live, d);
+  try { if (window.dataLayer) window.dataLayer.push({ event: 'live_preview_answer', named: !!d.named }); } catch { /* ignore */ }
 }
 
 // The header button. On a report page "Get my free report" is redundant: it becomes "Check another business".

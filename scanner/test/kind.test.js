@@ -64,3 +64,39 @@ test('GET /api/questions: no "what do you do" needed; asks only when nothing tel
   assert.equal(res.status, 422);
   assert.equal((await res.json()).needKind, true);
 });
+
+// ---- offices and professionals; the name from the page ----
+import { findName, metaContent } from '../kind.js';
+
+test('guessKind: agencies, firms and offices by name', () => {
+  assert.equal(guessKind('PR 73'), 'PR agency');
+  assert.equal(guessKind('Hudson Public Relations'), 'PR agency');
+  assert.equal(guessKind('Bright Marketing Group'), 'marketing agency');
+  assert.equal(guessKind('Sterling Law Group'), 'law firm');
+  assert.equal(guessKind('Northwell IT Services'), 'IT company');
+  assert.equal(guessKind('We make it easy'), null, '"it" the pronoun is not IT');
+  assert.equal(guessKind('Island Print Shop'), 'print shop');
+  assert.equal(guessKind('Elite Med Spa'), 'med spa');
+  assert.equal(guessKind('Quick Towing'), 'towing company');
+});
+
+test('kindFromPage: og:description comes after title, h1, description; body text is never read', () => {
+  assert.equal(kindFromPage('<title>PR 73</title><meta property="og:description" content="A boutique public relations agency in NYC">'), 'PR agency');
+  assert.equal(kindFromPage('<title>Smith Dental</title><p>We are a public relations agency</p>'), 'dentist', 'the title wins');
+  assert.equal(kindFromPage('<title>Home | Smith &amp; Sons</title><p>Call today for a free consultation. Follow us on social media.</p>'), null, '"consultation" in prose is not a consulting firm');
+  assert.equal(metaContent('<meta name="description" content="A &amp; B">', 'description'), 'A & B');
+});
+
+test('findName: schema.org name, else og:site_name, else the short part of the title', () => {
+  assert.equal(findName('<script type="application/ld+json">{"@context":"https://schema.org","@type":"LocalBusiness","name":"Mega Wash &amp; Dry"}</script><title>Laundromat</title>'), 'Mega Wash & Dry');
+  assert.equal(findName('<script type="application/ld+json">{"@type":"WebSite","name":"Site"}</script><meta property="og:site_name" content="Glenn Wayne Bakery">'), 'Glenn Wayne Bakery');
+  assert.equal(findName('<script type="application/ld+json">{"@graph":[{"@type":"WebPage","name":"Home"},{"@type":"Organization","name":"PR 73"}]}</script>'), 'PR 73');
+  assert.equal(findName('<title>PR 73 | Public Relations Agency in New York</title>'), 'PR 73');
+  assert.equal(findName('<title>Glenn Wayne Bakery | Bohemia NY</title>'), 'Glenn Wayne Bakery', 'a place is not the name');
+  assert.equal(findName('<title>Smith Dental | Boston</title>'), 'Smith Dental');
+  assert.equal(findName('<script type="application/ld+json">{"@type":"SiteNavigationElement","name":"Home"}</script><meta property="og:site_name" content="PR 73">'), 'PR 73', 'a nav "Home" is skipped');
+  assert.equal(findName('<title>Home - Otter Plumbing &amp; Heating</title>'), 'Otter Plumbing & Heating');
+  assert.equal(findName('<title>Welcome to Glenn Wayne Bakery</title>'), 'Glenn Wayne Bakery');
+  assert.equal(findName('<title>Home</title>'), '');
+  assert.equal(findName(''), '');
+});

@@ -460,7 +460,8 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 /* ---------- free-report flow: questions, then optional email ---------- */
 .request small.opt { font-weight: 400; opacity: .75; }
 .request.done { grid-template-columns: 1fr; }
-.request.done > div:first-child { display: none; }
+/* Only [hidden] may hide the results block (#request-next, the first child of .request.done):
+   the page script shows it after the hero form is submitted. */
 .request-next { display: grid; gap: 18px; max-width: 760px; width: 100%; margin: 0 auto; }
 .request-next[hidden], .request form[hidden] { display: none; }
 .rq-block { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); border-radius: var(--radius); padding: 24px; }
@@ -512,7 +513,6 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 /* Invisible unless Cloudflare asks for a click; the page script adds .ts-live while it does. */
 .ts-box:not(.ts-live) { height: 0; overflow: hidden; }
 .ts-box.ts-live { margin-top: 14px; }
-.request.done .request-col:not(.ts-shown) { display: none; }
 
 /* ---------- hero extras, two-plan pricing (index.html) ---------- */
 .hero-alt { margin: 12px 0 0; font-size: 15px; }
@@ -595,6 +595,12 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .hero-form[hidden], .hero-form .status:empty, .hero-form [hidden] { display: none; }
 .hero-form .status { margin: 0; font-size: 15px; }
 .hero-form .status.error { color: var(--red); font-weight: 600; }
+.hero-form .status.note { color: var(--navy); font-weight: 600; }
+/* Under the website box: what /api/site-check read from the site. */
+.hero-form .field-note { margin: -6px 0 0; font-size: 14px; color: var(--muted); }
+.hero-form .field-note.ok { color: var(--green); font-weight: 600; }
+.hero-form .field-note.busy::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--navy); vertical-align: -1px; animation: afs-spin 1s linear infinite; }
+@keyframes afs-spin { to { transform: rotate(360deg); } }
 @media (max-width: 520px) {
   .hero-form { grid-template-columns: 1fr; }
   .hero-form #zip-field { max-width: none; }
