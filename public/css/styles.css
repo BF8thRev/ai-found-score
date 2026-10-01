@@ -571,9 +571,9 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .hero-cta { display: inline-flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .hero-micro { margin: 0; font-size: 14px; color: var(--muted); text-align: center; letter-spacing: .01em; }
-/* Hero form: name + website side by side, ZIP + button under them. */
-.hero-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 560px; }
-.hero-form label { display: grid; gap: 6px; font-size: 15px; font-weight: 600; color: var(--navy); }
+/* Hero form: two short rows (website + name, where + what you do), the button under them. */
+.hero-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; max-width: 560px; }
+.hero-form label { display: grid; gap: 6px; align-content: end; font-size: 15px; font-weight: 600; color: var(--navy); }
 .hero-form .hint { font-size: 14px; font-weight: 400; color: var(--muted); }
 .hero-form input {
   font: inherit; font-size: 16px; font-weight: 400; color: var(--ink); background: #fff; border: 1px solid #C9D3E1; border-radius: 10px; padding: 12px 13px; width: 100%; box-sizing: border-box;
@@ -597,7 +597,8 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .hero-form .status.error { color: var(--red); font-weight: 600; }
 .hero-form .status.note { color: var(--navy); font-weight: 600; }
 /* Under the website box: what /api/site-check read from the site. */
-.hero-form .field-note { margin: -6px 0 0; font-size: 14px; color: var(--muted); }
+.hero-form .field-note { margin: -4px 0 0; font-size: 14px; color: var(--muted); }
+.hero-form .field-note:empty { display: none; }
 .hero-form .field-note.ok { color: var(--green); font-weight: 600; }
 .hero-form .field-note.busy::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--navy); vertical-align: -1px; animation: afs-spin 1s linear infinite; }
 @keyframes afs-spin { to { transform: rotate(360deg); } }

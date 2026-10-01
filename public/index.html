@@ -65,13 +65,13 @@
              boxes and presses the button once. Whatever the page can't tell stays an empty box. -->
         <div class="hero-start" id="request">
         <form class="hero-form" id="request-form" method="post" action="/api/request" novalidate>
-          <label class="full"><span>Your website <small class="hint">(or Facebook page)</small></span> <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
+          <label><span>Your website <small class="hint">(or Facebook page)</small></span> <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
+          <label>Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="The way customers know it"></label>
           <p class="full field-note" id="site-note" hidden role="status"></p>
-          <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="The way customers know it"></label>
-          <label class="full"><span>Where your customers are <small class="hint">(town, city or area)</small></span> <input name="area" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa, NY" data-geo-placeholder="town"></label>
+          <label><span>Where your customers are <small class="hint">(town or area)</small></span> <input name="area" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa, NY" data-geo-placeholder="town"></label>
           <input name="zip" type="hidden">
           <input name="state" type="hidden" value="NY" data-geo-value="state">
-          <label class="full">What you do <input name="trade_other" id="trade-other" type="text" required maxlength="40" autocomplete="off" placeholder="bakery, dentist, plumber, PR agency…"></label>
+          <label>What you do <input name="trade_other" id="trade-other" type="text" required maxlength="40" autocomplete="off" placeholder="bakery, plumber, PR agency…"></label>
           <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
           <button class="btn big" type="submit">Show me who&rsquo;s getting my calls</button>
           <p class="status" id="request-status" role="status"></p>
