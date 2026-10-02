@@ -772,7 +772,7 @@ export function buildKit(details, report, opts = {}) {
     title: 'Your business details in the format Google and AI read',
     tech: 'LocalBusiness schema (JSON-LD)',
     what: 'Your name, phone, address and service area as a small block of code search engines and AI read directly.',
-    where: 'Pasted into the <head> section of your home page by whoever runs your website.',
+    where: 'Pasted into a hidden part of your home page (the <head> section) by whoever runs your website.',
     who: 'web',
     time: 'Under half an hour for your web person',
     optional: hasSchema,
@@ -872,18 +872,13 @@ export function buildKit(details, report, opts = {}) {
 }
 
 /**
- * "START HERE": the jobs the owner can do alone today, before anything that needs whoever runs the website.
+ * The kit's jobs in two groups: what the owner can do alone today (their Google profile, review messages), and
+ * what goes on the website (needs whoever runs it). A job the builder can't take is left out of "yours".
  * (Buyer reviews: most owners have no web person, and the README never said what to do first.)
  */
-export function startHere(jobs = []) {
-  const mine = jobs.filter((j) => j.who === 'you' && !j.skip);
-  if (!mine.length) return [];
-  return [
-    'START HERE: what you can do yourself, today',
-    ...mine.map((j, n) => `${n + 1}. ${j.title}: open ${j.files[0]}. ${j.time || ''}`.replace(/\s+$/, '')),
-    'The other jobs go on your website. They need whoever looks after it, or your site builder’s help pages (linked where there is one). They can wait.',
-    '',
-  ];
+export function splitJobs(jobs = []) {
+  const mine = jobs.filter((j) => j.who === 'you');
+  return { mine, web: jobs.filter((j) => j.who !== 'you') };
 }
 
 export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token = '', date = new Date() } = {}) {
@@ -897,7 +892,6 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
     'Nothing changes on your website until someone puts these files in place.',
     'The files give AI and Google correct facts to read. We can’t promise any assistant will name you: check-it-worked.txt says what to expect and how to tell.',
     '',
-    ...startHere(jobs),
     ...(platform ? [`Your website is built on ${platform.name}. Where a job can be done in ${platform.name}, it says exactly where to click, with ${platform.name}’s own guide.`, ''] : []),
   ];
   if (missing.length || notes.length || faq.needs) {
@@ -907,20 +901,26 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
     if (faq.needs) out.push(`- ${plural(faq.needs, 'answer', 'answers')} in your Questions page ${faq.needs === 1 ? 'needs' : 'need'} one detail from you (the part in [brackets]). Fill ${faq.needs === 1 ? 'it' : 'them'} in on your Fix Kit page and download again.`);
     out.push('');
   }
-  out.push('WHAT’S LEFT TO DO, IN ORDER');
-  jobs.forEach((j, n) => {
-    out.push(
-      `${n + 1}. ${j.title}${j.optional ? ' (optional)' : ''}`,
-      `   ${j.files.length > 1 ? 'Files' : 'File'}: ${j.files.join(', ')}`,
-      `   What it does: ${j.what}`,
-      ...(j.time ? [`   Time: ${j.time}. No cost from us.`] : []),
-      `   Where it goes: ${j.where}`,
-      ...(j.platform ? j.platform.steps.map((x) => `   ${x}`) : []),
-      ...(j.platform ? j.platform.guides.map((g) => `   ${g.label}: ${g.url}`) : []),
-      ...(j.note ? [`   Note: ${j.note}`] : []),
-      '',
-    );
-  });
+  const { mine, web } = splitJobs(jobs);
+  const section = (title, intro, list) => {
+    if (!list.length) return;
+    out.push(title, ...intro, '');
+    list.forEach((j, n) => {
+      out.push(
+        `${n + 1}. ${j.title}${j.optional ? ' (optional)' : ''}`,
+        `   ${j.files.length > 1 ? 'Files' : 'File'}: ${j.files.join(', ')}`,
+        `   What it does: ${j.what}`,
+        ...(j.time ? [`   Time: ${j.time}. No cost from us.`] : []),
+        `   Where it goes: ${j.where}`,
+        ...(j.platform ? j.platform.steps.map((x) => `   ${x}`) : []),
+        ...(j.platform ? j.platform.guides.map((g) => `   ${g.label}: ${g.url}`) : []),
+        ...(j.note ? [`   Note: ${j.note}`] : []),
+        '',
+      );
+    });
+  };
+  section('START HERE: JOBS YOU CAN DO YOURSELF, TODAY', ['No website skills needed. If you only do one thing, do number 1.'], mine);
+  section('JOBS FOR WHOEVER RUNS YOUR WEBSITE', ['These go on your website. Give them this folder. Nobody does that for you? Ask us on your Fix Kit page (the “Do it for me” box) and we will write back with what we would do and what it would cost. Asking is free.'], web);
   if (done.length) {
     out.push('ALREADY DONE ON YOUR WEBSITE');
     for (const x of done) out.push(`- ${x.title}: ${x.note}`);

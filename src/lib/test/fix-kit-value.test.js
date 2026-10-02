@@ -168,9 +168,12 @@ test('README: START HERE names what the owner can do alone, before anything for 
   const { kit } = kitFor(officeReport());
   const readme = kit.files[0].content;
   const at = (s) => { const i = readme.indexOf(s); assert.ok(i >= 0, s); return i; };
-  assert.ok(at('START HERE: what you can do yourself, today') < at('WHAT’S LEFT TO DO, IN ORDER'));
-  assert.match(readme, /1\. Your Google Business Profile text: open google-business-profile\.txt\. Under half an hour for you/);
-  assert.match(readme, /2\. Ask happy customers for a Google review: open ask-for-reviews\.txt\./);
-  assert.match(readme, /The other jobs go on your website\. They need whoever looks after it/);
-  assert.doesNotMatch(readme.slice(at('START HERE'), at('WHAT’S LEFT')), /faq-page|schema-local|llms\.txt/, 'nothing for a web person under START HERE');
+  const mine = readme.slice(at('START HERE: JOBS YOU CAN DO YOURSELF, TODAY'), at('JOBS FOR WHOEVER RUNS YOUR WEBSITE'));
+  const web = readme.slice(at('JOBS FOR WHOEVER RUNS YOUR WEBSITE'), at('YOUR DETAILS, AS YOU CHECKED THEM'));
+  assert.match(mine, /1\. Your Google Business Profile text\n   File: google-business-profile\.txt\n[^]*Time: Under half an hour for you/);
+  assert.match(mine, /2\. Ask happy customers for a Google review/);
+  assert.doesNotMatch(mine, /faq-page|schema-local|llms\.txt/, 'nothing for a web person under the owner\'s jobs');
+  assert.match(web, /1\. A Questions page AI can quote/);
+  assert.doesNotMatch(web, /google-business-profile\.txt|ask-for-reviews/, 'nothing the owner does alone under the website jobs');
+  assert.match(web, /Nobody does that for you\? Ask us on your Fix Kit page/);
 });

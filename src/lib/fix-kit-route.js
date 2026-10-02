@@ -15,6 +15,10 @@
 //                                    kit's blanks, read off the owner's own website and checked against it
 //                                    (src/lib/fix-kit-suggest.js). Never applied by themselves; the page offers each one. Paid only,
 //                                    cached per token for a week, its cost logged to scan_usage. A sample token gets none.
+//                                    JSON { help: true, details, contact, phone?, wants[], note? } → { ok }: the "do it for me" button.
+//                                    Emails us (the alert addresses) the request with the kit and report links, and the owner a
+//                                    short "we got it". Paid only; one per token per day (idempotency key); a sample sends nothing.
+//                                    (src/lib/done-for-you.js)
 //   GET  /api/fix-kit/<token>.zip  → the zip (src/lib/fix-kit.js), paid AND ticked (saved) only (402 / 409).
 //
 // Paid = a payments row for the token whose tier (or amount, TIER_BY_CENTS) is one of FIX_KIT_TIERS,
@@ -34,6 +38,9 @@ import { rateLimit } from './rate-limit.js';
 import { FIX_KIT_TIERS, prefillDetails, validateDetails, buildKit, kitFaq, zipFiles, zipName } from './fix-kit.js';
 import { suggestForKit } from './fix-kit-suggest.js';
 import { saveUsage, usageRow, canStore } from '../../scanner/store.js';
+import { validateHelp, helpEmails } from './done-for-you.js';
+import { sendEmail } from './email.js';
+import { alertEmails } from './alerts.js';
 import { directoryChecklistTxt, googlePostsTxt } from './plan.js';
 import { withPlatform } from './site-platform.js';
 
@@ -47,13 +54,13 @@ const notPaid = () => json({ ok: false, error: 'The Fix Kit comes with the AI Vi
 
 /**
  * deps (all optional; tests pass fakes): { mockReports, getReport, getPaidTiers, getFixKitDetails,
- * saveFixKitDetails, rateLimit, now, withPlatform, suggest, saveUsage, cache }
+ * saveFixKitDetails, rateLimit, now, withPlatform, suggest, saveUsage, cache, sendEmail }
  */
 export async function handleFixKit(request, url, env, deps = {}) {
   const d = {
     getReport, getPaidTiers, getFixKitDetails, saveFixKitDetails, rateLimit, mockReports: {}, now: () => new Date(),
     withPlatform: (r) => withPlatform(r),
-    suggest: suggestForKit, saveUsage, cache: typeof caches !== 'undefined' ? caches.default : null,
+    suggest: suggestForKit, saveUsage, sendEmail, cache: typeof caches !== 'undefined' ? caches.default : null,
     ...deps,
   };
   let raw;
@@ -80,15 +87,16 @@ export async function handleFixKit(request, url, env, deps = {}) {
 
   let paid = isSample;
   let onPlan = isSample;
+  let tiers = [];
   if (!isSample) {
-    const tiers = await d.getPaidTiers(env, token).catch((e) => { console.error('[fix-kit] paid check failed', e); return []; });
+    tiers = await d.getPaidTiers(env, token).catch((e) => { console.error('[fix-kit] paid check failed', e); return []; });
     paid = tiers.some((t) => FIX_KIT_TIERS.includes(t));
     onPlan = tiers.includes('be_the_answer');
   }
   // Which site builder, for reports scanned before we recorded it. Never holds the kit up on failure.
   if (paid && !isSample) report = await d.withPlatform(report).catch(() => report);
 
-  if (request.method === 'POST') return postDetails(request, env, d, token, paid, isSample, report, url);
+  if (request.method === 'POST') return postDetails(request, env, d, token, paid, isSample, report, url, tiers);
 
   if (wantZip) {
     if (!paid) return notPaid();
@@ -155,7 +163,7 @@ export function kitView(details, report, opts) {
   };
 }
 
-async function postDetails(request, env, d, token, paid, isSample, report, url) {
+async function postDetails(request, env, d, token, paid, isSample, report, url, tiers = []) {
   if (!paid) return notPaid();
   if (!(request.headers.get('Content-Type') || '').includes('application/json')) {
     return json({ ok: false, error: 'Send the details as JSON.' }, 415);
@@ -169,6 +177,13 @@ async function postDetails(request, env, d, token, paid, isSample, report, url) 
   const v = validateDetails(body.details);
   const errors = [...v.errors];
   const kit = () => kitView(v.details, report, { origin: url.origin, token, date: d.now() });
+  if (body.help === true) {
+    const h = validateHelp(body);
+    const all = [...errors, ...h.errors];
+    if (all.length) return json({ ok: false, errors: all }, 422);
+    if (isSample) return json({ ok: true, sample: true });
+    return askForHelp(env, d, { origin: url.origin, token, tiers, details: v.details, report, kit: kit(), help: h.help });
+  }
   if (body.suggest === true) {
     if (errors.length) return json({ ok: false, errors }, 422);
     return suggestions(env, d, token, isSample, v.details, report);
@@ -227,4 +242,17 @@ async function suggestions(env, d, token, isSample, details, report) {
     await put.catch(() => {});
   }
   return json({ ok: true, suggestions: { slots: r.slots, services: r.services } });
+}
+
+/** "Do it for me": one email to us with everything needed to answer, one short "we got it" to the owner. */
+async function askForHelp(env, d, ctx) {
+  const mail = helpEmails(env, { ...ctx, date: d.now() });
+  const sends = [];
+  for (const to of alertEmails(env)) sends.push(await d.sendEmail(env, { ...mail.toUs, to, idempotencyKey: `${mail.toUs.idempotencyKey}-${to}` }));
+  if (!sends.some((r) => r && r.ok)) {
+    console.error('[fix-kit] help request not sent', JSON.stringify(sends));
+    return json({ ok: false, error: 'We could not send that just now. Email hello@aifoundscore.com and we will help.' }, 503);
+  }
+  await d.sendEmail(env, mail.toOwner);
+  return json({ ok: true, contact: ctx.help.contact });
 }

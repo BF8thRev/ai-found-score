@@ -225,7 +225,8 @@ test('router: a paid report opens on the kit already built: every file, the FAQ,
     assert.ok(kit.faq.needs >= 3, 'answers that need one detail are counted');
     assert.deepEqual(kit.missing.map((m) => m.field), ['phone', 'services']);
     assert.deepEqual(kit.done.map((x) => x.id), ['robots'], 'the site lets AI in: no robots.txt');
-    assert.match(kit.readme, /WHAT’S LEFT TO DO, IN ORDER/);
+    assert.match(kit.readme, /START HERE: JOBS YOU CAN DO YOURSELF, TODAY/);
+    assert.match(kit.readme, /JOBS FOR WHOEVER RUNS YOUR WEBSITE/);
     // The check list: what to expect, how to tell each file is live, the report's own questions to ask again.
     assert.match(kit.check, /^CHECK IT WORKED: Harbor Lane PR/);
     assert.match(kit.check, /We cannot promise any assistant will name you/);

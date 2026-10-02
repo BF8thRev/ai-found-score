@@ -198,9 +198,10 @@
   var WHO = { web: 'For whoever runs your website', you: 'You can do this', both: 'You, with your web person' };
 
   function drawJobs(kit) {
-    var list = $('[data-jobs]');
-    list.textContent = '';
+    var lists = { you: $('[data-jobs-you]'), web: $('[data-jobs-web]'), after: $('[data-jobs-after]') };
+    Object.keys(lists).forEach(function (k) { lists[k].textContent = ''; });
     (kit.jobs || []).forEach(function (j) {
+      var list = j.who === 'you' ? lists.you : lists.web;
       var li = el('li', 'fk-job');
       li.setAttribute('data-job', j.id);
       var h = el('h3', null, j.title);
@@ -250,7 +251,7 @@
       r.appendChild(el('span', 'fk-tech', 'README.txt'));
       r.appendChild(el('p', null, 'What each file does and where it goes, in plain words, in order.'));
       r.appendChild(fileDetails({ path: 'README.txt', content: kit.readme }));
-      list.appendChild(r);
+      lists.web.appendChild(r);
     }
     if (kit.check) {
       var c = el('li', 'fk-job');
@@ -258,8 +259,9 @@
       c.appendChild(el('span', 'fk-tech', 'check-it-worked.txt'));
       c.appendChild(el('p', null, 'How to tell each file is live, what to expect and when, and the questions to ask AI again in about a month.'));
       c.appendChild(fileDetails({ path: 'check-it-worked.txt', content: kit.check }));
-      list.appendChild(c);
+      lists.after.appendChild(c);
     }
+    ['you', 'web', 'after'].forEach(function (k) { $('[data-sec="' + k + '"]').hidden = !lists[k].childNodes.length; });
     var line = $('[data-platform-line]');
     if (line) {
       line.textContent = kit.platform && kit.platform.name ? 'Your site is built on ' + kit.platform.name + ', so each job says where it goes in ' + kit.platform.name + '.' : '';
@@ -425,6 +427,31 @@
     d.faqFacts = d.faqFacts || {};
     document.querySelectorAll('[data-slot]').forEach(function (input) { d.faqFacts[input.getAttribute('data-slot')] = input.value; });
     rebuild(d, $('[data-slots-status]'), $('[data-save-slots]'));
+  });
+
+  // "Do it for me": one request that emails us; nothing is asked for but a way to reach them and what they want.
+  $('[data-help-send]').addEventListener('click', function () {
+    var status = $('[data-help-status]');
+    var button = $('[data-help-send]');
+    clearErrors();
+    var wants = [].slice.call(document.querySelectorAll('[data-want]:checked')).map(function (x) { return x.value; });
+    button.disabled = true;
+    setStatus(status, 'Sending…');
+    post({ help: true, details: current, contact: $('#fk-help-email').value, phone: $('#fk-help-phone').value, wants: wants, note: $('#fk-help-note').value }).then(function (res) {
+      button.disabled = false;
+      if (res.body && res.body.ok) {
+        $('[data-help-form]').hidden = true;
+        var done = $('[data-help-done]');
+        done.hidden = false;
+        done.textContent = res.body.sample ? 'This is the sample, so nothing was sent.' : 'Sent. We will write to ' + res.body.contact + '.';
+        return;
+      }
+      if (res.body && res.body.errors) { setStatus(status, 'A few things need a fix.', 'bad'); showErrors(res.body.errors); return; }
+      setStatus(status, (res.body && res.body.error) || 'Something went wrong. Try again in a minute.', 'bad');
+    }).catch(function () {
+      button.disabled = false;
+      setStatus(status, 'Could not reach us. Check your connection and try again.', 'bad');
+    });
   });
 
   $('[data-download]').addEventListener('click', function () {
