@@ -871,6 +871,21 @@ export function buildKit(details, report, opts = {}) {
   return { jobs: ordered, done, faq, missing, notes, files: out, check, ...(platform ? { platform } : {}) };
 }
 
+/**
+ * "START HERE": the jobs the owner can do alone today, before anything that needs whoever runs the website.
+ * (Buyer reviews: most owners have no web person, and the README never said what to do first.)
+ */
+export function startHere(jobs = []) {
+  const mine = jobs.filter((j) => j.who === 'you' && !j.skip);
+  if (!mine.length) return [];
+  return [
+    'START HERE: what you can do yourself, today',
+    ...mine.map((j, n) => `${n + 1}. ${j.title}: open ${j.files[0]}. ${j.time || ''}`.replace(/\s+$/, '')),
+    'The other jobs go on your website. They need whoever looks after it, or your site builder’s help pages (linked where there is one). They can wait.',
+    '',
+  ];
+}
+
 export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token = '', date = new Date() } = {}) {
   const { jobs = [], done = [], faq = { items: [], needs: 0 }, missing = [], notes = [], platform = null } = kit || {};
   const out = [
@@ -882,6 +897,7 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
     'Nothing changes on your website until someone puts these files in place.',
     'The files give AI and Google correct facts to read. We can’t promise any assistant will name you: check-it-worked.txt says what to expect and how to tell.',
     '',
+    ...startHere(jobs),
     ...(platform ? [`Your website is built on ${platform.name}. Where a job can be done in ${platform.name}, it says exactly where to click, with ${platform.name}’s own guide.`, ''] : []),
   ];
   if (missing.length || notes.length || faq.needs) {
