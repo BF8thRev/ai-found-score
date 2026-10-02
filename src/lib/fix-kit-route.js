@@ -11,6 +11,10 @@
 //                                    the ownership tick, sent by the page right before the download.
 //                                    422 { ok:false, errors:[{ field, message }] } when something needs fixing.
 //                                    Only for a token paid for 'xray', 'fix_kit' or 'be_the_answer' (402 otherwise).
+//                                    JSON { suggest: true, details } → { ok, suggestions: { slots, services } }: AI drafts for the
+//                                    kit's blanks, read off the owner's own website and checked against it
+//                                    (src/lib/fix-kit-suggest.js). Never applied by themselves; the page offers each one. Paid only,
+//                                    cached per token for a week, its cost logged to scan_usage. A sample token gets none.
 //   GET  /api/fix-kit/<token>.zip  → the zip (src/lib/fix-kit.js), paid AND ticked (saved) only (402 / 409).
 //
 // Paid = a payments row for the token whose tier (or amount, TIER_BY_CENTS) is one of FIX_KIT_TIERS,
@@ -27,7 +31,9 @@
 
 import { getReport, getPaidTiers, getFixKitDetails, saveFixKitDetails } from './db.js';
 import { rateLimit } from './rate-limit.js';
-import { FIX_KIT_TIERS, prefillDetails, validateDetails, buildKit, zipFiles, zipName } from './fix-kit.js';
+import { FIX_KIT_TIERS, prefillDetails, validateDetails, buildKit, kitFaq, zipFiles, zipName } from './fix-kit.js';
+import { suggestForKit } from './fix-kit-suggest.js';
+import { saveUsage, usageRow, canStore } from '../../scanner/store.js';
 import { directoryChecklistTxt, googlePostsTxt } from './plan.js';
 import { withPlatform } from './site-platform.js';
 
@@ -41,12 +47,13 @@ const notPaid = () => json({ ok: false, error: 'The Fix Kit comes with the AI Vi
 
 /**
  * deps (all optional; tests pass fakes): { mockReports, getReport, getPaidTiers, getFixKitDetails,
- * saveFixKitDetails, rateLimit, now, withPlatform }
+ * saveFixKitDetails, rateLimit, now, withPlatform, suggest, saveUsage, cache }
  */
 export async function handleFixKit(request, url, env, deps = {}) {
   const d = {
     getReport, getPaidTiers, getFixKitDetails, saveFixKitDetails, rateLimit, mockReports: {}, now: () => new Date(),
     withPlatform: (r) => withPlatform(r),
+    suggest: suggestForKit, saveUsage, cache: typeof caches !== 'undefined' ? caches.default : null,
     ...deps,
   };
   let raw;
@@ -162,6 +169,10 @@ async function postDetails(request, env, d, token, paid, isSample, report, url) 
   const v = validateDetails(body.details);
   const errors = [...v.errors];
   const kit = () => kitView(v.details, report, { origin: url.origin, token, date: d.now() });
+  if (body.suggest === true) {
+    if (errors.length) return json({ ok: false, errors }, 422);
+    return suggestions(env, d, token, isSample, v.details, report);
+  }
   if (body.preview === true) {
     if (errors.length) return json({ ok: false, errors }, 422);
     return json({ ok: true, preview: true, details: v.details, kit: kit() });
@@ -177,4 +188,43 @@ async function postDetails(request, env, d, token, paid, isSample, report, url) 
     return json({ ok: false, error: 'Could not save your details. Try again in a minute.' }, 500);
   }
   return json({ ok: true, details: v.details, kit: kit() });
+}
+
+const EMPTY = { slots: {}, services: [] };
+const SUGGEST_TTL = 7 * 24 * 3600;
+const suggestKey = (token) => new Request(`https://aifoundscore.com/__cache/kit-suggest/v1/${encodeURIComponent(token)}`, { method: 'GET' });
+
+/**
+ * AI drafts for the blanks in this kit (the [bracket] answers, and services when there are none), read off
+ * the owner's website and verified against it. A repeat visit is answered from the cache, not the model.
+ */
+async function suggestions(env, d, token, isSample, details, report) {
+  if (isSample) return json({ ok: true, sample: true, suggestions: EMPTY });
+  const types = [...new Set(kitFaq(details, report).items.filter((i) => i.slot && !i.complete).map((i) => i.slot.type))];
+  const wantServices = !details.services.length;
+  if (!types.length && !wantServices) return json({ ok: true, suggestions: EMPTY });
+  const key = suggestKey(token);
+  try {
+    const hit = d.cache && await d.cache.match(key);
+    const c = hit && await hit.json();
+    if (c && c.website === details.website && types.every((t) => c.types.includes(t)) && (!wantServices || c.wantServices)) {
+      return json({ ok: true, cached: true, suggestions: { slots: Object.fromEntries(types.filter((t) => c.slots[t]).map((t) => [t, c.slots[t]])), services: wantServices ? c.services : [] } });
+    }
+  } catch { /* no cache: ask the model */ }
+  let r;
+  try {
+    r = await d.suggest({ details, types, wantServices, env });
+  } catch (e) {
+    console.error('[fix-kit] suggest failed', e);
+    return json({ ok: true, unavailable: true, suggestions: EMPTY });
+  }
+  if (r.usage && canStore(env)) {
+    await d.saveUsage(env, [usageRow({ kind: 'other', model: r.model, usage: r.usage, costUsd: r.costUsd, ok: r.ok, error: r.error, answerRef: 'kit-prefill:' + token.slice(0, 8) })]);
+  }
+  if (!r.ok) return json({ ok: true, unavailable: true, suggestions: EMPTY });
+  if (d.cache) {
+    const put = d.cache.put(key, Response.json({ website: details.website, types, wantServices, slots: r.slots, services: r.services }, { headers: { 'Cache-Control': `public, max-age=${SUGGEST_TTL}` } }));
+    await put.catch(() => {});
+  }
+  return json({ ok: true, suggestions: { slots: r.slots, services: r.services } });
 }

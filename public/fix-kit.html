@@ -54,6 +54,12 @@
     .fk-needs { border: 2px solid #F3C98B; background: #FFFAF0; }
     .fk-slot { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid #F3DDB8; }
     .fk-slot:first-of-type { border-top: 0; }
+    .fk-suggest { background: #fff; border: 1px dashed var(--blue); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; }
+    .fk-suggest p { margin: 0; }
+    .fk-suggest .fk-suggest-h { font-size: 14px; font-weight: 700; color: var(--navy); }
+    .fk-suggest .fk-suggest-q { font-size: 14px; color: var(--muted); }
+    .fk-suggest ul { margin: 0; padding-left: 20px; }
+    .fk-suggest button { justify-self: start; }
     .fk-slot .for { font-size: 14px; color: var(--muted); margin: 0; }
     .fk-jobs { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; counter-reset: job; }
     .fk-job { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; background: #fff; min-width: 0; }
@@ -140,6 +146,7 @@
         <h2 id="fk-check-h">Check these <span data-fact-count>6</span> details</h2>
         <p>We built this from your website and your report. If something is wrong or missing, fix it here and the kit is rebuilt.</p>
         <ul class="fk-facts" data-facts></ul>
+        <p class="fk-status" data-suggest-status role="status" aria-live="polite"></p>
         <button class="btn-secondary" type="button" data-edit>Edit details</button>
 
         <form class="fk-form" novalidate hidden>

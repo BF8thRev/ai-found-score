@@ -163,3 +163,14 @@ test('check-it-worked.txt: no check for a file the kit says to skip, no QR step 
   assert.doesNotMatch(noLink, /scan the QR code/);
   assert.match(kitFor(officeReport(), { googleReviewUrl: 'https://g.page/r/abc/review' }).kit.check.content, /scan the QR code/);
 });
+
+test('README: START HERE names what the owner can do alone, before anything for a web person', () => {
+  const { kit } = kitFor(officeReport());
+  const readme = kit.files[0].content;
+  const at = (s) => { const i = readme.indexOf(s); assert.ok(i >= 0, s); return i; };
+  assert.ok(at('START HERE: what you can do yourself, today') < at('WHAT’S LEFT TO DO, IN ORDER'));
+  assert.match(readme, /1\. Your Google Business Profile text: open google-business-profile\.txt\. Under half an hour for you/);
+  assert.match(readme, /2\. Ask happy customers for a Google review: open ask-for-reviews\.txt\./);
+  assert.match(readme, /The other jobs go on your website\. They need whoever looks after it/);
+  assert.doesNotMatch(readme.slice(at('START HERE'), at('WHAT’S LEFT')), /faq-page|schema-local|llms\.txt/, 'nothing for a web person under START HERE');
+});

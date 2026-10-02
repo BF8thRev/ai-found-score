@@ -17,6 +17,8 @@
   var LIST_FIELDS = ['services', 'serviceTowns'];
   var TEXT_FIELDS = ['name', 'trade', 'phone', 'website', 'street', 'town', 'state', 'zip', 'hours', 'price', 'description', 'googleMapsUrl', 'googleReviewUrl'];
   var current = null; // the details the kit on screen was built from
+  var lastKit = null; // the kit on screen
+  var suggestions = null; // AI drafts for the blanks: { slots: { type: { sentence, quote } }, services: [{ name, quote }] }
 
   function $(sel, root) { return (root || document).querySelector(sel); }
   function el(tag, cls, text) {
@@ -269,13 +271,71 @@
     $('[data-done-wrap]').hidden = !(kit.done || []).length;
   }
 
+  // The AI's drafts for the blanks, each with the words on the owner's website that back it. Nothing is
+  // used until the owner clicks "Use this"; a draft only fills the box, and "Add to my answers" saves it.
+  function suggestBox(head) {
+    var box = el('div', 'fk-suggest');
+    box.appendChild(el('p', 'fk-suggest-h', head));
+    return box;
+  }
+  function drawSuggestions() {
+    document.querySelectorAll('.fk-suggest').forEach(function (n) { n.remove(); });
+    if (!suggestions) return;
+    document.querySelectorAll('.fk-slot').forEach(function (row) {
+      var input = row.querySelector('input[data-slot]');
+      var s = input && suggestions.slots && suggestions.slots[input.getAttribute('data-slot')];
+      if (!s || input.value) return;
+      var box = suggestBox('Drafted by AI from your website. Check that it is true before you use it.');
+      box.appendChild(el('p', null, '“' + s.sentence + '”'));
+      box.appendChild(el('p', 'fk-suggest-q', 'From your website: “' + s.quote + '”'));
+      var b = el('button', 'btn-secondary', 'Use this');
+      b.type = 'button';
+      b.addEventListener('click', function () { input.value = s.sentence; box.remove(); input.focus(); });
+      box.appendChild(b);
+      row.appendChild(box);
+    });
+    var svc = (suggestions.services || []);
+    var li = [].slice.call(document.querySelectorAll('[data-facts] li')).filter(function (x) { return x.querySelector('.k') && x.querySelector('.k').textContent === 'Services' && x.querySelector('.fk-miss'); })[0];
+    if (svc.length && li) {
+      var sb = suggestBox('Drafted by AI from your website. Check that you offer each one.');
+      var ul = el('ul');
+      svc.forEach(function (x) { ul.appendChild(el('li', null, x.name + ' (your website says: “' + x.quote + '”)')); });
+      sb.appendChild(ul);
+      var ub = el('button', 'btn-secondary', 'Use these services');
+      ub.type = 'button';
+      ub.addEventListener('click', function () {
+        var d = copy(current);
+        d.services = svc.map(function (x) { return x.name; });
+        rebuild(d, $('[data-suggest-status]'), ub);
+      });
+      sb.appendChild(ub);
+      li.querySelector('.v').appendChild(sb);
+    }
+  }
+  function askForSuggestions(sample) {
+    var status = $('[data-suggest-status]');
+    var blanks = ((lastKit && lastKit.faq && lastKit.faq.needs) || 0) + ((lastKit && lastKit.missing || []).some(function (m) { return m.field === 'services'; }) ? 1 : 0);
+    if (sample || !blanks || !current || !current.website) return;
+    setStatus(status, 'Reading your website to draft the blanks for you…');
+    post({ suggest: true, details: current }).then(function (res) {
+      var sg = res.body && res.body.ok && res.body.suggestions;
+      var n = sg ? Object.keys(sg.slots || {}).length + ((sg.services || []).length ? 1 : 0) : 0;
+      if (!n) { setStatus(status, ''); return; }
+      suggestions = sg;
+      drawSuggestions();
+      setStatus(status, 'We drafted ' + plural(n, 'suggestion', 'suggestions') + ' from your website. Check each one, then click "Use this".', 'ok');
+    }).catch(function () { setStatus(status, ''); });
+  }
+
   function draw(details, kit) {
+    lastKit = kit;
     current = copy(details);
     current.faqFacts = current.faqFacts || {};
     $('[data-biz-name]').textContent = details.name || 'your business';
     drawFacts(details, kit);
     drawSlots(details, kit);
     drawJobs(kit);
+    drawSuggestions();
     var needs = (kit.faq && kit.faq.needs) || 0;
     var miss = (kit.missing || []).length;
     var note = $('[data-dl-note]');
@@ -342,6 +402,7 @@
       draw(data.details || {}, data.kit);
       if (data.confirmed) $('[data-confirm]').checked = true;
       show('kit');
+      askForSuggestions(data.sample);
       // Something we read doesn't pass the checks (a state we can't use, say): open the form on it.
       if (data.problems && data.problems.length) { openForm(true); showErrors(data.problems); }
     })

@@ -55,9 +55,9 @@ const DIRECTORIES = [
   { name: 'Instagram', url: 'https://www.instagram.com/' },
 ];
 const HOME_TRADES = [
-  { name: 'Angi', url: 'https://www.angi.com/' },
-  { name: 'Thumbtack', url: 'https://www.thumbtack.com/pro' },
-  { name: 'HomeAdvisor', url: 'https://pro.homeadvisor.com/' },
+  { name: 'Angi', url: 'https://www.angi.com/', why: 'It sells leads to businesses: a listing can be free, but leads can cost you. Read the terms first.' },
+  { name: 'Thumbtack', url: 'https://www.thumbtack.com/pro', why: 'It sells leads to businesses: a listing can be free, but leads can cost you. Read the terms first.' },
+  { name: 'HomeAdvisor', url: 'https://pro.homeadvisor.com/', why: 'It sells leads to businesses: a listing can be free, but leads can cost you. Read the terms first.' },
   { name: 'Houzz', url: 'https://www.houzz.com/' },
   { name: 'Porch', url: 'https://porch.com/' },
   { name: 'Networx', url: 'https://www.networx.com/' },
