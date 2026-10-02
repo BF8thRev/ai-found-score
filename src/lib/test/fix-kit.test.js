@@ -261,10 +261,13 @@ test('google-business-profile.txt: description ≤ 750, categories, services, ar
 test('README.txt: plain words first, only the jobs left (in order), what is done, the details and the link back', () => {
   const t = fileMap(confirmed())['README.txt'];
   const at = (s) => { const i = t.indexOf(s); assert.ok(i >= 0, s); return i; };
-  assert.ok(at('1. A Questions page AI can quote') < at('2. Your Google Business Profile text'));
-  assert.ok(at('2. Your Google Business Profile text') < at('3. Ask happy customers for a Google review'));
-  assert.ok(at('3. Ask happy customers for a Google review') < at('4. Your business details in the format Google and AI read (optional)'));
-  assert.ok(at('5. A short summary for AI tools (optional)') < at('ALREADY DONE ON YOUR WEBSITE'));
+  // Two sections: what the owner does alone (numbered 1, 2), then what goes on the website (numbered 1, 2, 3).
+  assert.ok(at('START HERE: JOBS YOU CAN DO YOURSELF, TODAY') < at('1. Your Google Business Profile text'));
+  assert.ok(at('1. Your Google Business Profile text') < at('2. Ask happy customers for a Google review'));
+  assert.ok(at('2. Ask happy customers for a Google review') < at('JOBS FOR WHOEVER RUNS YOUR WEBSITE'));
+  assert.ok(at('JOBS FOR WHOEVER RUNS YOUR WEBSITE') < at('1. A Questions page AI can quote'));
+  assert.ok(at('1. A Questions page AI can quote') < at('2. Your business details in the format Google and AI read (optional)'));
+  assert.ok(at('3. A short summary for AI tools (optional)') < at('ALREADY DONE ON YOUR WEBSITE'));
   assert.doesNotMatch(t, /^\d\. .*(JSON-LD|schema|llms\.txt|robots\.txt)/m, 'no job leads with jargon');
   assert.doesNotMatch(t, /File: robots\.txt/, 'no robots.txt to install');
   assert.match(t, /answers in your Questions page need one detail from you/);

@@ -282,10 +282,57 @@
         </div>
       </section>
 
-      <h2 class="fk-section">What&rsquo;s in your kit, in order</h2>
-      <p>Only the jobs that help your business. Open any file to see exactly what&rsquo;s in it.</p>
-      <p class="fk-platform-line" data-platform-line hidden></p>
-      <ol class="fk-jobs" data-jobs></ol>
+      <div data-sec="you">
+        <h2 class="fk-section">Do these yourself, today</h2>
+        <p>No website skills needed. Open any file to see exactly what&rsquo;s in it.</p>
+        <ol class="fk-jobs" data-jobs-you></ol>
+      </div>
+
+      <div data-sec="web">
+        <h2 class="fk-section">For whoever runs your website</h2>
+        <p>These go on your website. Hand over the folder, or ask us below. Only the jobs that help your business are here.</p>
+        <p class="fk-platform-line" data-platform-line hidden></p>
+        <ol class="fk-jobs" data-jobs-web></ol>
+      </div>
+
+      <section class="fk-box fk-help" id="fk-help" aria-labelledby="fk-help-h">
+        <h2 id="fk-help-h">Nobody to do the website part? We can help.</h2>
+        <p>Tell us how to reach you and what you want done. We&rsquo;ll write back by email with what we would do and what it would cost. Asking is free, you don&rsquo;t owe anything unless you say yes in writing, it&rsquo;s one reply and not a mailing list, and we never ask for a password here.</p>
+        <div data-help-form>
+          <div class="fk-field" data-field="helpContact">
+            <label for="fk-help-email">Your email</label>
+            <input id="fk-help-email" type="email" maxlength="200" autocomplete="email" inputmode="email">
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="helpPhone">
+            <label for="fk-help-phone">Your phone (optional)</label>
+            <input id="fk-help-phone" type="tel" maxlength="40" autocomplete="tel">
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="helpWants">
+            <label>What do you want help with?</label>
+            <label class="fk-confirm"><input type="checkbox" data-want value="website" checked> My website (a Questions page and the details Google reads)</label>
+            <label class="fk-confirm"><input type="checkbox" data-want value="google" checked> My Google Business Profile</label>
+            <label class="fk-confirm"><input type="checkbox" data-want value="reviews"> Getting more Google reviews</label>
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-field" data-field="helpNote">
+            <label for="fk-help-note">Anything we should know? (optional)</label>
+            <textarea id="fk-help-note" rows="3" maxlength="600"></textarea>
+            <p class="fk-err"></p>
+          </div>
+          <div class="fk-actions">
+            <button class="btn" type="button" data-help-send>Do it for me</button>
+            <p class="fk-status" data-help-status role="status" aria-live="polite"></p>
+          </div>
+        </div>
+        <p class="fk-status ok" data-help-done hidden></p>
+      </section>
+
+      <div data-sec="after">
+        <h2 class="fk-section">After it&rsquo;s live</h2>
+        <ol class="fk-jobs" data-jobs-after></ol>
+      </div>
 
       <div data-done-wrap hidden>
         <h2 class="fk-section">Already done on your website</h2>
