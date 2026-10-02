@@ -153,6 +153,9 @@ test('the kit page: section headings get real space above them, and the download
   assert.match(dl, /href="#fk-help">We can do it for you</);
   assert.match(html, /Hand over the folder, or <a href="#fk-help">ask us to do it<\/a>/);
   assert.ok(html.includes('id="fk-help"'));
+  // The sticky header (67px) would cover the box's heading when the link jumps to it.
+  const land = html.match(/\.fk-box\[id\]\s*\{\s*scroll-margin-top:\s*(\d+)px/);
+  assert.ok(land && Number(land[1]) >= 80, 'linked boxes land below the sticky header');
   // Served through the real router.
   await withWorker(async ({ call }) => {
     const res = await call(`/fix-kit/${TOKEN}`);

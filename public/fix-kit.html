@@ -109,6 +109,8 @@
     .fk-done li { padding: 12px 16px; background: var(--wash); border-radius: 8px; }
     .fk-list { margin: 0 0 16px; }
     [data-plan-only] .btn-secondary { margin-top: 6px; }
+    /* In-page links (#fk-help, #fk-needs) land below the sticky header, not under it. */
+    .fk-box[id] { scroll-margin-top: 88px; }
     @media (max-width: 560px) { .fk-box { padding: 20px 18px; } .fk-job { padding: 18px; } .fk h2.fk-section { margin-top: 44px; } }
     [hidden] { display: none !important; }
   </style>
