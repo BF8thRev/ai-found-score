@@ -230,7 +230,7 @@ export function recheckEmail(env, { token, name, totals, before }) {
     paragraphs: [
       'We ran your audit again, free, 30 days after you bought it.',
       line,
-      'Want us to keep watching? Be the Answer re-scans every month for a year in up to 3 towns you serve, sends a one-page “what changed” with your next 3 fixes, emails you when a competitor starts getting named instead of you, and gives you your directory checklist with the exact text to paste. Everything you’ve paid us counts toward it. Just reply to this email.',
+      'No one to put the fixes on your website? Reply to this email and we’ll tell you what we would do and what it would cost.',
     ],
     button: 'See what changed',
     url: reportUrl(env, token),

@@ -50,7 +50,7 @@ const NO_STORE = { 'Cache-Control': 'private, no-store' };
 
 const json = (body, status = 200) => Response.json(body, { status, headers: NO_STORE });
 const notFound = () => json({ ok: false, error: 'Report not found' }, 404);
-const notPaid = () => json({ ok: false, error: 'The Fix Kit comes with the AI Visibility Audit and Be the Answer.' }, 402);
+const notPaid = () => json({ ok: false, error: 'The Fix Kit comes with the AI Visibility Audit.' }, 402);
 
 /**
  * deps (all optional; tests pass fakes): { mockReports, getReport, getPaidTiers, getFixKitDetails,

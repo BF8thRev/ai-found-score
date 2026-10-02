@@ -162,3 +162,15 @@ test('the kit page: section headings get real space above them, and the download
     assert.equal(res.status, 200);
   });
 });
+
+test('not paid: the Fix Kit answer names only the audit (Be the Answer is off sale)', async () => {
+  await withWorker(async ({ call }) => {
+    const res = await call(`/api/fix-kit/${TOKEN}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true, details: { name: 'PR73' } }) });
+    assert.equal(res.status, 402);
+    const body = await res.json();
+    assert.equal(body.error, 'The Fix Kit comes with the AI Visibility Audit.');
+  }, { tiers: [] });
+  const html = readFileSync(new URL('../../../public/fix-kit.html', import.meta.url), 'utf8');
+  const unpaid = html.slice(html.indexOf('data-state="unpaid"'), html.indexOf('data-state="error"'));
+  assert.doesNotMatch(unpaid, /Be the Answer/);
+});
