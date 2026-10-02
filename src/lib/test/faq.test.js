@@ -40,9 +40,10 @@ test('attributeTypes: the detail types AI cited when it picked someone else, mos
   const r = prReport();
   for (const a of r.answers) a.namedYou = true;
   assert.deepEqual(attributeTypes(r), []);
-  // The plumber sample: prices, reviews and licensing come up when AI names other plumbers.
+  // The plumber sample: prices, the team (family-owned, independent: the small-firm question) and reviews
+  // come up when AI names other plumbers.
   const plumber = attributeTypes(PLUMBER).map((a) => a.type);
-  assert.deepEqual(plumber.slice(0, 3), ['price', 'reviews', 'licensed']);
+  assert.deepEqual(plumber.slice(0, 3), ['price', 'team', 'reviews']);
 });
 
 test('PR agency: the questions AI didn’t name them for, as customers ask them, then 2–4 more', () => {

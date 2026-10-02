@@ -197,7 +197,7 @@ test('result panel: one answer reads "once", not "1 times"', () => {
   const html = r.verdictV2(rep, { t, N: 1, cw, proven, zero: true, allNamed: false, b: rep.business, engineList: 'Gemini' });
   assert.match(html, /We asked AI once\./);
   assert.match(html, /aria-label="1 time we asked/);
-  assert.doesNotMatch(html, /1 times/);
+  assert.doesNotMatch(html, /\b1 times/, 'not "1 times" (a rival can come up 11 times)');
 });
 
 test('result box has no button (the rival chart is right below); the who section keeps its anchor', () => {

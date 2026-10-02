@@ -233,3 +233,40 @@ test('a report without the small-firm questions (free, or an audit from before) 
     assert.doesNotMatch(html, /id="your-size"|firm your size/);
   });
 });
+
+// The paid-style sample (preview builds can only load samples): 7 questions on the 5 engines it shows,
+// served by the Worker, rendered by report.js with the small-firm section and the 7-question copy.
+test('GET /api/report/sample-001: 7 questions, the "business your size" section, before/after on sample-recheck', async () => {
+  await withWorker(null, async (call) => {
+    const res = await call('/api/report/sample-001');
+    assert.equal(res.status, 200, 'passes the serve-time guardrails');
+    const body = await res.json();
+    assert.equal(body.questions.length, 7);
+    assert.deepEqual(body.questions.slice(5).map((q) => `${q.id}:${q.intent}`), ['q6:small', 'q7:niche']);
+    const engines = new Set(body.answers.map((a) => a.engine)).size;
+    assert.equal(body.answers.length, 7 * engines);
+    const html = render(body);
+    assert.match(html, new RegExp(`We asked AI ${7 * engines} times\.`));
+    const i = html.indexOf('id="your-size"');
+    assert.ok(i >= 0, 'the small-firm section renders');
+    const sec = html.slice(i, html.indexOf('</section>', i));
+    assert.match(sec, /When customers ask for a business your size/);
+    assert.match(sec, /Can you recommend a local, family-owned plumber in Massapequa, NY\?/);
+    assert.match(sec, /Who does boiler repair in Massapequa NY\?/);
+    assert.match(sec, /named you \(\d of \d answers\)/);
+    assert.deepEqual(lintText(sec.replace(/href="[^"]*"/g, '').replace(/<[^>]+>/g, ' ')).map((h) => h.word), []);
+    // The re-check sample compares the same 7 searches.
+    const re = await (await call('/api/report/sample-recheck')).json();
+    assert.equal(re.questions.length, 7);
+    assert.equal(re.baseline.totals.answers, body.answers.length);
+    assert.match(render(re), /Before and after/);
+  });
+});
+
+test('GET /api/report/sample-001?preview=locked: no small-firm section (a locked page has no names to list)', async () => {
+  await withWorker(null, async (call) => {
+    const body = await (await call('/api/report/sample-001?preview=locked')).json();
+    assert.equal(body.locked, true);
+    assert.doesNotMatch(render(body), /id="your-size"/);
+  });
+});

@@ -1300,7 +1300,8 @@ function renderV2(root, report) {
     recheckCard: paid ? recheckCard(report) : '',
     strip: offerStripV2({ report, severity, xrayOk, count: issues.length }),
     who: nobodyTwice ? '' : whoAiNamesV2({ report, b, t, N, cw, proven }),
-    smallFirm: smallFirmV2({ report, b, questions, answers }),
+    // A locked page has no names in its answers (src/lib/lock.js): only the sample's ?preview=locked gets here.
+    smallFirm: locked ? '' : smallFirmV2({ report, b, questions, answers }),
     sources: sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     facts: factsV2({ report, b, aById }),
     site: siteV2(report),
