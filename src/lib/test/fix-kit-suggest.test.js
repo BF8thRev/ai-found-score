@@ -197,3 +197,15 @@ test('the kit page: drafts are shown with their quote and used only when clicked
   assert.doesNotMatch(js, /faqFacts\[[^\]]+\] = s\.sentence/, 'never written into the details without the owner');
   assert.match(html, /data-suggest-status/);
 });
+
+test('the kit page: the suggested services list is not laid out like the detail rows', () => {
+  const js = readFileSync(new URL('../../../public/js/fix-kit.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../../../public/fix-kit.html', import.meta.url), 'utf8');
+  // The suggestion box sits inside a detail row; `.fk-facts li` (150px label column + divider) also
+  // caught its <li>s and squeezed each service into a 150px column (PR73, Oct 2).
+  assert.doesNotMatch(html, /\.fk-facts li\b/, 'detail-row rules must target `.fk-facts > li` only');
+  assert.match(html, /\.fk-facts > li \{ display: grid; grid-template-columns: 150px 1fr;/);
+  assert.match(html, /\.fk-suggest ul \{[^}]*list-style: disc/, '.fk-facts sets list-style: none, which the inner list inherits');
+  // Each service: the name, then the words on their website under it.
+  assert.match(js, /item\.appendChild\(el\('strong', null, x\.name\)\);\s*item\.appendChild\(el\('span', 'fk-suggest-q', 'Your website says: “' \+ x\.quote \+ '”'\)\);/);
+});

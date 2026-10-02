@@ -301,7 +301,12 @@
     if (svc.length && li) {
       var sb = suggestBox('Drafted by AI from your website. Check that you offer each one.');
       var ul = el('ul');
-      svc.forEach(function (x) { ul.appendChild(el('li', null, x.name + ' (your website says: “' + x.quote + '”)')); });
+      svc.forEach(function (x) {
+        var item = el('li');
+        item.appendChild(el('strong', null, x.name));
+        item.appendChild(el('span', 'fk-suggest-q', 'Your website says: “' + x.quote + '”'));
+        ul.appendChild(item);
+      });
       sb.appendChild(ul);
       var ub = el('button', 'btn-secondary', 'Use these services');
       ub.type = 'button';
