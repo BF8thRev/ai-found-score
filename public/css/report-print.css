@@ -13,7 +13,7 @@ body { font-size: 11pt; line-height: 1.45; color: #000; }
 /* Screen-only chrome. */
 .site-header, .site-footer, nav, .header-cta, .hdr-tools, .share-pop,
 .cta-band, .offer-band, .unlock-panel, .lead-form, .r2-tools, .r2-copy-btn, .r2-upsell,
-.r2-hero-read, .ap-tick, .ap-bar, .ap-kitcard-btns .btn-secondary, .sample-switch,
+.r2-hero-read, .ap-tick, .ap-bar, .ap-kitcard-btns .btn-secondary, .ap-kitcard-help, .sample-switch,
 .r2-skel, .r2-score-how summary,
 [data-tier], .locked-note, .r2-sticky, .r2-strip, .ob-sample { display: none !important; }
 

@@ -7,6 +7,7 @@
 // The routes are covered through the real Worker in faq.test.js and fix-kit.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { aboutTheBusiness } from '../../../shared/faq.js';
 import { prefillDetails, validateDetails, buildKit, gbpCategories, gbpTxt, checkTxt, reviewsTxt } from '../fix-kit.js';
 import { officeReport } from './fixtures/office-report.js';
@@ -101,7 +102,7 @@ test('ask-for-reviews.txt: the two messages, the review link or what is missing,
   const link = 'https://g.page/r/abc/review';
   const withLink = reviewsTxt({ name: 'Harbor Lane PR', trade: 'pr agency', googleReviewUrl: link });
   assert.ok(withLink.split(link).length - 1 === 2, 'in the text and in the email');
-  assert.match(withLink, /Ask every client after the job is done/);
+  assert.match(withLink, /Ask every client when a project wraps up/, 'a firm’s clients finish projects, not jobs');
   assert.match(withLink, /review-qr\.svg/);
   assert.match(withLink, /Google does not allow paying for reviews/);
   const noLink = reviewsTxt({ name: 'Harborview Plumbing', trade: 'plumber', googleReviewUrl: '' });
@@ -177,4 +178,32 @@ test('README: START HERE names what the owner can do alone, before anything for 
   assert.match(web, /1\. A Questions page AI can quote/);
   assert.doesNotMatch(web, /google-business-profile\.txt|ask-for-reviews/, 'nothing the owner does alone under the website jobs');
   assert.match(web, /Nobody does that for you\? Ask us on your Fix Kit page/);
+});
+
+test('buyer review 3 (Oct 2): a firm asks for reviews when a project wraps up; a saved description that talks to "you" stays out of the listing', () => {
+  const office = officeReport();
+  const { d, kit } = kitFor(office, { googleReviewUrl: 'https://g.page/r/abc/review', description: SITE_COPY });
+  const qr = kit.jobs.find((j) => j.id === 'qr');
+  assert.ok(qr);
+  assert.match(qr.what, /Two short messages to send when a project wraps up/);
+  assert.match(qr.where, /^Send a message when a project wraps up\./);
+  assert.doesNotMatch(`${qr.what} ${qr.where}`, /after (?:a|each) job/);
+  // A trade still says "after each job".
+  const trade = kitFor(office, { trade: 'plumber', googleReviewUrl: 'https://g.page/r/abc/review' }).kit.jobs.find((j) => j.id === 'qr');
+  assert.match(trade.where, /^Send a message after each job\./);
+  // The listing text: the saved description's "…to help you build trust" clause is cut.
+  const gbp = gbpTxt(d);
+  assert.doesNotMatch(gbp, /help you build trust|your audience/);
+  assert.match(gbp, /specializes in public relations & media relations\./);
+});
+
+test('buyer review 3 (Oct 2): the kit page leftovers are gone, the blanks AI used most come first, drafted services are not "Missing"', () => {
+  const page = readFileSync(new URL('../../../public/fix-kit.html', import.meta.url), 'utf8');
+  const js = readFileSync(new URL('../../../public/js/fix-kit.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(page, /placeholder="plumber"/);
+  assert.doesNotMatch(page, /Who&rsquo;s getting my calls\?/, 'a buyer is past the free-report button');
+  assert.match(page, /<a class="header-cta" data-report-link href="\/">Back to my report<\/a>/);
+  assert.match(js, /items\.sort\(function \(a, b\) \{ return \(a\.complete \? 1 : 0\) - \(b\.complete \? 1 : 0\) \|\| at\(a\) - at\(b\); \}\);/);
+  assert.match(js, /if \(n === 0 && !it\.complete && it\.slot\.type in order\) row\.appendChild\(el\('p', 'fk-most', 'Start here: of these, AI brought this up most/);
+  assert.match(js, /pill\.textContent = 'Drafted for you — check below';/);
 });

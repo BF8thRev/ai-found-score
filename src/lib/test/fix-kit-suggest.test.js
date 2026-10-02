@@ -5,14 +5,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { register } from 'node:module';
-import { verifySuggestions, buildSuggestRequest, gatherSiteText } from '../fix-kit-suggest.js';
+import { verifySuggestions, buildSuggestRequest, gatherSiteText, SUGGEST_SYSTEM, SUGGEST_SCHEMA } from '../fix-kit-suggest.js';
 import { officeReport } from './fixtures/office-report.js';
 
 const TEXT = '[PAGE https://www.harborlanepr.example.com/]\nHarbor Lane PR is a boutique agency in New York City. We focus on healthcare and financial services companies, and most of our work is media relations. '
   + '[PAGE https://www.harborlanepr.example.com/about]\nWe were founded in 2012 and work with early-stage startups and national consumer brands. Our services include media relations, crisis communications and executive visibility training.';
 const D = { name: 'Harbor Lane PR', trade: 'pr agency', town: 'New York City', state: 'NY', services: [] };
 const PAGE = 'https://www.harborlanepr.example.com/about';
-const slot = (type, sentence, quote, page = PAGE) => ({ type, sentence, quote, page });
+// fact: the concrete words the sentence states; by default the whole sentence (as the quote words it).
+const slot = (type, sentence, quote, page = PAGE, fact = sentence.replace(/\.$/, '')) => ({ type, fact, sentence, quote, page });
 
 test('verifySuggestions: only what the pages back up, word for word', () => {
   const types = ['specialty', 'experience', 'clients', 'results', 'team'];
@@ -33,7 +34,7 @@ test('verifySuggestions: only what the pages back up, word for word', () => {
   const ok = verifySuggestions({ slots: [slot('experience', 'We were founded in 2012.', 'We were founded in 2012')], services: [] }, TEXT, D, { types });
   assert.equal(ok.slots.experience.sentence, 'We were founded in 2012.');
   // Quote matching ignores case, spacing and curly quotes; a quote that is too short is not enough.
-  assert.ok(verifySuggestions({ slots: [slot('clients', 'We work with early-stage startups.', 'WORK WITH   early-stage startups and')], services: [] }, TEXT, D, { types }).slots.clients);
+  assert.ok(verifySuggestions({ slots: [slot('clients', 'We work with early-stage startups.', 'WORK WITH   early-stage startups and', PAGE, 'early-stage startups')], services: [] }, TEXT, D, { types }).slots.clients);
   assert.deepEqual(verifySuggestions({ slots: [slot('clients', 'We work with startups.', 'startups')], services: [] }, TEXT, D, { types }).slots, {});
   // Brackets, links and long sentences are refused.
   for (const bad of ['We work with [startups].', 'See https://x.example for clients.', 'x'.repeat(260)]) {
@@ -208,4 +209,34 @@ test('the kit page: the suggested services list is not laid out like the detail 
   assert.match(html, /\.fk-suggest ul \{[^}]*list-style: disc/, '.fk-facts sets list-style: none, which the inner list inherits');
   // Each service: the name, then the words on their website under it.
   assert.match(js, /item\.appendChild\(el\('strong', null, x\.name\)\);\s*item\.appendChild\(el\('span', 'fk-suggest-q', 'Your website says: “' \+ x\.quote \+ '”'\)\);/);
+});
+
+test('verifySuggestions: taglines are not answers; each draft states a concrete fact from the quote (PR73 review, Oct 2)', () => {
+  const site = '[PAGE https://www.pr73.example.com/]\nPR73 specializes in seizing crucial moments to develop trust. We were born after years in New York media. '
+    + 'We specialize in media relations for fintech and healthcare companies. Our team of 6 senior strategists works on every account. Founded in 2014 in Manhattan.';
+  const d = { name: 'PR73', town: 'New York City', state: 'NY', trade: 'public relations agency' };
+  const types = ['specialty', 'team', 'experience', 'results'];
+  const v = verifySuggestions({ slots: [
+    slot('specialty', 'We specialize in seizing crucial moments to develop trust.', 'specializes in seizing crucial moments to develop trust', PAGE, 'seizing crucial moments'),
+    slot('team', 'We were born after years in New York media.', 'We were born after years in New York media', PAGE, 'years in New York media'),
+  ], services: [] }, site, d, { types });
+  assert.deepEqual(Object.keys(v.slots), [], 'the two slogans the buyer quoted are dropped');
+
+  const good = verifySuggestions({ slots: [
+    slot('specialty', 'We specialize in media relations for fintech and healthcare companies.', 'We specialize in media relations for fintech and healthcare companies', PAGE, 'media relations for fintech and healthcare companies'),
+    slot('team', 'Our team of 6 senior strategists works on every account.', 'Our team of 6 senior strategists works on every account', PAGE, 'team of 6 senior strategists'),
+    slot('experience', 'We were founded in 2014.', 'Founded in 2014 in Manhattan', PAGE, 'founded in 2014'),
+  ], services: [] }, site, d, { types });
+  assert.deepEqual(Object.keys(good.slots).sort(), ['experience', 'specialty', 'team']);
+
+  // The fact must be in the quote and in the sentence; "when you started" needs a number.
+  const bad = verifySuggestions({ slots: [
+    slot('specialty', 'We specialize in media relations.', 'We specialize in media relations for fintech and healthcare companies', PAGE, 'crisis work'),
+    slot('experience', 'We have years of New York media experience.', 'We were born after years in New York media', PAGE, 'years in New York media'),
+  ], services: [] }, site, d, { types });
+  assert.deepEqual(Object.keys(bad.slots), []);
+
+  // The model is told the same thing.
+  assert.match(SUGGEST_SYSTEM, /A tagline, mission or brand line is not an answer/);
+  assert.ok(SUGGEST_SCHEMA.properties.slots.items.required.includes('fact'));
 });
