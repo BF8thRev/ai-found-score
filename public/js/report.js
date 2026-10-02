@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // A free-report request whose scan is queued or running: 202 {status}. Show "in progress".
     if (res.status === 202) {
       const j = await res.json().catch(() => ({}));
+      rememberReport(id, j.business && j.business.name);
       renderPending(root, id, j);
       return;
     }
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  if (!isDemoReport(report)) rememberReport(report.id, report.business && report.business.name);
   document.title = `AI Found Score — ${report.business.name}`;
   if (report.version === 2) renderV2(root, report);
   else renderV1(root, report);
@@ -625,6 +627,11 @@ function samplesStrip(report) {
     : `<a class="sample-tab" href="${r.href}">${escapeHtml(r.name)} <small>${escapeHtml(r.kind)}</small></a>`).join('');
   return `<nav class="sample-switch" aria-label="Sample reports"><span class="sample-switch-k">Real sample reports, shown with each owner&rsquo;s permission:</span>${tabs}</nav>`;
 }
+// This browser remembers the last real report it opened; the homepage offers it back (public/js/my-report.js).
+function rememberReport(token, name) {
+  try { localStorage.setItem('afs_last_report', JSON.stringify({ token: String(token), name: String(name || '').slice(0, 80), at: Date.now() })); } catch { /* storage blocked */ }
+}
+
 function isDemoReport(report) {
   return !!report.sample || SHOWCASE_TOKENS.includes(String(report.id || ''));
 }

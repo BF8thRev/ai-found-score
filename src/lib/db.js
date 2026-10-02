@@ -533,6 +533,27 @@ export async function getRequestInfo(env, token, { fetchImpl = (...a) => fetch(.
   };
 }
 
+/**
+ * The reports tied to an email address (newest first, one per token, at most 3) → [{ token, name }].
+ * For "Lost your report link?": the tokens go to the owner's own inbox only, never to the page. A
+ * request with no report token yet is skipped.
+ */
+export async function findReportsByEmail(env, email, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  const s = supaService(env);
+  const res = await fetchImpl(`${s.base}/${TABLES.REPORT_REQUESTS}?email=eq.${encodeURIComponent(email)}&report_token=not.is.null&select=report_token,business_name&order=requested_at.desc&limit=10`, { headers: s.headers, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`Supabase GET report_requests failed: ${res.status}`);
+  const seen = new Set();
+  const out = [];
+  for (const r of await res.json()) {
+    const token = String(r.report_token || '');
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    out.push({ token, name: String(r.business_name || '').slice(0, 120) });
+    if (out.length === 3) break;
+  }
+  return out;
+}
+
 /** Whether any request tied to this report token has an email on file. */
 export async function requestHasEmail(env, token, { fetchImpl = (...a) => fetch(...a) } = {}) {
   const s = supaService(env);

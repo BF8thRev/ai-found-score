@@ -146,6 +146,22 @@ export function requestReceivedEmail(env, { token, name }) {
   });
 }
 
+/** "Lost your report link?" on the homepage: the links to the reports tied to this address (newest first). */
+export function findReportEmail(env, { reports }) {
+  const [first, ...more] = reports;
+  return layout({
+    subject: reports.length > 1 ? 'Your AI Found Score report links' : `Your AI report link${first.name ? ` for ${first.name}` : ''}`,
+    paragraphs: [
+      'You asked us to find your report. Here it is.',
+      ...more.map((r) => `Also on this email address: ${r.name || 'your business'}: ${reportUrl(env, r.token)}`),
+    ],
+    button: `See my report${first.name ? ` for ${first.name}` : ''}`,
+    url: reportUrl(env, first.token),
+    unsubUrl: unsubFor(env, first.token),
+    note: 'The link is private to you. Bookmark it; it keeps working. If you didn’t ask for this, you can ignore it.',
+  });
+}
+
 /** "Email me this report" on the report page. */
 export function leadEmail(env, { token, name }) {
   return layout({
