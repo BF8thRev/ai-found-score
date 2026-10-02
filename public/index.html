@@ -64,6 +64,8 @@
              listing) and fills in the name, the area and what it does; the owner checks the three
              boxes and presses the button once. Whatever the page can't tell stays an empty box. -->
         <div class="hero-start" id="request">
+        <!-- public/js/my-report.js fills this from the report this browser opened last. -->
+        <p class="return-card" id="return-card" hidden>Welcome back. <a id="return-link" href="/"></a></p>
         <form class="hero-form" id="request-form" method="post" action="/api/request" novalidate>
           <label class="full"><span>Your website <small class="hint">(or Facebook page)</small></span> <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
           <p class="full field-note" id="site-note" hidden role="status"></p>
@@ -86,6 +88,13 @@
         <p class="ts-help" id="ts-help" hidden>One quick check: tap the box below to confirm you&rsquo;re a person.</p>
         <div class="ts-box" id="ts-request" data-turnstile-sitekey=""></div>
         <p class="hero-done" id="hero-done" hidden>Your report is on its way. <a href="#results">See it below &darr;</a></p>
+        <p class="find-line">Already have a report? <button type="button" class="link-btn" id="find-open">Email me my link</button></p>
+        <form class="find-form" id="find-form" method="post" action="/api/find-report" hidden novalidate>
+          <label>Your email <input name="email" type="email" required maxlength="160" autocomplete="email" placeholder="you@yourbusiness.com"></label>
+          <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+          <button class="btn" type="submit">Send my link</button>
+          <p class="status" id="find-status" role="status"></p>
+        </form>
         </div>
         <p class="proof-line" id="proof-line" hidden></p>
       </div>
@@ -411,6 +420,7 @@
 <script src="/js/config.js?v=12"></script>
 <script src="/js/analytics.js?v=10"></script>
 <script src="/js/site-gate.js?v=2"></script>
+<script src="/js/my-report.js?v=1"></script>
 <script>
 (function () {
   // Free-report flow: business details (no email) -> show the exact questions ->

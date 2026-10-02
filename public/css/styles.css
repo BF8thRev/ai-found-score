@@ -602,6 +602,18 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .hero-form .status.error { color: var(--red); font-weight: 600; }
 .hero-form .status.note { color: var(--navy); font-weight: 600; }
 /* Under the website box: what /api/site-check read from the site. */
+.return-card { margin: 0 0 14px; padding: 12px 16px; max-width: 560px; border-radius: 12px; background: #EAF6EF; border: 1px solid #CBE8D7; font-weight: 600; color: var(--navy); }
+.return-card[hidden], .find-form[hidden] { display: none; }
+.return-card a { color: var(--blue); }
+.find-line { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+.find-line .link-btn { font: inherit; color: var(--blue); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.find-form { display: grid; gap: 10px; max-width: 560px; margin-top: 10px; }
+.find-form label { display: grid; gap: 6px; font-size: 15px; font-weight: 600; color: var(--navy); }
+.find-form input[type=email] { width: 100%; box-sizing: border-box; padding: 14px; font: inherit; border: 1px solid var(--line); border-radius: 10px; }
+.find-form .status { margin: 0; font-size: 15px; }
+.find-form .status:empty { display: none; }
+.find-form .status.error { color: var(--red); font-weight: 600; }
+.find-form .status.note { color: var(--navy); font-weight: 600; }
 .hero-form .hero-details { display: grid; gap: 14px; }
 .hero-form .hero-details[hidden] { display: none; }
 .hero-form .field-summary { margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: #F5F8FC; font-size: 15px; font-weight: 600; color: var(--navy); }

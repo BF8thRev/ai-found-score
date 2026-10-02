@@ -46,6 +46,7 @@ import {
 import { handleQuestions } from './lib/questions-route.js';
 import { handleReportRequest } from './lib/report-request.js';
 import { handleSiteCheck } from './lib/site-check.js';
+import { handleFindReport } from './lib/find-report.js';
 import { turnstileConfigured, turnstileSiteKey } from './lib/turnstile.js';
 import { rateLimit } from './lib/rate-limit.js';
 import { freeQuestions } from '../scanner/questions.js';
@@ -115,6 +116,11 @@ export default {
           // Local dry run: nothing is written to Supabase.
           ? { previewDryRun: true, scanDryRun: true, dryEnv: dryRunEnv(env), recordReportRequest: async () => console.log('[dry-run] request not saved') }
           : {});
+    }
+
+    // "Lost your report link?": emails the links for an address (src/lib/find-report.js).
+    if (url.pathname === '/api/find-report' && request.method === 'POST') {
+      return (await rateLimit(env, request, 'find')) || handleFindReport(request, env, { waitUntil: (p) => ctx.waitUntil(p) });
     }
 
     if (url.pathname === '/api/live-preview' && request.method === 'POST') {
