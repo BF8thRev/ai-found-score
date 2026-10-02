@@ -606,7 +606,7 @@ export const ADMIN_JS = `(() => {
   // Ask first on a form marked data-confirm (Cancel).
   document.addEventListener('submit', (e) => { const m = e.target.getAttribute && e.target.getAttribute('data-confirm'); if (m && !confirm(m)) e.preventDefault(); });
   const DONE = new Set(['complete', 'errored', 'terminated', 'done', 'failed']);
-  const money = (n) => (n == null ? '—' : '$' + Number(n).toFixed(4));
+  const money = (n) => (n == null ? '—' : '$' + Number(n).toFixed(2));
   const set = (el, f, text) => { const x = el.querySelector('[data-f="' + f + '"]'); if (x) x.textContent = text; };
   function poll(el) {
     const id = el.getAttribute('data-watch');
