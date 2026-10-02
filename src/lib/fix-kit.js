@@ -32,7 +32,7 @@ import { US_STATES } from '../../scanner/config.js';
 import { SCHEMA_TYPES, GBP_DESCRIPTION_MAX, alwaysOpen, siteSpelling } from '../../scanner/extract/fixes.js';
 import { phoneKey, squashName } from '../../scanner/extract/normalize.js';
 import { qrSvg } from './vendor/qrcode.js';
-import { buildFaq, faqPlainText, faqJsonLdScript, ownWords, ATTRIBUTES } from '../../shared/faq.js';
+import { buildFaq, faqPlainText, faqJsonLdScript, ownWords, aboutTheBusiness, ATTRIBUTES } from '../../shared/faq.js';
 import { platformFor, platformJob, platformStep, guideLinks } from '../../shared/platforms.js';
 
 /** Tiers whose buyers get the Fix Kit (tier keys from TIER_BY_CENTS in src/lib/stripe.js). */
@@ -493,7 +493,7 @@ export function faqTxt(d, report, faq = kitFaq(d, report)) {
 /** A GBP description: the owner's description, then services and towns while they fit in 750. */
 export function gbpDescriptionText(d) {
   const parts = [
-    d.description || leadSentence(d),
+    aboutTheBusiness(d.description) || leadSentence(d),
     d.services.length ? `Services: ${joinAnd(d.services)}.` : '',
     d.serviceTowns.length ? `We serve ${townsText(d)}.` : '',
   ].filter(Boolean);
@@ -615,7 +615,7 @@ export function reviewsTxt(d) {
   return [
     `ASK FOR REVIEWS: ${d.name}`,
     '',
-    `Reviews are public, and AI assistants and Google can read them. Ask every ${who} after the job is done, while it is fresh.`,
+    `Reviews are public, and AI assistants and Google can read them. Ask every ${who} ${office ? 'when a project wraps up' : 'after the job is done'}, while it is fresh.`,
     'Google does not allow paying for reviews or offering a reward for them, so just ask. Only text people who have agreed to be messaged.',
     '',
     'TEXT MESSAGE',
@@ -801,16 +801,18 @@ export function buildKit(details, report, opts = {}) {
   // Reviews: when AI named others for their reviews, or the owner gave their review link.
   const reviewsMatter = faq.attributes.some((a) => a.type === 'reviews');
   if (d.googleReviewUrl || reviewsMatter) {
+    // A firm's clients finish projects, not jobs (buyer review, Oct 2).
+    const after = kindClass(d.trade) === 'professional' ? 'when a project wraps up' : 'after each job';
     jobs.push({
       id: 'qr',
       title: 'Ask happy customers for a Google review',
       tech: d.googleReviewUrl ? 'Message templates and a QR code (SVG)' : 'Message templates',
       what: d.googleReviewUrl
-        ? 'Two short messages to send after a job, and a QR code that opens your Google review page on a customer’s phone.'
-        : 'Two short messages to send after a job. Add your Google review link on this page and the kit adds a QR code you can print.',
+        ? `Two short messages to send ${after}, and a QR code that opens your Google review page on a phone.`
+        : `Two short messages to send ${after}. Add your Google review link on this page and the kit adds a QR code you can print.`,
       where: d.googleReviewUrl
-        ? 'Send a message after each job. Print the QR code on invoices, receipts or a card you leave behind.'
-        : 'Send a message after each job.',
+        ? `Send a message ${after}. Print the QR code on invoices, receipts or a card you leave behind.`
+        : `Send a message ${after}.`,
       who: 'you',
       time: 'Under half an hour to set up, then seconds per customer',
       optional: false,

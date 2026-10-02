@@ -364,7 +364,7 @@ export function buildActionPlan(report) {
       ],
       copyText: [],
       kit: { file: 'questions', questions: faq.items.length, fromScan: faq.items.filter((x) => x && x.fromScan).length, needs: faq.needs || 0 },
-      time: 'About an hour for you, then 1–2 hours for your web person',
+      time: 'About an hour for you, then about half an hour for your web person',
       cost: 'No cost',
       week: true,
       ...withGuides(fq && fq.schema === true ? ['faq'] : ['faq', 'headCode']),
@@ -543,8 +543,8 @@ const EFFORT = {
   site_http_no_redirect: { time: 'Under half an hour for your web person', cost: 'No cost', week: true },
   site_no_https: { time: 'About an hour for your web person', cost: 'Often no cost; some hosts charge', week: false },
   site_slow: { time: 'A few hours for your web person, depending on the site', cost: 'Varies', week: false },
-  lost_question: { time: 'About an hour for you, then 1–2 hours for your web person', cost: 'No cost', week: true },
-  baseline_faq: { time: 'About an hour for you, then 1–2 hours for your web person', cost: 'No cost', week: true },
+  lost_question: { time: 'About an hour for you, then about half an hour for your web person', cost: 'No cost', week: true },
+  baseline_faq: { time: 'About an hour for you, then about half an hour for your web person', cost: 'No cost', week: true },
   site_no_faq_schema: { time: 'About half an hour for your web person', cost: 'No cost', week: true },
 };
 

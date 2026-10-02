@@ -814,6 +814,7 @@ function kitCard(report, kitUrl) {
         <h3>Hand the website work to your web person</h3>
         <p>Your Fix Kit has the website files built for you from this report: ${kitFilesText(report)}. Check them, then send them on. Your Google profile text is in there too; that one is for you to paste in.</p>
         <p class="ap-kitcard-btns"><a class="btn" href="${kitUrl}">Open my Fix Kit</a> <a class="btn-secondary" href="${escapeHtml(mailto)}">Email it to my web person</a></p>
+        <p class="ap-kitcard-help">No web person? <a href="${kitUrl}#fk-help">We can do it for you</a>: tell us what you need and we&rsquo;ll reply with what we would do and what it would cost.</p>
       </div>`;
 }
 

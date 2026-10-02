@@ -140,15 +140,21 @@
     var why = (kit.faq.attributes || []).slice(0, 3).map(function (a) { return a.label; });
     $('[data-needs-why]').textContent = why.length ? why.join(', ') : 'what you specialize in and who you work with';
     var facts = (d.faqFacts) || {};
-    // The ones still waiting first.
-    items.sort(function (a, b) { return (a.complete ? 1 : 0) - (b.complete ? 1 : 0); });
-    items.forEach(function (it) {
+    // The ones still waiting first, and among those, what AI talked about most when it picked others
+    // (kit.faq.attributes is most-mentioned first): the buyer's "results" box sat at the bottom.
+    var order = {};
+    (kit.faq.attributes || []).forEach(function (a, n) { if (!(a.type in order)) order[a.type] = n; });
+    var at = function (i) { return i.slot.type in order ? order[i.slot.type] : 99; };
+    items.sort(function (a, b) { return (a.complete ? 1 : 0) - (b.complete ? 1 : 0) || at(a) - at(b); });
+    items.forEach(function (it, n) {
       var id = 'fk-slot-' + it.slot.type;
       var row = el('div', 'fk-slot fk-field');
       row.setAttribute('data-field', 'faqFacts.' + it.slot.type);
       var label = el('label', null, it.slot.prompt);
       label.setAttribute('for', id);
       row.appendChild(label);
+      // The first blank is the one AI brought up most when it described the businesses it picked.
+      if (n === 0 && !it.complete && it.slot.type in order) row.appendChild(el('p', 'fk-most', 'Start here: of these, AI brought this up most when it described the businesses it picked.'));
       row.appendChild(el('p', 'for', 'For: “' + it.question + '”'));
       var input = el('input');
       input.type = 'text';
@@ -299,6 +305,12 @@
     var svc = (suggestions.services || []);
     var li = [].slice.call(document.querySelectorAll('[data-facts] li')).filter(function (x) { return x.querySelector('.k') && x.querySelector('.k').textContent === 'Services' && x.querySelector('.fk-miss'); })[0];
     if (svc.length && li) {
+      // Not "Missing" right above a list of drafts: say we drafted them and they need a check.
+      var pill = li.querySelector('.fk-miss');
+      pill.textContent = 'Drafted for you — check below';
+      pill.className = 'fk-miss drafted';
+      var why = li.querySelector('.v .note');
+      if (why) why.textContent = 'Your website mentions these. Check you offer each one, click “Use these services”, then remove any that are wrong with Edit details.';
       var sb = suggestBox('Drafted by AI from your website. Check that you offer each one.');
       var ul = el('ul');
       svc.forEach(function (x) {

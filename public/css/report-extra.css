@@ -547,6 +547,7 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-kitcard h3 { margin: 0 0 6px; font-size: 17px; color: var(--navy); }
 .ap-kitcard p { margin: 0 0 10px; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
 .ap-kitcard-btns { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 !important; }
+.ap-kitcard .ap-kitcard-help { margin: 12px 0 0; color: var(--muted); }
 /* The free 30-day re-check, right after the plan. */
 .r2-recheck { margin: 0 0 24px; padding: 14px 16px; border-radius: 12px; background: var(--wash); border: 1px solid var(--line); }
 .r2-recheck h3 { margin: 0 0 4px; font-size: 16px; color: var(--navy); }

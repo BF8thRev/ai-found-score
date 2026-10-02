@@ -399,6 +399,10 @@ test('Fix Kit: no box above step 1; "Done for you" on the steps it covers; one h
   assert.match(card, /<h3>Hand the website work to your web person<\/h3>/);
   assert.match(card, /<a class="btn" href="\/fix-kit\/office-test-token">Open my Fix Kit<\/a>/);
   assert.match(card, /llms\.txt/, 'llms.txt is named in the kit card');
+  // No web person: the kit's "do it for me" box, reachable from the report too (buyer review, Oct 2).
+  assert.match(card, /No web person\? <a href="\/fix-kit\/office-test-token#fk-help">We can do it for you<\/a>/);
+  // One time for the Questions page, the same as the kit's: about half an hour for the web person.
+  assert.doesNotMatch(plan, /1–2 hours/);
   assert.doesNotMatch(card.match(/<h3>[^<]*<\/h3>/)[0], /JSON|llms|schema/i);
   // "Email it to my web person": the owner's own mail app, the kit link inside, no address of theirs.
   const href = card.match(/<a class="btn-secondary" href="([^"]+)">Email it to my web person<\/a>/)[1].replace(/&amp;/g, '&');

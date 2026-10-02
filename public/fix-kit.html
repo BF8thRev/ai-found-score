@@ -26,6 +26,8 @@
     .fk-facts > li:first-child { border-top: 0; }
     .fk-facts .k { font-weight: 700; color: var(--navy); }
     .fk-facts .v { overflow-wrap: anywhere; }
+    .fk-miss.drafted { background: #FFF1D6; color: var(--amber); }
+    .fk-most { margin: 0; font-size: 14px; font-weight: 700; color: var(--amber); }
     .fk-miss { display: inline-block; background: #FDECEA; color: var(--red); font-weight: 700; font-size: 14px; padding: 2px 10px; border-radius: 999px; margin-right: 6px; }
     .fk-facts .note { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
     @media (max-width: 560px) { .fk-facts > li { grid-template-columns: 1fr; gap: 2px; } }
@@ -136,7 +138,7 @@
       <a href="/report/sample-001">Sample report</a>
       <a href="/#faq">FAQ</a>
     </nav>
-    <a class="header-cta" href="/#request">Who&rsquo;s getting my calls?</a>
+    <a class="header-cta" data-report-link href="/">Back to my report</a>
   </div>
 </header>
 
@@ -187,7 +189,7 @@
           </div>
           <div class="fk-field" data-field="trade">
             <label for="fk-trade">What you do</label>
-            <input id="fk-trade" name="trade" type="text" maxlength="60" placeholder="plumber">
+            <input id="fk-trade" name="trade" type="text" maxlength="60" placeholder="what customers search for">
             <p class="fk-err"></p>
           </div>
           <div class="fk-field" data-field="phone">
