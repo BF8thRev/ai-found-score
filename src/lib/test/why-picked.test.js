@@ -77,7 +77,7 @@ test('FAQ step on the paid PR 73 page: points to the Fix Kit, with how many answ
     const k = body.xray.actionPlan.items.find((i) => i.id === 'faq').kit;
     assert.ok(k.questions >= 2 && k.needs >= 1, JSON.stringify(k));
     assert.match(faq, /<p class="ap-why"><b>Why it matters:<\/b> AI was asked/, 'the why stays');
-    assert.match(faq, new RegExp(`<b>Already written for you\\.</b> Your Questions page is in your Fix Kit: ${k.questions} questions and answers, starting with the ${k.fromScan} questions AI was asked in this scan`));
+    assert.match(faq, new RegExp(`<b>Drafted for you\\.</b> Your Questions page is in your Fix Kit: ${k.questions} questions and answers, starting with the ${k.fromScan} questions AI was asked in this scan`));
     assert.match(faq, new RegExp(`${k.needs} answers? needs? one detail only you know`));
     assert.match(faq, new RegExp(`<a class="btn-secondary" href="/fix-kit/${encodeURIComponent(body.id)}">Open my Fix Kit</a>`));
     // Nothing of the page itself: no copy box, no FAQ code, no answers.

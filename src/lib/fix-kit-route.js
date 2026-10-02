@@ -143,6 +143,7 @@ export function kitView(details, report, opts) {
     missing: kit.missing,
     notes: kit.notes || [],
     readme: content.get('README.txt'),
+    check: content.get('check-it-worked.txt'),
     ...(kit.platform ? { platform: kit.platform } : {}),
   };
 }

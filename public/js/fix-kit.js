@@ -229,7 +229,7 @@
         });
         li.appendChild(box);
       }
-      li.appendChild(el('p', 'who', WHO[j.who] || ''));
+      li.appendChild(el('p', 'who', (WHO[j.who] || '') + (j.time ? ' · ' + j.time + ' · No cost from us' : '')));
       if (j.note) li.appendChild(el('p', 'fk-note sample', j.note));
       if (j.id === 'faq' && kit.faq) {
         var why = (kit.faq.attributes || []).slice(0, 4).map(function (a) { return a.label; });
@@ -249,6 +249,14 @@
       r.appendChild(el('p', null, 'What each file does and where it goes, in plain words, in order.'));
       r.appendChild(fileDetails({ path: 'README.txt', content: kit.readme }));
       list.appendChild(r);
+    }
+    if (kit.check) {
+      var c = el('li', 'fk-job');
+      c.appendChild(el('h3', null, 'Check it worked, and what to expect'));
+      c.appendChild(el('span', 'fk-tech', 'check-it-worked.txt'));
+      c.appendChild(el('p', null, 'How to tell each file is live, what to expect and when, and the questions to ask AI again in about a month.'));
+      c.appendChild(fileDetails({ path: 'check-it-worked.txt', content: kit.check }));
+      list.appendChild(c);
     }
     var line = $('[data-platform-line]');
     if (line) {

@@ -777,13 +777,13 @@ function kitDone(k, href, demo) {
     const n = num(k.questions);
     const fromScan = num(k.fromScan);
     const needs = num(k.needs);
-    text = `<b>Already written for you.</b> Your Questions page is in your Fix Kit: ${n} ${plural(n, 'question', 'questions')} and ${plural(n, 'answer', 'answers')}${fromScan ? `, starting with the ${fromScan === 1 ? 'question' : `${fromScan} questions`} AI was asked in this scan` : ''}, with the code that goes with ${n === 1 ? 'it' : 'them'}. `
+    text = `<b>${needs ? 'Drafted for you.' : 'Already written for you.'}</b> Your Questions page is in your Fix Kit: ${n} ${plural(n, 'question', 'questions')} and ${plural(n, 'answer', 'answers')}${fromScan ? `, starting with the ${fromScan === 1 ? 'question' : `${fromScan} questions`} AI was asked in this scan` : ''}, with the code that goes with ${n === 1 ? 'it' : 'them'}. `
       + (needs
         ? `${needs} ${plural(needs, 'answer needs', 'answers need')} one detail only you know (a sentence each); the kit asks you for ${needs === 1 ? 'it' : 'each one'} and puts it in the page and the code.`
         : 'Every answer is complete: read it through, then send it on.');
   } else if (k.file === 'code') {
     const missing = (Array.isArray(k.missing) ? k.missing : []).filter((x) => typeof x === 'string' && x);
-    text = `<b>Already written for you.</b> Your business code is in your Fix Kit, ready to send to whoever runs your website.${missing.length ? ` Your ${escapeHtml(listJoin(missing))} ${missing.length === 1 ? 'isn’t' : 'aren’t'} in it yet: add ${missing.length === 1 ? 'it' : 'them'} on the Fix Kit page and the kit puts ${missing.length === 1 ? 'it' : 'them'} in.` : ''}`;
+    text = `<b>${missing.length ? 'Drafted for you.' : 'Already written for you.'}</b> Your business code is in your Fix Kit, ready to send to whoever runs your website.${missing.length ? ` Your ${escapeHtml(listJoin(missing))} ${missing.length === 1 ? 'isn’t' : 'aren’t'} in it yet: add ${missing.length === 1 ? 'it' : 'them'} on the Fix Kit page and the kit puts ${missing.length === 1 ? 'it' : 'them'} in.` : ''}`;
   } else return '';
   return `
               <div class="ap-kitdone">

@@ -218,7 +218,7 @@ test('router: a paid report opens on the kit already built: every file, the FAQ,
     assert.deepEqual([body.paid, body.confirmed], [true, false]);
     assert.equal(body.details.name, 'Harbor Lane PR', 'nothing saved yet: built from the report');
     const kit = body.kit;
-    assert.deepEqual(kit.jobs.map((j) => j.id), ['faq', 'google', 'schema', 'llms']);
+    assert.deepEqual(kit.jobs.map((j) => j.id), ['faq', 'google', 'schema', 'qr', 'llms']);
     const faqJob = kit.jobs[0];
     assert.deepEqual(faqJob.files.map((f) => f.path), ['faq-page.html', 'faq-page.txt']);
     assert.match(faqJob.files[0].content, /<h3>What&#39;s the best PR agency in New York City, NY\?<\/h3>/);
@@ -226,6 +226,12 @@ test('router: a paid report opens on the kit already built: every file, the FAQ,
     assert.deepEqual(kit.missing.map((m) => m.field), ['phone', 'services']);
     assert.deepEqual(kit.done.map((x) => x.id), ['robots'], 'the site lets AI in: no robots.txt');
     assert.match(kit.readme, /WHAT’S LEFT TO DO, IN ORDER/);
+    // The check list: what to expect, how to tell each file is live, the report's own questions to ask again.
+    assert.match(kit.check, /^CHECK IT WORKED: Harbor Lane PR/);
+    assert.match(kit.check, /We cannot promise any assistant will name you/);
+    assert.match(kit.check, /STEP 2: SEE WHAT AI SAYS/);
+    assert.ok(kit.jobs.every((j) => /^(About|Under)/.test(j.time)), 'every job says how long it takes');
+    assert.match(kit.jobs.find((j) => j.id === 'google').files[0].content, /PRIMARY CATEGORY \(our suggestion\)\r?\nPublic relations firm/);
     assert.equal(db.posts.length, 0);
   });
 });
@@ -268,7 +274,7 @@ test('router: edit → rebuilt kit (not saved); ownership tick → saved → the
     assert.equal(zip.headers.get('Content-Type'), 'application/zip');
     const bytes = new Uint8Array(await zip.arrayBuffer());
     const text = new TextDecoder().decode(bytes);
-    for (const f of ['README.txt', 'faq-page.html', 'faq-page.txt', 'google-business-profile.txt', 'schema-localbusiness.html', 'llms.txt']) assert.ok(text.includes(f), f);
+    for (const f of ['README.txt', 'faq-page.html', 'faq-page.txt', 'google-business-profile.txt', 'schema-localbusiness.html', 'llms.txt', 'check-it-worked.txt', 'ask-for-reviews.txt']) assert.ok(text.includes(f), f);
     assert.ok(!text.includes('robots.txt\u0000') && !/PK[^]{26}robots\.txt/.test(text), 'no robots.txt: the site already lets AI in');
     assert.match(text, /We focus on B2B software companies\./);
     assert.match(text, /"telephone": "\(212\) 555-0100"/);

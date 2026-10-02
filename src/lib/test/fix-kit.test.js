@@ -107,7 +107,8 @@ const withSite = (over) => ({ ...SAMPLE, siteCheck: { ...SAMPLE.siteCheck, ...ov
 const BLOCKED = withSite({ robots: { found: true, blocked: [{ agent: 'GPTBot', who: 'ChatGPT (training)' }, { agent: 'ClaudeBot', who: 'Claude' }] } });
 
 test('buildFixKitFiles: only the files that help this business; the QR code only with a review link', () => {
-  assert.deepEqual(Object.keys(fileMap(confirmed())), ['README.txt', 'faq-page.html', 'faq-page.txt', 'google-business-profile.txt', 'schema-localbusiness.html', 'llms.txt']);
+  // The plumber sample's AI answers mention reviews, so the kit carries the review messages even without a link.
+  assert.deepEqual(Object.keys(fileMap(confirmed())), ['README.txt', 'faq-page.html', 'faq-page.txt', 'google-business-profile.txt', 'ask-for-reviews.txt', 'schema-localbusiness.html', 'llms.txt', 'check-it-worked.txt']);
   const withQr = fileMap(confirmed({ googleReviewUrl: 'https://g.page/r/abc/review' }));
   assert.ok(withQr['review-qr.svg'].startsWith('<svg'));
   assert.match(withQr['README.txt'], /review-qr\.svg/);
@@ -119,7 +120,7 @@ test('buildFixKitFiles: only the files that help this business; the QR code only
 
 test('buildKit: the jobs left, in order; what the site already has is done or optional', () => {
   const k = buildKit(confirmed(), SAMPLE, { token: 'tok_1', date: DATE });
-  assert.deepEqual(k.jobs.map((j) => [j.id, j.optional]), [['faq', false], ['google', false], ['schema', true], ['llms', true]]);
+  assert.deepEqual(k.jobs.map((j) => [j.id, j.optional]), [['faq', false], ['google', false], ['qr', false], ['schema', true], ['llms', true]]);
   assert.match(k.jobs.find((j) => j.id === 'schema').note, /already has business code \(Plumber\)/);
   assert.deepEqual(k.done.map((x) => x.id), ['robots']);
   // Plain words first; the technical name is the small print.
@@ -261,14 +262,17 @@ test('README.txt: plain words first, only the jobs left (in order), what is done
   const t = fileMap(confirmed())['README.txt'];
   const at = (s) => { const i = t.indexOf(s); assert.ok(i >= 0, s); return i; };
   assert.ok(at('1. A Questions page AI can quote') < at('2. Your Google Business Profile text'));
-  assert.ok(at('2. Your Google Business Profile text') < at('3. Your business details in the format Google and AI read (optional)'));
-  assert.ok(at('4. A short summary for AI tools (optional)') < at('ALREADY DONE ON YOUR WEBSITE'));
+  assert.ok(at('2. Your Google Business Profile text') < at('3. Ask happy customers for a Google review'));
+  assert.ok(at('3. Ask happy customers for a Google review') < at('4. Your business details in the format Google and AI read (optional)'));
+  assert.ok(at('5. A short summary for AI tools (optional)') < at('ALREADY DONE ON YOUR WEBSITE'));
   assert.doesNotMatch(t, /^\d\. .*(JSON-LD|schema|llms\.txt|robots\.txt)/m, 'no job leads with jargon');
   assert.doesNotMatch(t, /File: robots\.txt/, 'no robots.txt to install');
   assert.match(t, /answers in your Questions page need one detail from you/);
   assert.match(t, /Phone: \(516\) 555-0148/);
   assert.match(t, /https:\/\/aifoundscore\.com\/fix-kit\/tok_1/);
-  assert.ok(!/review-qr/.test(t));
+  assert.ok(!/review-qr/.test(t), 'no link, no QR code');
+  assert.match(t, /Time: About an hour for you, then about half an hour for your web person. No cost from us./);
+  assert.match(t, /We can’t promise any assistant will name you: check-it-worked.txt says what to expect/);
 });
 
 test('copy: no banned words, no "unlock", "seamless" or "leverage"', () => {
@@ -460,7 +464,7 @@ test('zip: paid and confirmed only; an attachment named for the business', async
   assert.equal(res.headers.get('Content-Disposition'), 'attachment; filename="harborview-plumbing-heating-fix-kit.zip"');
   const z = new Uint8Array(await res.arrayBuffer());
   assert.deepEqual([...z.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
-  assert.equal(u16(z, z.length - 22 + 10), 7, 'README, the FAQ (page + text), Google text, business code, llms.txt and the QR code');
+  assert.equal(u16(z, z.length - 22 + 10), 9, 'README, the FAQ (page + text), Google text, review messages, business code, llms.txt, the QR code and the check list');
   // The sample zip works with no database.
   const sample = await handleFixKit(...req('/api/fix-kit/sample-001.zip'), ENV, fakes().deps);
   assert.equal(sample.status, 200);
