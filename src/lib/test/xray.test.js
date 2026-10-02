@@ -6,6 +6,7 @@ import { TIER_BY_CENTS, tierForSession } from '../stripe.js';
 import { lockReport, reportBody } from '../lock.js';
 import { MOCK_REPORTS } from '../../mock/sample-reports.js';
 import { buildGapSheet, buildFixChecklist, xraySections, xrayOffered, validateReport } from '../../../shared/report-v2.js';
+import { buildActionPlan } from '../../../shared/action-plan.js';
 
 const v2 = MOCK_REPORTS['sample-001'];
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -128,12 +129,15 @@ test('lock: the X-Ray sections are withheld until paid; unlocked reports carry t
   assert.equal(open.locked, false);
   assert.ok(open.xray.gapSheet.competitors.length >= 2);
   assert.equal(open.xray.checklist.length, v2.issues.length);
-  assert.deepEqual(open.xray, xraySections(v2));
+  const { actionPlan, ...sections } = open.xray;
+  assert.deepEqual(sections, xraySections(v2));
+  assert.deepEqual(actionPlan, buildActionPlan(v2), 'the paid report carries the action plan');
+  assert.ok(actionPlan.items.length >= 1);
 
   const locked = reportBody(v2, false);
   assert.deepEqual(locked.xray, { locked: true });
   const body = JSON.stringify(locked);
-  assert.ok(!body.includes('gapSheet') && !body.includes('checklist'));
+  assert.ok(!body.includes('gapSheet') && !body.includes('checklist') && !body.includes('actionPlan'));
   // Even a stored report that somehow carried X-Ray data never passes it through the lock.
   const tainted = { ...clone(v2), xray: xraySections(v2), gapSheet: { x: 1 }, checklist: [1] };
   const l2 = lockReport(tainted);

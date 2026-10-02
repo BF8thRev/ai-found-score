@@ -600,6 +600,80 @@ function fixKitIncluded(report) {
     </div>`;
 }
 
+// The paid report's first section: every fix as one ordered checklist, biggest impact first
+// (shared/action-plan.js, built by the Worker and sent only when paid). Each step says why it
+// matters and who does it; "How to do it" holds the steps and the text to paste. Ticks and the
+// progress count are saved in this browser. The Fix Kit link sits at the top: it's already paid for.
+const AP_IMPACT = { high: 'Biggest impact', medium: 'Next', low: 'Quick extra' };
+const AP_WHO = { you: 'You can do this', web: 'For whoever runs your website', both: 'You, with your web person' };
+function actionPlanV2(report) {
+  const plan = report.xray && report.xray.actionPlan;
+  const items = ((plan && plan.items) || []).filter((i) => i && i.title && i.id);
+  if (!items.length) return '';
+  const name = (report.business && report.business.name) || 'your business';
+  const key = 'afs_plan_' + String(report.id || '');
+  let ticked = {};
+  try { ticked = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { ticked = {}; }
+  const done = items.filter((i) => ticked[i.id]).length;
+  const firstOpen = items.findIndex((i) => !ticked[i.id]);
+  const pct = (n) => Math.round((100 * n) / items.length);
+  const kitUrl = '/fix-kit/' + encodeURIComponent(String((report.plan && report.plan.token) || report.id || ''));
+  const kit = isDemoReport(report) ? '' : `
+      <div class="ap-kit">
+        <p><strong>Your Fix Kit is ready, and it’s included.</strong> Confirm your details once and we build the files several steps below ask for (FAQ code, business code, llms.txt, your Google text), with a one-page guide for whoever runs your website.</p>
+        <a class="btn" href="${kitUrl}">Open my Fix Kit</a>
+      </div>`;
+  const sites = (list) => ((list || []).length ? `
+          <ul class="ap-sites">${list.map((s) => `<li><span class="badge ${s.status === 'missing' ? 'mismatch' : 'low'}">${s.status === 'missing' ? 'Not on it' : 'Check'}</span> <a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`).join('')}</ul>` : '');
+  // Wired once the page is in the DOM: save a tick, strike the step through, update the count.
+  setTimeout(() => {
+    const root = typeof document.getElementById === 'function' ? document.getElementById('action-plan') : null;
+    if (!root) return;
+    root.querySelectorAll('input[data-ap]').forEach((box) => box.addEventListener('change', () => {
+      let cur = {};
+      try { cur = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { cur = {}; }
+      cur[box.dataset.ap] = box.checked;
+      try { localStorage.setItem(key, JSON.stringify(cur)); } catch { /* storage blocked: ticks just don't persist */ }
+      const li = box.closest('li');
+      if (li) li.classList.toggle('done', box.checked);
+      const n = root.querySelectorAll('input[data-ap]:checked').length;
+      const out = root.querySelector('[data-ap-count]');
+      if (out) out.textContent = String(n);
+      const bar = root.querySelector('.ap-bar i');
+      if (bar) bar.style.width = `${pct(n)}%`;
+    }));
+  }, 0);
+  const recheck = !isDemoReport(report) && !report.plan
+    ? ' We ask AI the same questions again 30 days after your audit, free, and show you what changed.'
+    : '';
+  return `
+    <section class="report-section ap" id="action-plan" aria-label="Your action plan">
+      <h2>Your action plan</h2>
+      <p class="sub">${items.length} ${plural(items.length, 'step', 'steps')} to get ${escapeHtml(name)} named by AI, biggest impact first. Do them in order and tick each one off.</p>
+      <div class="ap-progress"><span><b data-ap-count>${done}</b> of ${items.length} done</span><div class="ap-bar" aria-hidden="true"><i style="width:${pct(done)}%"></i></div></div>
+      ${kit}
+      <ol class="ap-list">${items.map((i, n) => `
+        <li class="ap-item${ticked[i.id] ? ' done' : ''}" id="step-${n + 1}">
+          <div class="ap-head">
+            <label class="ap-tick"><input type="checkbox" data-ap="${escapeHtml(i.id)}"${ticked[i.id] ? ' checked' : ''} aria-label="Step ${n + 1} done"></label>
+            <div class="ap-main">
+              <div class="ap-meta"><span class="ap-num">Step ${n + 1}</span><span class="badge ${escapeHtml(i.impact)}">${escapeHtml(AP_IMPACT[i.impact] || AP_IMPACT.medium)}</span><span class="ap-who">${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}</span></div>
+              <h3>${escapeHtml(i.title)}</h3>
+              ${i.why ? `<p class="ap-why"><b>Why it matters:</b> ${escapeHtml(i.why)}</p>` : ''}
+            </div>
+          </div>
+          ${sites(i.sites)}
+          <details class="ap-how"${n === firstOpen ? ' open' : ''}>
+            <summary>How to do it</summary>
+            ${(i.steps || []).length ? `<ol class="r2-steps">${i.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}
+            ${copyBlocksV2(i.copyText)}
+          </details>
+        </li>`).join('')}
+      </ol>
+      <p class="r2-muted ap-foot">Below this plan: the evidence behind it (what AI said, who it named, and what we found on your website).${recheck}</p>
+    </section>`;
+}
+
 // Be the Answer: this report is on a plan. Link to the plan page (towns, directory checklist, Google posts).
 function planPanel(report) {
   const url = '/plan/' + encodeURIComponent(String(report.plan.token || ''));
@@ -840,9 +914,12 @@ function computeTotalsV2(answers) {
 }
 
 // A competitor is shown only with proof: named in 2+ stored answers.
+// A directory or "top firms" list AI listed as if it were a business ("Clutch"): never a competitor.
+// Same list as DIRECTORY_NAME_RE in shared/report-v2.js.
+const DIRECTORY_NAME_RE = /^(?:the\s+)?(?:clutch(?:\.co)?|manifest|yelp|angi(?:'?s list)?|angie'?s list|thumbtack|bbb|better business bureau|homeadvisor|upcity|designrush|goodfirms|expertise(?:\.com)?|sortlist|agency spotter|o'?dwyer'?s?|prweek|provoke(?: media)?|google(?: maps)?|nextdoor|tripadvisor|yellow ?pages|houzz|porch|avvo|justia|martindale(?:-hubbell)?|findlaw|healthgrades|zocdoc)$/i;
 function provenEntities(report) {
   return (report.entities || [])
-    .filter((e) => !e.isYou && (e.answerIds || []).length >= 2 && e.named >= 2)
+    .filter((e) => !e.isYou && !DIRECTORY_NAME_RE.test(String(e.name || '').trim().replace(/[.,]+$/, '')) && (e.answerIds || []).length >= 2 && e.named >= 2)
     .sort((a, b) => b.named - a.named || b.first - a.first);
 }
 
@@ -970,9 +1047,16 @@ function renderV2(root, report) {
   // A free report with the offer is a sales page: the result, who took the calls, and the offer come first,
   // the reference material (listings, every answer) after the buy button. Everything else keeps the
   // findings-first order.
+  // A paid report with an action plan is a to-do list: the score, then the plan (which replaces the
+  // fix list, the checklist and the Fix Kit band), then the evidence, and anything for sale last.
+  const hasPlan = paid && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
+  sec.actionPlan = hasPlan ? actionPlanV2(report) : '';
+  sec.breakdownUpsell = hasPlan ? breakdownUpsell(report) : '';
   const order = xrayOk
     ? ['verdict', 'who', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
-    : ['verdict', 'hero', 'baseline', 'plan', 'recheck', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method'];
+    : hasPlan
+      ? ['verdict', 'baseline', 'plan', 'actionPlan', 'hero', 'who', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'breakdownUpsell', 'recheck', 'offer']
+      : ['verdict', 'hero', 'baseline', 'plan', 'recheck', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method'];
 
   root.innerHTML = [
     headerV2(report, b, scoreV2(report)),
@@ -1262,7 +1346,7 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
     .filter((s) => s.lostIn.length && s.domain !== ownDomain)
     .sort((a, c) => order(a) - order(c) || c.lostIn.length - a.lostIn.length);
   if (!list.length) return '';
-  const cards = list.map((s) => {
+  const card = (s) => {
     const col = (e) => { const i = ENGINE_COLUMNS.indexOf(e); return i < 0 ? 99 : i; };
     const engs = [...new Set(s.lostIn.map((id) => aById[id]?.engine))].sort((x, y) => col(x) - col(y)).map(engineName);
     const badge = s.youListed === false
@@ -1280,12 +1364,17 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
         <p>${facts.join(' ')}</p>
         <p class="r2-src"><a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(shortUrl(s.url))}</a></p>
       </div>`;
-  }).join('');
+  };
+  // With an action plan, the sites we couldn't read sit behind one line: the plan's "lists" step
+  // already names the ones worth checking.
+  const folded = !!(report.xray && report.xray.actionPlan) ? list.filter((s) => s.youListed == null) : [];
+  const shown = list.filter((s) => !folded.includes(s));
   return `
     <section class="report-section">
       <h2>Why they got named instead</h2>
       <p class="sub">The sites the AI cited in the ${cw.unit} that didn’t name you, and whether you’re on them.</p>
-      ${cards}
+      ${shown.map(card).join('')}
+      ${folded.length ? `<details class="r2-fold"><summary>${num(folded.length)} ${plural(folded.length, 'site', 'sites')} AI cited that we couldn’t read for listings</summary>${folded.map(card).join('')}</details>` : ''}
     </section>`;
 }
 
@@ -1589,7 +1678,7 @@ function xrayV2({ report, aById, cw, N }) {
     const t = revText(c.reviews);
     return t ? `<p class="r2-reviews">${escapeHtml(t)}${youRev ? ` <span class="r2-muted">(you: ${escapeHtml(youRev)})</span>` : ''}</p>` : '';
   };
-  const cards = comps.map((c) => {
+  const card = (c) => {
     const srcs = (c.sources || []).filter((s) => s && s.domain);
     return `
       <div class="listing-card r2-gap">
@@ -1602,10 +1691,22 @@ function xrayV2({ report, aById, cw, N }) {
           : '<p class="r2-muted">We found no sites AI cited that list them and not you.</p>'}
         ${proof(c.answerIds)}
       </div>`;
-  }).join('');
+  };
+  const cards = comps.map(card).join('');
   const checkedNote = num(gap.sourcesChecked) === 0
     ? 'None of the sites AI cited could be read for their listings, so no gaps could be checked.'
     : anyGap ? '' : 'We found no sites AI cited that list them and not you.';
+  // With an action plan, the plan is the checklist and the $25 offer moves to the end of the page
+  // (breakdownUpsell). The gap sheet stays only when it found a gap: nine "found nothing" cards aren't evidence.
+  if (x.actionPlan && (x.actionPlan.items || []).length) {
+    if (!anyGap) return '';
+    return `
+    <section class="report-section r2-xray">
+      <h2>Competitor gap sheet</h2>
+      <p class="sub">The businesses AI named in at least 2 of the ${num(N)} ${cw.unit}, and the sites AI cited that list them and not you.</p>
+      ${comps.filter((c) => (c.sources || []).some((s) => s && s.domain)).map(card).join('')}
+    </section>`;
+  }
   const checklist = (x.checklist || []).filter((i) => i && i.title);
   const checkKey = 'afs_check_' + String(report.id || '');
   let ticked = {};
@@ -1636,6 +1737,20 @@ function xrayV2({ report, aById, cw, N }) {
         return `<li><label><input type="checkbox" data-check="${k}"${ticked[`${n}:${i.title}`.slice(0, 120)] ? ' checked' : ''}> <span>${escapeHtml(i.title)}</span></label></li>`;
       }).join('')}</ul>
     </section>`;
+}
+
+// The $25 Competitor Breakdown offer on a paid report with an action plan: at the end of the page,
+// after everything the owner already paid for. Same rules as the offer inside the gap sheet.
+function breakdownUpsell(report) {
+  const comps = ((report.xray && report.xray.gapSheet && report.xray.gapSheet.competitors) || []).filter((c) => c && c.name);
+  if (!comps.length || report.breakdown || report.plan || isDemoReport(report)) return '';
+  return `
+    <div class="r2-upsell">
+      <p><strong>Want to see what ${escapeHtml(listJoin(comps.slice(0, 3).map((c) => c.name)))} have that you don’t?</strong> The Competitor Breakdown ($25) is a scorecard of what the top 3 businesses AI names instead of you show that you don’t: a page for your town, how they price, licenses, awards, reviews and directories, with a “do these first” list in the order to copy them.</p>
+      ${tierOn('competitor_breakdown')
+        ? `<a class="btn-secondary" data-tier="competitor_breakdown" href="#">Get my Competitor Breakdown — $25</a>`
+        : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a>`}
+    </div>`;
 }
 
 // 8c. Competitor Breakdown ($25 add-on; in Be the Answer). Built by the Worker from this report's own

@@ -513,3 +513,39 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .r2-pending-qs { margin: 20px 0 8px; }
 .r2-pending-qs h2 { font-size: 18px; margin: 0 0 10px; color: var(--navy); }
 .r2-pending-qs .rq-list li { border: 1px solid var(--line); }
+
+/* Paid report: the action plan (report.js actionPlanV2). One card per step, a tick on the left,
+   "How to do it" folded; a ticked step fades and is struck through. */
+.ap .sub { margin-bottom: 12px; }
+.ap-progress { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 15px; color: var(--muted); }
+.ap-progress b { color: var(--navy); }
+.ap-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--wash-2); overflow: hidden; }
+.ap-bar i { display: block; height: 100%; background: var(--green); border-radius: 999px; transition: width .2s; }
+.ap-kit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; background: var(--wash-2); }
+.ap-kit p { margin: 0; flex: 1 1 280px; font-size: 15px; }
+.ap-list { list-style: none; margin: 0; padding: 0; counter-reset: none; }
+.ap-item { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 14px 16px; margin: 0 0 12px; }
+.ap-head { display: flex; gap: 12px; align-items: flex-start; }
+.ap-tick { flex: none; padding-top: 2px; cursor: pointer; }
+.ap-tick input { width: 22px; height: 22px; accent-color: var(--green); cursor: pointer; }
+.ap-main { min-width: 0; flex: 1; }
+.ap-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 6px; font-size: 13px; }
+.ap-num { font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .04em; }
+.ap-who { color: var(--muted); }
+.ap-item h3 { font-size: 18px; margin: 0 0 6px; overflow-wrap: anywhere; }
+.ap-why { margin: 0; font-size: 15px; line-height: 1.5; }
+.ap-sites { list-style: none; margin: 10px 0 0 34px; padding: 0; }
+.ap-sites li { margin: 0 0 6px; font-size: 15px; overflow-wrap: anywhere; }
+.ap-how { margin: 10px 0 0 34px; }
+.ap-how summary { cursor: pointer; font-weight: 700; color: var(--navy); font-size: 15px; }
+.ap-how .r2-steps { margin-top: 8px; }
+.ap-item.done { background: var(--wash); }
+.ap-item.done h3 { text-decoration: line-through; color: var(--muted); }
+.ap-item.done .ap-why, .ap-item.done .ap-sites { opacity: .6; }
+.ap-foot { margin-top: 4px; }
+.r2-fold { margin-top: 8px; }
+.r2-fold summary { cursor: pointer; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+@media (max-width: 520px) {
+  .ap-item { padding: 12px; }
+  .ap-sites, .ap-how { margin-left: 0; }
+}

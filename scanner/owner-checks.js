@@ -220,8 +220,24 @@ export function tradeWords(trade) {
     words.push(key.replace(/_/g, ' '), TRADES[key].trade);
     for (const [alias, k] of Object.entries(TRADE_ALIASES)) if (k === key) words.push(alias);
   }
-  return [...new Set(words.map((w) => w.replace(/[\s_-]+/g, ' ').trim()).filter((w) => w.length >= 3))];
+  // The trade without its generic last word ("pr agency" → "pr"), and that word's other names: a site
+  // that says "PR & Media Relations" or "public relations" says what a PR agency does (Oct 2 2026).
+  const core = raw.replace(/\s+(?:agenc(?:y|ies)|firms?|compan(?:y|ies)|services?|shops?|stores?|studios?|consultants?|consulting|office|group)$/, '').trim();
+  const extra = core && core !== raw ? [core, ...(TRADE_SYNONYMS[core] || [])] : (TRADE_SYNONYMS[raw] || []);
+  const short = new Set(extra.filter((w) => w.length < 3 && TRADE_SYNONYMS[w]));
+  words.push(...extra);
+  return [...new Set(words.map((w) => w.replace(/[\s_-]+/g, ' ').trim()).filter((w) => w.length >= 3 || short.has(w)))];
 }
+
+/** Other names for a trade's core word. A short acronym counts only when it is listed here. */
+export const TRADE_SYNONYMS = {
+  pr: ['public relations', 'media relations'],
+  'public relations': ['pr', 'media relations'],
+  seo: ['search engine optimization'],
+  cpa: ['accountant', 'accounting'],
+  it: ['it support', 'it services', 'managed it'],
+  law: ['attorney', 'lawyer', 'legal'],
+};
 
 /** The homeowner noun for a trade ("plumbing" → "plumber"); the owner's own word when unknown. */
 export function tradeNoun(trade) {
