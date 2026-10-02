@@ -180,7 +180,7 @@ async function buildSevenQuestionReport() {
   return { report, validation, questions };
 }
 
-test('paid PR 73 audit with the small-firm questions: "When customers ask for a firm your size" lists who AI named there', async () => {
+test('paid PR 73 audit with the small-firm questions: "Firms your size" leads "Why AI picked them" with who AI named there', async () => {
   const { report, validation, questions } = await buildSevenQuestionReport();
   assert.deepEqual(validation.errors, []);
   assert.equal(questions.length, 7);
@@ -192,9 +192,9 @@ test('paid PR 73 audit with the small-firm questions: "When customers ask for a 
     // Counts: every answer, all 7 questions.
     assert.match(html, /We asked AI 14 times\./);
     const i = html.indexOf('id="your-size"');
-    assert.ok(i >= 0, 'the small-firm section renders');
-    const sec = html.slice(i, html.indexOf('</section>', i));
-    assert.match(sec, /When customers ask for a firm your size/);
+    assert.ok(i >= 0, 'the small-firm block renders');
+    const sec = html.slice(i, html.indexOf('class="r2-why-you"', i));
+    assert.match(sec, /<h3>Firms your size<\/h3>/);
     assert.match(sec, /What&#39;s a good boutique PR agency in New York City, NY for a small company\?/);
     assert.match(sec, /Which PR agency in New York City, NY specializes in integrated communications\?/);
     // Boutique question: the firms AI named there, the directory left out, the owner not named.
@@ -207,8 +207,14 @@ test('paid PR 73 audit with the small-firm questions: "When customers ask for a 
     // Specialty question: PR73 named by both engines (and never listed as its own rival).
     assert.match(q7, /ChatGPT and Gemini named you \(2 of 2 answers\)\./);
     assert.doesNotMatch(q7, /<span class="nm">PR73<\/span>/);
-    // Comes right after "Who AI recommended instead".
-    assert.ok(html.indexOf('id="who"') < i, 'after Who AI recommended instead');
+    // The first block of "Why AI picked them" (no separate section, no "Who AI recommended instead").
+    const why = html.indexOf('id="why-picked"');
+    assert.ok(why >= 0 && why < i && i < html.indexOf('class="r2-why-card"', why), 'first block of Why AI picked them');
+    assert.doesNotMatch(html, /id="who"|When customers ask for a firm your size/);
+    // Juniper & Vale PR was named only on the boutique question and is kept with the bigger names.
+    const card = html.slice(html.indexOf('<h3>Juniper &amp; Vale PR'), html.indexOf('</article>', html.indexOf('<h3>Juniper &amp; Vale PR')));
+    assert.match(card, /<span class="ap-whotag">Named for a firm your size<\/span>/);
+    assert.match(card, /“Juniper &amp; Vale PR is a boutique agency that takes small clients\.”/);
     // Our copy has no banned words.
     assert.deepEqual(lintText(sec.replace(/href="[^"]*"/g, '').replace(/<[^>]+>/g, ' ')).map((h) => h.word), []);
     // The score, the lost-question logic and the FAQ take all 7.
@@ -248,9 +254,9 @@ test('GET /api/report/sample-001: 7 questions, the "business your size" section,
     const html = render(body);
     assert.match(html, new RegExp(`We asked AI ${7 * engines} times\.`));
     const i = html.indexOf('id="your-size"');
-    assert.ok(i >= 0, 'the small-firm section renders');
-    const sec = html.slice(i, html.indexOf('</section>', i));
-    assert.match(sec, /When customers ask for a business your size/);
+    assert.ok(i >= 0, 'the small-firm block renders');
+    const sec = html.slice(i, html.indexOf('class="r2-why-you"', i));
+    assert.match(sec, /<h3>Businesses your size<\/h3>/);
     assert.match(sec, /Can you recommend a local, family-owned plumber in Massapequa, NY\?/);
     assert.match(sec, /Who does boiler repair in Massapequa NY\?/);
     assert.match(sec, /named you \(\d of \d answers\)/);

@@ -7,6 +7,7 @@ import { lockReport, reportBody } from '../lock.js';
 import { MOCK_REPORTS } from '../../mock/sample-reports.js';
 import { buildGapSheet, buildFixChecklist, xraySections, xrayOffered, validateReport } from '../../../shared/report-v2.js';
 import { buildActionPlan } from '../../../shared/action-plan.js';
+import { buildWhyPicked } from '../../../shared/why-picked.js';
 
 const v2 = MOCK_REPORTS['sample-001'];
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -129,15 +130,16 @@ test('lock: the X-Ray sections are withheld until paid; unlocked reports carry t
   assert.equal(open.locked, false);
   assert.ok(open.xray.gapSheet.competitors.length >= 2);
   assert.equal(open.xray.checklist.length, v2.issues.length);
-  const { actionPlan, ...sections } = open.xray;
+  const { actionPlan, whyPicked, ...sections } = open.xray;
   assert.deepEqual(sections, xraySections(v2));
   assert.deepEqual(actionPlan, buildActionPlan(v2), 'the paid report carries the action plan');
+  assert.deepEqual(whyPicked, buildWhyPicked(v2, actionPlan), 'and "Why AI picked them"');
   assert.ok(actionPlan.items.length >= 1);
 
   const locked = reportBody(v2, false);
   assert.deepEqual(locked.xray, { locked: true });
   const body = JSON.stringify(locked);
-  assert.ok(!body.includes('gapSheet') && !body.includes('checklist') && !body.includes('actionPlan'));
+  assert.ok(!body.includes('gapSheet') && !body.includes('checklist') && !body.includes('actionPlan') && !body.includes('whyPicked'));
   // Even a stored report that somehow carried X-Ray data never passes it through the lock.
   const tainted = { ...clone(v2), xray: xraySections(v2), gapSheet: { x: 1 }, checklist: [1] };
   const l2 = lockReport(tainted);

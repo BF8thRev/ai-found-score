@@ -12,7 +12,8 @@
 //   - "your title doesn't say what you do" is re-checked with the trade's other names ("PR" and
 //     "public relations" for a PR agency) before it is shown;
 //   - FAQ answers use the business's own homepage description, not a one-line template;
-//   - the FAQ is the Fix Kit's own (shared/faq.js): the same questions and answers in the report and the kit;
+//   - the FAQ is the Fix Kit's own (shared/faq.js), and lives only in the kit: the report says how many
+//     answers need a detail from the owner and links to the kit (Oct 2 2026 owner review), as does the business code;
 //   - website steps say where to click on the owner's own site builder (siteCheck.platform, shared/platforms.js:
 //     "In Wix: …" with Wix's own guide linked), and keep the generic steps when we don't know it.
 
@@ -21,7 +22,6 @@ import { tradeWords, mentionsAny } from '../scanner/owner-checks.js';
 import { businessDetails, napBlock, GBP_DESCRIPTION_MAX, siteSpelling, spellingLine } from '../scanner/extract/fixes.js';
 import { LIST_SITE_RE, NOT_A_LIST_RE, LIST_PATH_RE, CHECK_REASON_TEXT } from '../scanner/extract/sources.js';
 import { isDirectoryName } from './report-v2.js';
-import { faqPlainText, faqJsonLdScript } from './faq.js';
 import { joinFor, JOIN_LABELS } from './directories.js';
 import { reportFaq } from '../src/lib/fix-kit.js';
 import { platformFor, platformJob, platformStep, guideLinks } from './platforms.js';
@@ -95,7 +95,7 @@ export function joinInfo(domain, type, guess) {
 const squash = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
 
 // A competitor's own website (5wpr.com for 5WPR, berlinrosen.com for BerlinRosen): nothing to get onto.
-function isCompetitorSite(domain, entities) {
+export function isCompetitorSite(domain, entities) {
   if (LIST_SITE_RE.test(domain)) return false;
   const stem = squash(String(domain || '').replace(/\.[a-z.]+$/i, ''));
   if (stem.length < 3) return false;
@@ -128,12 +128,15 @@ export function homepageSaysTrade(meta, trade) {
 }
 
 /**
- * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, kitNote?, time?, cost?, week?, platform?, from }], kitOnly?, platform? }
+ * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, kitNote?, kit?, time?, cost?, week?, platform?, from }], kitOnly?, platform? }
  * `platform` on a step: { name, guides: [{ label, url }] }, the site builder's own help pages for the steps
  * written for it; on the plan: { id, name }, the builder the owner's site is made with (unknown: absent).
  * `kind`: 'professional' (an office: agency, firm), 'trade' (goes to the customer) or 'storefront'.
  * `time`, `cost`: a rough, conservative estimate for the step; `week`: one the owner can finish this
  * week (the page's "Do these 3 this week"). `kitNote`: the Fix Kit already has this step's file.
+ * `kit`: the step's work is a file already written in the Fix Kit, so the report links there instead of
+ * pasting it: { file: 'questions', questions, fromScan, needs } (the Questions page and its code) or
+ * { file: 'code', placeholders } (the business code). Text the owner pastes on other sites stays in copyText.
  * `kitOnly`: stored issue kinds handled only by a Fix Kit file (llms.txt), with no step of their own.
  * `from`: the stored issue kinds this step covers (every stored issue lands in exactly one step,
  * or is dropped on purpose: walk-in advice for an office).
@@ -338,14 +341,9 @@ export function buildActionPlan(report) {
     const rivalText = !rivals.length ? 'other businesses' : hits.size > rivals.length ? `${rivals.join(', ')} and others` : listJoin(rivals);
     const fq = job('faq');
     const hc = job('headCode');
-    // The FAQ code: skipped when the builder's FAQ block writes it; else where it goes on this builder.
-    const codeSteps = fq && fq.schema === true
-      ? []
-      : [
-        'Ask whoever runs your website to add the FAQ code below to the same page. The code must say exactly what the page says, so it holds only the finished answers: add each of the others to it once it’s filled in.',
-        ...(hc ? [hc.can === false ? told(hc) : `For the code, ${told(hc, { page: true }).replace(/^In /, 'in ')}`] : []),
-        'Check the page at validator.schema.org: it should read each question and answer.',
-      ];
+    // The Questions page and its code are written in the Fix Kit (the same questions and answers,
+    // shared/faq.js): the report says so and links there instead of pasting the page and the code here.
+    const where = [fq && told(fq), fq && fq.schema === true ? null : hc && (hc.can === false ? told(hc) : `For the code, ${told(hc, { page: true }).replace(/^In /, 'in ')}`)].filter(Boolean);
     items.push({
       id: 'faq',
       impact: lostQs.length ? 'high' : 'medium',
@@ -357,18 +355,15 @@ export function buildActionPlan(report) {
         : 'A page that answers the questions customers ask, in your words, gives AI something to quote.',
       who: 'both',
       steps: [
-        'Add a “Questions” section to your website: a new page, or the bottom of your homepage.',
-        ...(fq ? [told(fq)] : []),
         ...(faq.needs
-          ? [`Paste the questions and answers below. ${faq.needs === 1 ? 'One answer has' : `${faq.needs} answers have`} a part in [brackets] that only you know (a specialty, a client, a result): write one true sentence in its place, then delete the brackets.`]
-          : ['Paste the questions and answers below.']),
-        ...codeSteps,
+          ? [`Open your Fix Kit and fill in the ${faq.needs === 1 ? 'one detail' : `${faq.needs} details`} it asks for, one true sentence each. The kit puts each one into the page and its code.`]
+          : ['Open your Fix Kit and read the page through: every answer is already complete.']),
+        'Send the Questions page and its code to whoever runs your website: a new page, or the bottom of your homepage. The kit’s guide says where each part goes.',
+        ...where,
+        'Check the page at validator.schema.org once it’s live: it should read each question and answer.',
       ],
-      copyText: [
-        { label: faq.needs ? 'Questions and answers for your website (fill in the brackets)' : 'Questions and answers for your website', text: faqPlainText(faq.items) },
-        { label: 'FAQ code: the finished answers only (JSON-LD)', text: faqJsonLdScript(faq.items), format: 'code' },
-      ],
-      kitNote: 'Done for you: your Questions page and its code are ready in your Fix Kit. The kit asks you for each [bracket] detail and puts it into the page and the code for you.',
+      copyText: [],
+      kit: { file: 'questions', questions: faq.items.length, fromScan: faq.items.filter((x) => x && x.fromScan).length, needs: faq.needs || 0 },
       time: 'About an hour for you, then 1–2 hours for your web person',
       cost: 'No cost',
       week: true,
@@ -478,7 +473,8 @@ export function buildActionPlan(report) {
     const code = (schema[0] && (schema[0].copyText || []).find((c) => c && c.format === 'code')) || null;
     // The stored code leaves out what we don't know; show where the phone (and street) go instead of
     // asking for them to be "filled in" to a block that has no place for them.
-    const codeText = code ? withPlaceholders(String(code.text), { phone: d.phone, street: d.street, wantStreet: !office }) : '';
+    // The kit's code leaves out what we don't know until the owner adds it on the kit page (src/lib/fix-kit.js).
+    const codeMissing = code ? [!d.phone && 'phone number', !office && !d.street && 'street address'].filter(Boolean) : [];
     const ft = nap.length ? job('footer') : null;
     const hc = code ? job('headCode') : null;
     items.push({
@@ -493,12 +489,13 @@ export function buildActionPlan(report) {
         nap.length && `Put your phone number${office ? '' : ' and street address'} as plain text in the footer of every page${office ? ' (add your office address if clients can visit)' : ''}, written the same as on Google.`,
         nap.length && 'Make the phone number a tap-to-call link.',
         ft && told(ft),
-        code && !(hc && hc.can === false) && `Ask whoever runs your website to add the code below to your homepage’s <head> section${/\[your /.test(codeText) ? ', after replacing each part in [brackets] with your real details' : ''}.`,
+        code && !(hc && hc.can === false) && `Send the business code in your Fix Kit to whoever runs your website, to add to your homepage’s <head> section${codeMissing.length ? `. Add your ${listJoin(codeMissing)} on the Fix Kit page first: the kit puts ${codeMissing.length === 1 ? 'it' : 'them'} into the code` : ''}.`,
         hc && told(hc),
         code && !(hc && hc.can === false) && 'Check it at validator.schema.org: it should read your name and contact details.',
       ].filter(Boolean),
-      copyText: code ? [{ ...code, text: codeText, label: 'Business code for your web person (JSON-LD)' }] : [],
-      ...(code ? { kitNote: 'Done for you: this code is ready in your Fix Kit. Send it to whoever runs your website.' } : {}),
+      // The code itself is in the Fix Kit (the report points there instead of pasting it).
+      copyText: [],
+      ...(code ? { kit: { file: 'code', missing: codeMissing } } : {}),
       ...withGuides([ft && 'footer', hc && 'headCode'].filter(Boolean)),
       time: 'About half an hour for your web person',
       cost: 'No cost',
@@ -572,22 +569,3 @@ function listingCopy(d, noun, where, words) {
   return out;
 }
 
-// LocalBusiness JSON-LD with a [placeholder] for the phone (and street) we don't know, so the web
-// person sees where they go. Code we can't parse is returned as is.
-function withPlaceholders(text, { phone = '', street = '', wantStreet = true } = {}) {
-  const m = text.match(/^(\s*<script[^>]*>)([\s\S]*?)(<\/script>\s*)$/i);
-  let o;
-  try { o = JSON.parse(m ? m[2] : text); } catch { return text; }
-  if (!o || typeof o !== 'object') return text;
-  const out = {};
-  for (const [k, v] of Object.entries(o)) {
-    out[k] = v;
-    if (k === 'name' && !o.telephone) out.telephone = phone || '[your phone number]';
-  }
-  if (wantStreet && out.address && typeof out.address === 'object' && !out.address.streetAddress) {
-    const { '@type': type, ...rest } = out.address;
-    out.address = { '@type': type, streetAddress: street || '[your street address]', ...rest };
-  }
-  const json = JSON.stringify(out, null, 2).replace(/</g, '\\u003c');
-  return m ? `${m[1].trim()}\n${json}\n</script>` : json;
-}

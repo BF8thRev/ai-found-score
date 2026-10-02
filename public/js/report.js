@@ -751,11 +751,12 @@ function actionPlanV2(report) {
             <div class="ap-body">
               <p class="ap-who">${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}${effort(i) ? `<span class="ap-effort"> · ${effort(i)}</span>` : ''}</p>
               ${i.why ? `<p class="ap-why"><b>Why it matters:</b> ${escapeHtml(i.why)}</p>` : ''}
+              ${i.kit ? kitDone(i.kit, demo ? SAMPLE_KIT_URL : kitUrl, demo) : ''}
               ${sites(i.sites)}
               ${builtOn(i.platform)}
               ${(i.steps || []).length ? `<p class="ap-how-k">How to do it</p><ol class="r2-steps">${i.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}
               ${copyBlocksV2(i.copyText)}
-              ${i.kitNote && !demo ? `<p class="ap-kitnote">${escapeHtml(i.kitNote)} <a href="${kitUrl}">Open my Fix Kit</a></p>` : ''}
+              ${i.kit ? '' : i.kitNote && !demo ? `<p class="ap-kitnote">${escapeHtml(i.kitNote)} <a href="${kitUrl}">Open my Fix Kit</a></p>` : ''}
             </div>
           </details>
         </li>`).join('')}
@@ -763,6 +764,32 @@ function actionPlanV2(report) {
       ${demo ? '' : kitCard(report, kitUrl)}
       <p class="r2-muted ap-foot">Below this plan: the evidence behind it (what AI said, who it named, and what we found on your website).</p>
     </section>`;
+}
+
+// A step whose work is a file already written in the Fix Kit (shared/action-plan.js `kit`): say so, how many
+// answers still need a detail from the owner, and open the kit. The page and the code are never pasted here
+// (Oct 2 2026 owner review: "the FAQ should already be in the Fix Kit, not listed here"). A sample report
+// links to the sample's kit.
+const SAMPLE_KIT_URL = '/fix-kit/sample-001';
+function kitDone(k, href, demo) {
+  let text = '';
+  if (k.file === 'questions') {
+    const n = num(k.questions);
+    const fromScan = num(k.fromScan);
+    const needs = num(k.needs);
+    text = `<b>Already written for you.</b> Your Questions page is in your Fix Kit: ${n} ${plural(n, 'question', 'questions')} and ${plural(n, 'answer', 'answers')}${fromScan ? `, starting with the ${fromScan === 1 ? 'question' : `${fromScan} questions`} AI was asked in this scan` : ''}, with the code that goes with ${n === 1 ? 'it' : 'them'}. `
+      + (needs
+        ? `${needs} ${plural(needs, 'answer needs', 'answers need')} one detail only you know (a sentence each); the kit asks you for ${needs === 1 ? 'it' : 'each one'} and puts it in the page and the code.`
+        : 'Every answer is complete: read it through, then send it on.');
+  } else if (k.file === 'code') {
+    const missing = (Array.isArray(k.missing) ? k.missing : []).filter((x) => typeof x === 'string' && x);
+    text = `<b>Already written for you.</b> Your business code is in your Fix Kit, ready to send to whoever runs your website.${missing.length ? ` Your ${escapeHtml(listJoin(missing))} ${missing.length === 1 ? 'isn’t' : 'aren’t'} in it yet: add ${missing.length === 1 ? 'it' : 'them'} on the Fix Kit page and the kit puts ${missing.length === 1 ? 'it' : 'them'} in.` : ''}`;
+  } else return '';
+  return `
+              <div class="ap-kitdone">
+                <p>${text}</p>
+                <a class="btn-secondary" href="${escapeHtml(href)}">${demo ? 'See the sample Fix Kit' : 'Open my Fix Kit'}</a>
+              </div>`;
 }
 
 // "Your site is built on Wix." with Wix's own help pages for the step (shared/platforms.js guideLinks).
@@ -1334,11 +1361,17 @@ function renderV2(root, report) {
   // fix list, the checklist and the Fix Kit band), then the evidence, and anything for sale last.
   // Sample reports show it too: they show a buyer exactly what the audit gives them.
   sec.actionPlan = hasPlan ? actionPlanV2(report) : '';
+  // With a plan, one evidence section ("Why AI picked them") replaces the search card, the "who instead"
+  // bars and "why they got named instead" (and holds the firms-your-size block). Free and locked reports
+  // keep those as they are.
+  sec.why = hasPlan ? whyPickedV2({ report, b, questions, answers }) : '';
   sec.breakdownUpsell = hasPlan ? breakdownUpsell(report) : '';
   const order = xrayOk
     ? ['verdict', 'who', 'smallFirm', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
     : hasPlan
-      ? ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'hero', 'who', 'smallFirm', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell']
+      ? (sec.why
+        ? ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'why', 'xray', 'breakdown', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell']
+        : ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'hero', 'who', 'smallFirm', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell'])
       : ['verdict', 'topTools', 'hero', 'baseline', 'plan', 'who', 'smallFirm', 'sources', 'facts', 'site', 'listings', 'issues', 'recheckCard', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method', 'recheck'];
 
   root.innerHTML = [
@@ -1356,6 +1389,13 @@ function renderV2(root, report) {
 
   // Grid marks (and "read the answer" links) open their answer in section 10.
   root.addEventListener('click', (e) => {
+    // "step 2" links in the evidence open that step of the plan.
+    const stepLink = e.target.closest('a[data-step]');
+    if (stepLink) {
+      const row = document.querySelector(`#step-${Number(stepLink.dataset.step) || 0} details`);
+      if (row) row.open = true;
+      return;
+    }
     const link = e.target.closest('a[data-open]');
     if (!link) return;
     const d = document.getElementById('ans-' + link.dataset.open);
@@ -1618,7 +1658,7 @@ function whoAiNamesV2({ report, b, t, N, cw, proven }) {
 // owner sees the businesses they really compete with, not only the giants. Every name and count comes
 // from those answers' businessesNamed (directories left out); nothing about any business's size is
 // claimed. Only when the report asked them.
-function smallFirmV2({ report, b, questions, answers }) {
+function smallFirmV2({ report, b, questions, answers, block = false }) {
   const qs = questions.filter((q) => q && SMALL_FIRM_INTENTS.includes(q.intent));
   const blocks = qs.map((q) => {
     const as = answers.filter((a) => a && a.questionId === q.id);
@@ -1663,11 +1703,117 @@ function smallFirmV2({ report, b, questions, answers }) {
   }).filter(Boolean);
   if (!blocks.length) return '';
   const office = isOffice(report);
+  // Inside "Why AI picked them" (paid reports with an action plan): the first block, not a section of its own.
+  if (block) {
+    return `
+      <div class="r2-small r2-why-size" id="your-size">
+        <h3>${office ? 'Firms your size' : 'Businesses your size'}</h3>
+        <p class="r2-muted">We also asked ${blocks.length === 1 ? 'a question' : `${blocks.length} questions`} ${office ? 'a smaller firm' : 'a smaller local business'} can win. These are the ${office ? 'firms' : 'businesses'} AI named in those answers, and whether it named ${escapeHtml(b.name || 'you')}.</p>
+        ${blocks.join('')}
+      </div>`;
+  }
   return `
     <section class="report-section r2-small" id="your-size">
       <h2>When customers ask for ${office ? 'a firm' : 'a business'} your size</h2>
       <p class="sub">We also asked ${blocks.length === 1 ? 'a question' : `${blocks.length} questions`} ${office ? 'a smaller firm' : 'a smaller local business'} can win. These are the businesses AI named in those answers, and whether it named ${escapeHtml(b.name || 'you')}.</p>
       ${blocks.join('')}
+    </section>`;
+}
+
+// 3c. Why AI picked them (paid reports with an action plan): one evidence section in place of the search
+// card, "Who AI recommended instead" and "Why they got named instead". Built by the Worker
+// (shared/why-picked.js) from the report's own answers: for each firm AI named in 2+ answers, what AI
+// said about it, quoted word for word, and the pages AI read in the answers that named it, with the
+// owner's status on each list and the plan step that gets them on it. Firms your size come first.
+// A page we couldn't read gets no badge here: the plan's lists step says what to do with it.
+const WHY_STATUS = {
+  missing: ['mismatch', 'You’re not on it'], not_found: ['low', 'No profile found'], listed: ['match', 'You’re listed'],
+};
+function whyPickedV2({ report, b, questions, answers }) {
+  const w = report.xray && report.xray.whyPicked;
+  if (!w) return '';
+  const office = isOffice(report);
+  const firms = office ? 'firms' : 'businesses';
+  const rivals = (w.rivals || []).filter((r) => r && r.name);
+  const items = ((report.xray.actionPlan && report.xray.actionPlan.items) || []).filter((i) => i && i.title && i.id);
+  const stepOf = (id) => { const n = items.findIndex((i) => i.id === id); return n < 0 ? 0 : n + 1; };
+  const stepLink = (id) => { const n = stepOf(id); return n ? `<a href="#step-${n}" data-step="${n}">step ${n}</a>` : ''; };
+  const siteName = (p) => escapeHtml(p.name || p.domain);
+  const N = num(w.answers);
+  const ans = (n) => `${num(n)} of ${N} ${plural(N, 'answer', 'answers')}`;
+
+  // The takeaway: the reasons AI gave most often, and the lists it read for 2+ of these firms.
+  const t = w.takeaway || {};
+  const reasons = (t.reasons || []).filter((r) => r && r.label);
+  const sources = (t.sources || []).filter((s) => s && s.domain);
+  const of = num(t.of) || rivals.length;
+  const whom = of === 1 || sources.every((s) => num(s.count) === of) ? 'them' : of === 2 ? 'both' : 'at least 2 of them';
+  const take = [
+    reasons.length ? `AI most often described ${of === 1 ? 'them' : `these ${firms}`} by ${escapeHtml(labelJoin(reasons.map((r) => r.label)))}` : '',
+    sources.length ? `${reasons.length ? 'and' : 'AI'} read ${escapeHtml(listJoin(sources.map((s) => s.name || s.domain)))} when it named ${whom}` : '',
+  ].filter(Boolean).join(', ');
+  // "reviews and reputation, and prices": labels that hold "and" get a comma before the last one.
+  function labelJoin(xs) { return xs.length > 2 || xs.some((x) => / and /.test(x)) ? (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')}, and ${xs[xs.length - 1]}`) : listJoin(xs); }
+  const takeCounts = reasons.map((r) => `${r.label}: ${num(r.count)} of ${of}`);
+  const takeaway = take ? `
+      <div class="r2-why-take">
+        <p><b>In short:</b> ${take}.</p>
+        ${of > 1 && takeCounts.length ? `<p class="r2-muted">Counted over the ${of} ${firms} below: ${escapeHtml(takeCounts.join(' · '))}.</p>` : ''}
+      </div>` : '';
+
+  // The owner's own row: how often named, and the lists AI read for these firms that they're not on.
+  const you = w.you || {};
+  const miss = (you.missing || []).filter((x) => x && x.domain);
+  const listed = (you.listed || []).filter((x) => x && x.domain);
+  const bySteps = (rows) => {
+    const groups = new Map();
+    for (const x of rows) { const k = x.step || ''; groups.set(k, [...(groups.get(k) || []), x]); }
+    return [...groups].map(([k, xs]) => `${listJoin(xs.map(siteName))}${k && stepLink(k) ? ` (${stepLink(k)})` : ''}`);
+  };
+  const youRow = `
+      <div class="r2-why-you">
+        <h3>${escapeHtml(b.name || 'You')} <span class="r2-muted">(you)</span></h3>
+        <p>Named in ${ans(you.named)}${num(you.first) ? `, first in ${num(you.first)}` : ''}.${miss.length ? ` Of the lists AI read for these ${firms}, you’re not on ${bySteps(miss).join('; ')}.` : ''}${listed.length ? ` You’re already on ${listJoin(listed.map(siteName))}: check the details match.` : ''}</p>
+      </div>`;
+
+  const card = (r) => {
+    const qs = (r.questions || []).map((q) => INTENT_LABELS[q.intent] || q.text).filter(Boolean);
+    const quotes = (r.quotes || []).filter((q) => q && q.text).map((q) => `
+          <blockquote class="r2-why-q">
+            <p>“${escapeHtml(q.text)}”</p>
+            <cite>As ${escapeHtml(engineName(q.engine))} wrote it${q.answerId ? ` · <a href="#ans-${escapeHtml(q.answerId)}" data-open="${escapeHtml(q.answerId)}">Read the answer</a>` : ''}</cite>
+          </blockquote>`).join('');
+    const pages = (r.pages || []).filter((p) => p && p.domain);
+    const lists = pages.filter((p) => p.list);
+    const tag = (p) => (p.theirs ? 'Their own website' : p.type === 'award' ? 'Industry list' : p.list ? 'List' : p.type === 'article' ? 'Article' : '');
+    const pageRows = pages.map((p) => {
+      const st = p.list && WHY_STATUS[p.status];
+      return `<li><a href="${safeHref(p.url)}" rel="nofollow noopener" target="_blank">${siteName(p)}</a>${p.name ? ` <span class="r2-muted">${escapeHtml(p.domain)}</span>` : ''}${tag(p) ? ` <span class="ap-type">${tag(p)}</span>` : ''}${st ? ` <span class="badge ${st[0]}">${st[1]}</span>` : ''}</li>`;
+    }).join('');
+    const byStep = new Map();
+    for (const p of lists) if (p.step && p.status !== 'listed') byStep.set(p.step, [...(byStep.get(p.step) || []), p]);
+    const which = (ps) => (ps.length === lists.length && ps.length > 1 ? (ps.length === 2 ? 'both' : `all ${ps.length}`) : ps.length <= 3 ? listJoin(ps.map(siteName)) : `${ps.length} of them`);
+    const getLine = [...byStep].map(([step, ps]) => `${step === 'awards' ? 'you can enter' : 'you can get on'} ${which(ps)}${stepLink(step) ? ` (${stepLink(step)})` : ''}`).join('; ');
+    const readLine = lists.length ? `<p class="r2-why-line">AI read ${lists.length > 3 ? `${lists.slice(0, 3).map(siteName).join(', ')} and ${lists.length - 3} more` : listJoin(lists.map(siteName))} when it named them${getLine ? `; ${getLine}` : ''}.</p>` : '';
+    return `
+      <article class="r2-why-card">
+        <h3>${escapeHtml(r.name)}${r.small ? ` <span class="ap-whotag">Named for ${office ? 'a firm' : 'a business'} your size</span>` : ''}</h3>
+        <p class="r2-why-meta">Named in ${ans(r.named)}${num(r.first) ? `, first in ${num(r.first)}` : ''}${qs.length ? ` · Asked for: ${escapeHtml(qs.join(', '))}` : ''}</p>
+        <p class="r2-why-k">Why: what AI said about them</p>
+        ${quotes || '<p class="r2-muted">AI named them without saying why.</p>'}
+        <p class="r2-why-k">Where: the pages AI read when it named them</p>
+        ${pageRows ? `${readLine}<ul class="r2-why-pages">${pageRows}</ul>${num(r.morePages) ? `<p class="r2-muted">+ ${num(r.morePages)} more ${plural(num(r.morePages), 'page', 'pages')} in the answers below.</p>` : ''}` : '<p class="r2-muted">AI cited no pages in the answers that named them.</p>'}
+      </article>`;
+  };
+  const size = smallFirmV2({ report, b, questions, answers, block: true });
+  if (!rivals.length && !size) return '';
+  return `
+    <section class="report-section r2-why" id="why-picked">
+      <h2>Why AI picked them</h2>
+      <p class="sub">The other ${firms} AI named in 2 or more answers: what AI said about each one, word for word, and the pages it read when it named them.</p>
+      ${rivals.length ? takeaway : ''}
+      ${size}
+      ${rivals.length ? `${youRow}${rivals.map(card).join('')}` : `<p class="r2-muted">No other ${office ? 'firm' : 'business'} was named in 2 or more answers.</p>`}
     </section>`;
 }
 
@@ -2332,25 +2478,138 @@ function wireOfferTotal(root) {
   });
 }
 
-// Answer text with business names bolded at their stored positions.
-function answerHtml(a) {
-  const text = String(a.text || '');
-  const marks = (a.businessesNamed || [])
-    .filter((n) => n && typeof n.name === 'string' && text.slice(n.pos, n.pos + n.name.length) === n.name)
-    .sort((x, y) => x.pos - y.pos);
-  let out = '';
-  let at = 0;
-  for (const n of marks) {
-    if (n.pos < at) continue;
-    out += escapeHtml(text.slice(at, n.pos));
-    out += isYouNamed(n) ? `<mark>${escapeHtml(n.name)}</mark>` : `<b>${escapeHtml(n.name)}</b>`;
-    at = n.pos + n.name.length;
+// An answer's markdown as clean HTML, safely: every piece of text is escaped FIRST, then only a short
+// whitelist of patterns becomes markup (headings, bold, italic, bullet and numbered lists, simple tables,
+// links to http(s) pages). Horizontal rules are dropped; anything else stays as plain text, so a
+// <script> or a javascript: link in an answer is shown as words and never runs.
+function mdInline(raw) {
+  let s = escapeHtml(raw);
+  // [text](url): a link only to an http(s) page; anything else keeps just its text.
+  s = s.replace(/\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g, (m, txt, url) => (/^https?:\/\//i.test(url)
+    ? `<a href="${url}" rel="nofollow noopener" target="_blank">${txt}</a>`
+    : txt));
+  s = s.replace(/`([^`\n]+)`/g, '$1');
+  s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>').replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[\s(>])\*(?!\s)([^*\n]+?)\*(?=[\s).,;:!?<]|$)/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[\s(>])_(?!\s)([^_\n]+?)_(?=[\s).,;:!?<]|$)/g, '$1<em>$2</em>');
+  return s.replace(/\*\*/g, '');
+}
+
+function mdToHtml(text) {
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let para = [];
+  const lists = []; // open lists, innermost last: { tag, indent }
+  const flushPara = () => { if (para.length) { out.push(`<p>${para.join('<br>')}</p>`); para = []; } };
+  const closeLists = (toIndent = -1) => {
+    while (lists.length && lists[lists.length - 1].indent > toIndent) { out.push(`</li></${lists.pop().tag}>`); }
+  };
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n];
+    if (!line.trim()) { flushPara(); continue; }
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flushPara(); closeLists(); continue; }
+    const h = line.match(/^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/);
+    if (h) { flushPara(); closeLists(); out.push(`<h4 class="md-h${h[1].length <= 2 ? ' big' : ''}">${mdInline(h[2])}</h4>`); continue; }
+    // A table: rows of | cells |. The --- row under the head is dropped.
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      flushPara(); closeLists();
+      const rows = [];
+      while (n < lines.length && /^\s*\|.*\|\s*$/.test(lines[n])) { rows.push(lines[n]); n++; }
+      n--;
+      const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map((c) => mdInline(c.trim()));
+      const body = rows.filter((r) => !/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(r));
+      const head = rows.length > 1 && /^\s*\|?\s*:?-{2,}/.test(rows[1]) ? body.shift() : null;
+      out.push(`<div class="md-table-wrap"><table class="md-table">${head ? `<thead><tr>${cells(head).map((c) => `<th>${c}</th>`).join('')}</tr></thead>` : ''}<tbody>${body.map((r) => `<tr>${cells(r).map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+      continue;
+    }
+    const li = line.match(/^(\s*)(?:([-*•+])|(\d+)[.)])\s+(.*)$/);
+    if (li) {
+      flushPara();
+      const indent = li[1].replace(/\t/g, '    ').length;
+      const tag = li[2] ? 'ul' : 'ol';
+      const top = lists[lists.length - 1];
+      if (top && indent > top.indent) {
+        lists.push({ tag, indent });
+        out.push(`<${tag}${tag === 'ol' && li[3] !== '1' ? ` start="${num(li[3])}"` : ''}><li>`);
+      } else {
+        closeLists(indent);
+        const cur = lists[lists.length - 1];
+        if (cur && cur.indent === indent && cur.tag === tag) out.push('</li><li>');
+        else {
+          if (cur && cur.indent === indent) out.push(`</li></${lists.pop().tag}>`);
+          lists.push({ tag, indent });
+          out.push(`<${tag}${tag === 'ol' && li[3] !== '1' ? ` start="${num(li[3])}"` : ''}><li>`);
+        }
+      }
+      out.push(mdInline(li[4]));
+      continue;
+    }
+    const q = line.match(/^\s*>\s?(.*)$/);
+    if (q) { flushPara(); closeLists(); out.push(`<p class="md-quote">${mdInline(q[1])}</p>`); continue; }
+    // A plain line right under a list item, indented: part of that item.
+    if (lists.length && /^\s+\S/.test(line) && !para.length) { out.push(`<br>${mdInline(line.trim())}`); continue; }
+    closeLists();
+    para.push(mdInline(line.trim()));
   }
-  return out + escapeHtml(text.slice(at));
+  flushPara();
+  closeLists();
+  return out.join('');
+}
+
+// Business names in the rendered answer: the owner highlighted, everyone else in bold. Matched by name in
+// the text between tags (never inside a tag or a link address), longest name first, the owner first.
+function highlightNames(html, named) {
+  const seen = new Set();
+  const names = [];
+  for (const n of [...(named || []).filter(isYouNamed), ...(named || []).filter((x) => !isYouNamed(x))]) {
+    const name = n && typeof n.name === 'string' ? n.name.trim() : '';
+    if (name.length < 2 || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    names.push({ esc: escapeHtml(name), you: isYouNamed(n) });
+  }
+  if (!names.length) return html;
+  names.sort((x, y) => y.esc.length - x.esc.length);
+  const reEsc = (t) => t.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
+  let re;
+  try { re = new RegExp(`(^|[^\\p{L}\\p{N}])(${names.map((x) => reEsc(x.esc)).join('|')})(?=$|[^\\p{L}\\p{N}])`, 'giu'); } catch { return html; }
+  const byLower = new Map(names.map((x) => [x.esc.toLowerCase(), x]));
+  return html.split(/(<[^>]*>)/).map((part) => (part.startsWith('<') ? part : part.replace(re, (m, pre, name) => {
+    const x = byLower.get(name.toLowerCase());
+    return `${pre}${x && x.you ? `<mark>${name}</mark>` : `<b>${name}</b>`}`;
+  }))).join('');
+}
+
+// Answer text as clean HTML, with business names bolded and the owner highlighted.
+function answerHtml(a) {
+  return highlightNames(mdToHtml(a.text), a.businessesNamed);
+}
+
+// One line above an answer: who it named, which sites it read, and whether it named the owner.
+function answerSummary(a) {
+  const seen = new Set();
+  const names = [];
+  for (const n of a.businessesNamed || []) {
+    const nm = n && typeof n.name === 'string' ? n.name.trim() : '';
+    if (!nm || isYouNamed(n) || seen.has(nm.toLowerCase())) continue;
+    seen.add(nm.toLowerCase());
+    names.push(nm);
+  }
+  const doms = [];
+  for (const c of a.citations || []) {
+    let d = c && c.domain ? String(c.domain) : '';
+    if (!d && c && c.url) { try { d = new URL(c.url).hostname; } catch { d = ''; } }
+    d = d.replace(/^www\./, '').toLowerCase();
+    if (d && !doms.includes(d)) doms.push(d);
+  }
+  const more = (list, k) => `${escapeHtml(list.slice(0, k).join(', '))}${list.length > k ? ` + ${list.length - k} more` : ''}`;
+  const m = markFor(a);
+  return `<p class="r2-ans-sum">${names.length ? `<span><b>Named:</b> ${more(names, 3)}</span>` : '<span>Named no other business</span>'}${doms.length ? `<span><b>Read:</b> ${more(doms, 2)}</span>` : '<span>No sites cited</span>'}<span class="${m.cls === 'y' ? 'yes' : m.cls === 'x' ? 'no' : ''}">${escapeHtml(m.cls === 'x' ? 'Didn’t name you' : m.label)}</span></p>`;
 }
 
 // 10. Every answer: full text, collapsed, cited URLs under each.
 function answersV2({ questions, answers, failedNote = '' }) {
+  // The proof, at the end of the page and closed: every answer as clean text (mdToHtml), each with a
+  // one-line summary of who it named and what it read.
   if (!answers.length) return '';
   const runs = Math.max(1, ...answers.map((a) => a.run || 1));
   const groups = questions.map((q) => {
@@ -2385,7 +2644,8 @@ function answersV2({ questions, answers, failedNote = '' }) {
           <summary><span class="eng">${escapeHtml(engineName(a.engine))}${runs > 1 ? ` · run ${num(a.run) || 1}` : ''}</span><span class="mk ${m.cls}">${m.txt}</span><span class="lbl">${m.label}</span></summary>
           <div class="body">
             ${a.headlineUnstable ? '<p class="r2-note">We asked this search again and the second answer changed whether it named you, so we didn’t lead with it.</p>' : ''}
-            <blockquote>${answerHtml(a)}</blockquote>
+            ${answerSummary(a)}
+            <div class="r2-md">${answerHtml(a)}</div>
             ${cites.length
               ? `<p class="r2-src">Cited: ${cites.map((c) => `<a href="${safeHref(c.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(shortUrl(c.url))}</a>`).join(' · ')}</p>`
               : '<p class="r2-src">No sources cited.</p>'}
@@ -2397,10 +2657,10 @@ function answersV2({ questions, answers, failedNote = '' }) {
   const hasUnsure = answers.some((a) => a.ownerMatch === 'unsure' && !a.namedYou);
   return `
     <details class="report-section r2-allans">
-      <summary><h2>Every question, every answer</h2><span class="r2-allans-n">${answers.length} ${plural(answers.length, 'answer', 'answers')}</span></summary>
+      <summary><h2>${answers.some((a) => a.locked) ? 'The proof: what AI answered' : 'The proof: every answer, word for word'}</h2><span class="r2-allans-n">${answers.length} ${plural(answers.length, 'answer', 'answers')}</span></summary>
       <p class="sub">✓ mentioned you (★ first) · ✗ didn’t${hasUnsure ? ' · ? unsure, not counted' : ''}. ${answers.some((a) => a.locked)
         ? 'Tap to open. The answer at the top of this report is here word for word; every other answer, and the websites it cited, is in the audit.'
-        : 'Word for word, as the AI returned it. Business names in bold, yours highlighted. Tap to open.'}</p>
+        : 'Word for word, as the AI returned it. Business names in bold, yours highlighted. Tap a question to open its answers.'}</p>
       ${failedNote ? `<p class="r2-note">${escapeHtml(failedNote)}</p>` : ''}
       ${groups}
     </details>`;

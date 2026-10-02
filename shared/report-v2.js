@@ -556,7 +556,7 @@ const MAX_MENTIONS = 200;
 const NEGATED_RE = /\b(?:not|no|non|never|nor|neither|without|lacks?|lacking|hardly|rarely|seldom|barely|few|little|fails?|failed|unable|cannot|only|except|unless|if|may|might|could|would|should|claims?|claimed|allegedly|reportedly|supposedly|possibly|probably|perhaps|least|expired|lapsed|revoked|suspended|used to|formerly|unclear|unknown|whether)\b|\w+n['’]t\b|\bun-?(?:licensed|insured|certified|bonded)\b/i;
 const ADVICE_RE = /^\s*(?:always|look for|choose|pick|hire|ensure|check|ask|verify|beware|remember|note|make sure|be sure|you (?:should|can|may|will|need|must)|when |if )|\b(?:requires?|required|by law|state law|whoever you hire|any (?:plumber|contractor|company)|tips?)\b/i;
 // Never quote a sentence about complaints or legal trouble under a positive label.
-const RISKY_RE = /\b(?:complaints?|lawsuits?|sued|scam|fraud|fined|violations?|f rating|unresolved|warning|accused|busy|slow|rude|poor|bad|worst|terrible|overcharg\w*|no-?shows?|never (?:showed|called|came)|wait\w*|delays?|delayed|cancel\w*|disappoint\w*|unprofessional|mixed|negative)\b/i;
+export const RISKY_RE = /\b(?:complaints?|lawsuits?|sued|scam|fraud|fined|violations?|f rating|unresolved|warning|accused|busy|slow|rude|poor|bad|worst|terrible|overcharg\w*|no-?shows?|never (?:showed|called|came)|wait\w*|delays?|delayed|cancel\w*|disappoint\w*|unprofessional|mixed|negative)\b/i;
 // "A is 24/7 while B is not", "unlike A, B is licensed": a comparison says nothing safe about either.
 const COMPARE_RE = /\b(?:unlike|whereas|while|vs\.?|versus|compared (?:to|with)|than|instead of|rather than|but|however|outperform\w*|outrank\w*|outshine\w*|beats?|edges? out|tops|trails|lags?|ahead of|better|worse|cheaper|pricier|the same|as well)\b/i;
 const FOLLOW_UP_RE = /^\s*(?:however|but|although|though|yet)\b/i;
@@ -577,7 +577,7 @@ function lineStartOf(text, pos) {
   return text.lastIndexOf('\n', pos - 1) + 1;
 }
 
-function sentenceBounds(text, at, len) {
+export function sentenceBounds(text, at, len) {
   let start = 0;
   for (let i = at - 1; i >= 0; i--) if (isSentenceEnd(text, i)) { start = i + 1; break; }
   let end = text.length;

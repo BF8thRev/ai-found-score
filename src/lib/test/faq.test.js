@@ -151,12 +151,11 @@ test('the report and the kit never disagree: the action planâ€™s FAQ is the kitâ
     const step = buildActionPlan(r).items.find((i) => i.id === 'faq');
     const kit = buildKit(kitDetails(r), r, { date: new Date(2026, 9, 2) });
     const txt = kit.files.find((f) => f.path === 'faq-page.txt').content;
-    assert.equal(step.copyText[0].text, faqPlainText(kit.faq.items));
-    assert.ok(txt.includes(step.copyText[0].text));
-    assert.equal(step.copyText[0].text, faqPlainText(reportFaq(r).items));
-    // The plan's FAQ code is the kit's FAQ code.
-    const html = kit.files.find((f) => f.path === 'faq-page.html').content;
-    assert.ok(html.includes(step.copyText[1].text), 'same JSON-LD block');
+    // The plan points to the kit's page and counts what it counts: same questions, same details to fill in.
+    assert.equal(faqPlainText(reportFaq(r).items), faqPlainText(kit.faq.items));
+    assert.ok(txt.includes(faqPlainText(kit.faq.items)));
+    assert.deepEqual(step.kit, { file: 'questions', questions: kit.faq.items.length, fromScan: kit.faq.items.filter((i) => i.fromScan).length, needs: kit.faq.needs });
+    assert.deepEqual(step.copyText, []);
   }
 });
 
