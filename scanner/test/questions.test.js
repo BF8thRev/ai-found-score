@@ -132,3 +132,82 @@ test('caseKind / tradeOrKind: acronyms upper-cased, whole words only, the rest u
   assert.equal(tradeOrKind('73'), null, 'but not be only digits');
   assert.equal(tradeOrKind('hvac'), 'hvac', 'a known trade stays its key');
 });
+
+// ---------------------------------------------------------------------------
+// Small-firm questions: the paid audit only (q6 'small', q7 'niche').
+// ---------------------------------------------------------------------------
+import {
+  smallFirmQuestions, paidQuestions, readSpecialty, PAID_INTENTS, PAID_QUESTION_COUNT, FREE_QUESTION_COUNT, questionKey,
+} from '../questions.js';
+import { BUSINESS as PR73, HOME as PR73_HOME } from './fixtures/pr73.js';
+import { metaCheck } from '../owner-checks.js';
+
+const pr73Site = { meta: metaCheck(PR73_HOME, PR73) };
+
+test('PR 73 (paid): the 5, then a boutique question and its own specialty from its homepage', () => {
+  assert.equal(pr73Site.meta.title, 'Integrated Communications, PR & Media Relations | PR73');
+  assert.deepEqual(paidQuestions(PR73, { siteCheck: pr73Site }), [
+    { id: 'q1', intent: 'best', text: "What's the best PR agency in New York City, NY?" },
+    { id: 'q2', intent: 'urgent', text: 'Top rated PR agency in New York City, NY' },
+    { id: 'q3', intent: 'job', text: 'Can you recommend a PR agency in New York City NY?' },
+    { id: 'q4', intent: 'trust', text: 'PR agency with good reviews near New York City, NY' },
+    { id: 'q5', intent: 'price', text: 'Affordable PR agency near New York City NY' },
+    { id: 'q6', intent: 'small', text: "What's a good boutique PR agency in New York City, NY for a small company?" },
+    { id: 'q7', intent: 'niche', text: 'Which PR agency in New York City, NY specializes in integrated communications?' },
+  ]);
+  // An industry on the homepage wins over a kind of work.
+  const tech = { meta: { title: 'PR73 | Integrated communications', description: 'PR for tech startups and consumer brands in NYC.', h1: '' } };
+  assert.equal(smallFirmQuestions(PR73, { siteCheck: tech })[1].text, 'Which PR agency in New York City, NY specializes in tech startups?');
+  // Nothing readable: the budget question, never a guess.
+  for (const siteCheck of [null, { meta: null }, { meta: { title: 'Home', description: '', h1: 'Welcome' } }]) {
+    assert.equal(smallFirmQuestions(PR73, { siteCheck })[1].text, 'Is there a PR agency in New York City, NY that works with small businesses on a budget?');
+  }
+});
+
+test('plumber sample (paid): family-owned, and a service from the homepage the job question doesn’t already ask', () => {
+  const plumber = { name: 'Harborview Plumbing & Heating', trade: 'plumber', town: 'Massapequa', state: 'NY', zip: '11758' };
+  const site = { meta: { title: 'Harborview Plumbing & Heating | Massapequa Plumber & Boiler Repair', description: '', h1: 'Plumbing and heating you can count on' } };
+  assert.deepEqual(smallFirmQuestions(plumber, { siteCheck: site }), [
+    { id: 'q6', intent: 'small', text: 'Can you recommend a local, family-owned plumber in Massapequa, NY?' },
+    { id: 'q7', intent: 'niche', text: 'Who does boiler repair in Massapequa NY?' },
+  ]);
+  // The water heater is already q3 ("Who can replace a water heater…"): the next service instead.
+  assert.equal(readSpecialty(plumber, { meta: { title: 'Tankless water heaters and drain cleaning' } }).phrase, 'drain cleaning');
+  assert.equal(smallFirmQuestions(plumber)[1].text, "Who's a reliable plumber in Massapequa NY for a small job?");
+});
+
+test('small-firm questions for every kind: filled, located, natural, never the trade itself as a specialty', () => {
+  assert.deepEqual(smallFirmQuestions({ trade: 'bakery', town: 'Plainview' }).map((q) => q.text), [
+    'Can you recommend a local, family-owned bakery in Plainview, NY?', 'Is there a hidden gem bakery in Plainview, NY?',
+  ]);
+  // People hire a realtor; companies hire an agency.
+  assert.deepEqual(smallFirmQuestions({ trade: 'real estate agent', town: 'Plainview' }, { siteCheck: { meta: { title: 'Real estate in Plainview' } } }).map((q) => q.text), [
+    "What's a good independent real estate agent in Plainview, NY?", 'Which real estate agent in Plainview, NY gives clients personal attention?',
+  ]);
+  assert.equal(smallFirmQuestions({ trade: 'law firm', town: 'Mineola' }, { siteCheck: { meta: { description: 'Personal injury lawyers on Long Island' } } })[1].text, 'Which law firm in Mineola, NY specializes in personal injury?');
+  for (const trade of [...Object.keys(TRADES), 'pr agency', 'accountant', 'bakery', 'marketing agency', 'dentist']) {
+    const qs = smallFirmQuestions({ trade, town: 'Levittown', state: 'NY', zip: '11756' }, { siteCheck: { meta: { title: 'Boilers, gutters, EV chargers, deep cleaning, transmissions, dry cleaning, healthcare' } } });
+    assert.deepEqual(qs.map((q) => `${q.id}:${q.intent}`), ['q6:small', 'q7:niche'], trade);
+    for (const q of qs) {
+      assert.doesNotMatch(q.text, /[{}]|\s{2}|\s[,?]|undefined|null/, `${trade} ${q.id}: ${q.text}`);
+      assert.match(q.text, /Levittown/, `${trade} ${q.id} lacks the town`);
+    }
+  }
+});
+
+test('free questions are unchanged by the paid ones: 3 questions, same text, no small-firm intent', () => {
+  for (const b of [PR73, { trade: 'plumbing', town: 'Massapequa', state: 'NY', zip: '11758' }]) {
+    const free = freeQuestions(b);
+    assert.equal(free.length, FREE_QUESTION_COUNT);
+    assert.deepEqual(free, buildQuestions(b).slice(0, 3));
+    assert.deepEqual(paidQuestions(b, { siteCheck: pr73Site }).slice(0, 5), buildQuestions(b), 'the paid scan asks the same 5 first');
+  }
+  assert.equal(buildQuestions(PR73).length, 5);
+  assert.deepEqual(INTENTS, ['best', 'urgent', 'job', 'trust', 'price']);
+  assert.deepEqual(PAID_INTENTS, [...INTENTS, 'small', 'niche']);
+  assert.equal(PAID_QUESTION_COUNT, 7);
+  // questionKey: order doesn't matter, wording and ids do.
+  const qs = paidQuestions(PR73, { siteCheck: pr73Site });
+  assert.equal(questionKey([...qs].reverse()), questionKey(qs));
+  assert.notEqual(questionKey(qs.slice(0, 5)), questionKey(qs));
+});

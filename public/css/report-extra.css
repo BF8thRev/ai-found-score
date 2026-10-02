@@ -148,6 +148,17 @@
 .r2-row.you.none { color: var(--red); }
 .r2-once { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
 
+/* When customers ask for a firm your size: the paid audit's two small-firm questions. */
+.r2-small-q { padding: 14px 0; border-top: 1px solid var(--line); }
+.r2-small-q .q { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+.r2-small-you { margin: 6px 0; font-weight: 600; color: var(--red); }
+.r2-small-you.yes { color: var(--ink); }
+.r2-small-names { list-style: none; margin: 6px 0; padding: 0; }
+.r2-small-names li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 15.5px; }
+.r2-small-names li:last-child { border-bottom: 0; }
+.r2-small-names .nm { font-weight: 600; overflow-wrap: anywhere; }
+.r2-small-names .c { flex: none; color: var(--muted); font-size: 14px; }
+
 /* Why they got named instead: the sites AI cited. */
 .r2-cited-k { margin: 14px 0 4px; font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .r2-cited { list-style: none; margin: 0 0 12px; padding: 0; }

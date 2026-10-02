@@ -133,9 +133,10 @@ export function customerQuestion(q, { noun, town, state = '', office }) {
 // Which owner detail each scan question's answer asks for, best first. The first one AI mentioned
 // for other businesses wins; a type is asked once across the whole FAQ.
 const PREFS = {
-  office: { best: ['specialty', 'results', 'clients', 'team'], job: ['clients', 'specialty', 'results', 'team'], trust: ['reviews', 'results', 'experience'], price: ['price'], urgent: ['reviews', 'results', 'experience'] },
-  other: { best: ['specialty', 'reviews', 'experience', 'team'], job: ['specialty', 'clients', 'results'], trust: ['reviews', 'licensed', 'experience'], price: ['price'], urgent: ['speed'] },
+  office: { best: ['specialty', 'results', 'clients', 'team'], job: ['clients', 'specialty', 'results', 'team'], trust: ['reviews', 'results', 'experience'], price: ['price'], urgent: ['reviews', 'results', 'experience'], small: ['team', 'clients', 'experience'], niche: ['specialty', 'clients', 'results'] },
+  other: { best: ['specialty', 'reviews', 'experience', 'team'], job: ['specialty', 'clients', 'results'], trust: ['reviews', 'licensed', 'experience'], price: ['price'], urgent: ['speed'], small: ['team', 'experience', 'reviews'], niche: ['specialty', 'experience', 'results'] },
 };
+// small / niche: the paid audit's small-firm questions (scanner/questions.js smallFirmQuestions).
 // Extra questions, when the scan's own questions didn't use these types (most mentioned first).
 const EXTRA_DEFAULTS = { office: ['clients', 'experience', 'results', 'team', 'specialty'], other: ['experience', 'price', 'licensed', 'reviews', 'specialty'] };
 

@@ -22,11 +22,11 @@ const post = (env, fields, headers = bearer) => call(env, '/admin/report/unlock'
 });
 
 /** A fake Supabase holding one finished free report for TOKEN (PR 73), its scan's cost, and any payments. */
-function fakeDb({ payments = [], scans } = {}) {
+function fakeDb({ payments = [], scans, scanRows = [], stored = [] } = {}) {
   const db = {
     payments: [...payments],
     scans: scans || [{ scan_id: 's-free', trigger: 'request', status: 'done', started_at: '2026-10-01T17:49:15Z', total_cost_usd: 0.33, business_name: 'PR 73', report_saved: true, engines: ['chatgpt', 'gemini', 'claude'], answers: 8, calls_ok: 9 }],
-    scanRows: [],
+    scanRows: [...scanRows],
     calls: [],
   };
   const json = (b, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } });
@@ -38,6 +38,8 @@ function fakeDb({ payments = [], scans } = {}) {
     // As on the preview: the RPC answers 401. /admin must not depend on it.
     if (u.pathname === '/rest/v1/rpc/report_unlocked') return json({ message: 'Unauthorized' }, 401);
     if (u.pathname === '/rest/v1/v_scan_costs') return json(forToken ? db.scans : []);
+    // The stored reports' questions and website check (src/lib/auto-scan.js fullScanQuestions).
+    if (u.pathname === '/rest/v1/scan_results' && u.searchParams.get('select')?.includes('questions:')) return json(forToken ? stored : []);
     if (u.pathname === '/rest/v1/scan_results') return json(forToken ? [{ name: 'PR 73' }] : []);
     if (u.pathname === '/rest/v1/payments' && method === 'GET') return json(forToken ? db.payments : []);
     if (u.pathname === '/rest/v1/payments' && method === 'POST') { db.payments.push(JSON.parse(init.body)); return new Response(null, { status: 201 }); }
@@ -211,4 +213,77 @@ test('routes: /admin/report/breakdown adds the Breakdown to an unlocked report o
   assert.equal(p.amount_cents, 2500);
   assert.equal(p.livemode, true);
   assert.equal(created.length, 0, 'no scan');
+});
+
+// The PR 73 audit was made before the small-firm questions: "Run the full audit again" in Find a report
+// asks all 7 under the same link (src/admin/routes.js /admin/scan/paid with again=1).
+test('routes: "Run the full audit again" re-runs a finished paid audit with the 7 questions; refused while one runs', async () => {
+  const site = { meta: { title: 'Integrated Communications, PR & Media Relations | PR73', description: 'PR73 is an integrated communications and media relations firm in New York City.', h1: 'Integrated communications for brands that want to be heard' } };
+  const oldFive = [
+    { id: 'q1', intent: 'best', text: "What's the best pr agency in New York City, NY?" },
+    { id: 'q2', intent: 'urgent', text: 'Pr agency open now near New York City NY' },
+    { id: 'q3', intent: 'job', text: 'Can you recommend a pr agency in New York City NY?' },
+    { id: 'q4', intent: 'trust', text: 'Pr agency with good reviews near New York City, NY' },
+    { id: 'q5', intent: 'price', text: 'Affordable pr agency near New York City NY' },
+  ];
+  const opts = () => ({
+    payments: [{ tier: 'xray', amount_cents: 4900, addons: [], livemode: true, stripe_session_id: 'cs_live_pr73', paid_at: '2026-10-01T18:00:00Z' }],
+    scans: [
+      { scan_id: 's-free', trigger: 'request', status: 'done', started_at: '2026-10-01T17:49:15Z', total_cost_usd: 0.33, business_name: 'PR 73', report_saved: true, engines: ['chatgpt', 'gemini', 'claude'], answers: 8, calls_ok: 9 },
+      { scan_id: 's-paid', trigger: 'paid', status: 'done', started_at: '2026-10-01T18:01:00Z', total_cost_usd: 0.9, business_name: 'PR 73', report_saved: true, engines: ['chatgpt', 'gemini', 'claude'], answers: 15, calls_ok: 15 },
+    ],
+    scanRows: [{ id: 's-paid', trigger: 'paid', status: 'done', report_valid: true, errors: [], created_at: '2026-10-01T18:01:00Z' }],
+    stored: [{ scanned_at: '2026-10-01T18:10:00Z', questions: oldFive, siteCheck: site }],
+  });
+  const { env, created } = mockEnv();
+  const { db, fetchImpl } = fakeDb(opts());
+  const rerun = (fields) => call(env, '/admin/scan/paid', {
+    method: 'POST', headers: { ...bearer, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields).toString(),
+  });
+  await withFetch(fetchImpl, async () => {
+    // The lookup offers it, with the cost of 7 questions and a warning that the buyer is emailed.
+    const page = await (await call(env, `/admin?report=${TOKEN}`, { headers: bearer })).text();
+    assert.match(page, /<input type="hidden" name="again" value="1"><button type="submit">Run the full audit again \(about \$\d+\.\d\d\)<\/button>/);
+    assert.match(page, /all 7 questions \(with the 2 small-firm ones\)/);
+    assert.match(page, /the buyer gets the “full audit ready” email again/);
+    // Without again=1 the finished audit still blocks (the old "Re-run paid audit" button is for failures).
+    const plain = await rerun({ token: TOKEN });
+    assert.equal(plain.status, 409);
+    assert.match(await plain.text(), /running or already done/);
+    assert.equal(created.length, 0);
+    // again=1: a new paid scan under the same link, with the 7 questions.
+    const res = await rerun({ token: TOKEN, again: '1' });
+    assert.equal(res.status, 303);
+    assert.match(res.headers.get('Location'), /\/admin\?started=[0-9a-f-]{36}#run$/);
+  });
+  assert.equal(created.length, 1);
+  const p = created[0].params;
+  assert.equal(p.reportToken, TOKEN);
+  assert.equal(p.trigger, 'paid');
+  assert.deepEqual(p.questions.map((q) => q.text), [
+    "What's the best PR agency in New York City, NY?",
+    'Top rated PR agency in New York City, NY',
+    'Can you recommend a PR agency in New York City NY?',
+    'PR agency with good reviews near New York City, NY',
+    'Affordable PR agency near New York City NY',
+    "What's a good boutique PR agency in New York City, NY for a small company?",
+    'Which PR agency in New York City, NY specializes in integrated communications?',
+  ]);
+  const row = db.scanRows.find((r) => r.trigger === 'paid' && r.status === 'running');
+  assert.equal(row.questions, 7);
+  assert.equal(row.notes, 'paid scan, run again from /admin');
+  // While that one runs, a second click is refused.
+  const busy = fakeDb({
+    ...opts(),
+    scans: [...opts().scans, { scan_id: 's-again', trigger: 'paid', status: 'running', started_at: '2026-10-02T12:00:00Z', total_cost_usd: 0, business_name: 'PR 73', engines: ['chatgpt', 'gemini', 'claude'] }],
+    scanRows: [...opts().scanRows, { id: 's-again', trigger: 'paid', status: 'running', created_at: '2026-10-02T12:00:00Z' }],
+  });
+  await withFetch(busy.fetchImpl, async () => {
+    const r2 = await rerun({ token: TOKEN, again: '1' });
+    assert.equal(r2.status, 409);
+    assert.match(await r2.text(), /running right now/);
+    const page = await (await call(env, `/admin?report=${TOKEN}`, { headers: bearer })).text();
+    assert.doesNotMatch(page, /Run the full audit again/);
+  });
+  assert.equal(created.length, 1);
 });

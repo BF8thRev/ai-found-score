@@ -6,7 +6,7 @@ import {
   startRequestScan, pendingReportStatus, runQueuedScan, statusFromRows, capDecision, requestKey, ipDailyHit,
   newRequestToken, requestScanId, autoScanOn, autoScanLimits, estimateRequestScanUsd, REQUEST_TOKEN_RE,
   DRY_RUN_REQUESTS, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, monthlyScanId,
-  pickRecoveries, PAID_INTENT, ABANDONED_CHECKOUT_MINUTES, retryFailedScans,
+  pickRecoveries, PAID_INTENT, ABANDONED_CHECKOUT_MINUTES, retryFailedScans, startFullScan, fullScanQuestions, estimatePaidScanUsd,
 } from '../auto-scan.js';
 import { freeEngines, activeEngines } from '../../../scanner/config.js';
 import { handleReportRequest } from '../report-request.js';
@@ -48,7 +48,14 @@ function fakeDb(seed = [], reportSeed = [], paymentSeed = []) {
     if (u.pathname.endsWith('/rest/v1/plan_towns')) return Response.json([]);
     if (u.pathname.endsWith('/rest/v1/scan_results')) {
       if (method === 'POST') { const body = JSON.parse(init.body); reports.push(body); return Response.json([body], { status: 201 }); }
-      return Response.json(reports.filter((r) => match(r, params)).map((r) => ({ ...r })));
+      // PostgREST's json selects ("questions:report->questions"): picked out of the stored report.
+      const sel = u.searchParams.get('select') || '';
+      const project = (r) => (!sel.includes('->') ? { ...r } : Object.fromEntries(sel.split(',').map((part) => {
+        const [alias, path] = part.includes(':') ? part.split(':') : [part.split('->').at(-1), part];
+        const [col, key] = path.split('->');
+        return [alias, key ? (r[col] || {})[key] ?? null : r[col]];
+      })));
+      return Response.json(reports.filter((r) => match(r, params)).sort((a, b) => String(b.scanned_at || '').localeCompare(String(a.scanned_at || ''))).map(project));
     }
     assert.ok(u.pathname.endsWith('/rest/v1/scans'), `unexpected table ${u.pathname}`);
     if (method === 'POST') {
@@ -475,7 +482,8 @@ test('paid scan: every question, every engine, same token; once per token; never
   assert.equal(wf.params.business.name, 'Otter Plumbing');
   const row = db.rows.find((x) => x.id === r.scanId);
   assert.equal(row.trigger, 'paid');
-  assert.equal(row.questions, 5);
+  assert.equal(row.questions, 7, 'the 5 + the 2 small-firm questions');
+  assert.equal(wf.params.questions.length, 7);
   assert.equal(await paidScanRunning(env, q.token, { fetchImpl: db.fetch }), true);
   // A retried webhook, or a Fix Kit bought after the audit, starts nothing new.
   assert.equal((await startPaidScan(env, { token: q.token, sessionId: 'cs_1', tier: 'xray' }, { fetchImpl: db.fetch })).reason, 'already');
@@ -510,7 +518,7 @@ test('30-day re-check: due live payments get one full rescan each; test mode, to
   assert.deepEqual(r.started, [due.token]);
   const row = db.rows.find((x) => x.trigger === 'recheck');
   assert.equal(row.report_token, due.token);
-  assert.equal(row.questions, 5);
+  assert.equal(row.questions, 7, 'no earlier full report under this token: the 7');
   const wf = env.SCAN_WORKFLOW.created.at(-1);
   assert.equal(wf.params.questionLimit, null);
   assert.equal(wf.params.business.name, 'Due Plumbing');
@@ -531,6 +539,135 @@ test('30-day re-check: due live payments get one full rescan each; test mode, to
   assert.equal(gaveUp.skipped['gave-up'], 1);
   // Off switch.
   assert.equal((await startDueRechecks({ ...env, RECHECK_SCAN: 'off' }, { now, fetchImpl: db.fetch })).error, 'off');
+});
+
+// ---------------------------------------------------------------------------
+// Small-firm questions (scanner/questions.js smallFirmQuestions): the paid tiers only, and a re-check
+// asks exactly what the audit it is compared with asked.
+// ---------------------------------------------------------------------------
+const PR73 = { businessName: 'PR 73', trade: 'pr agency', town: 'New York City', state: 'NY', zip: '10001', website: 'https://www.pr73.com' };
+const PR73_SITE = { meta: {
+  title: 'Integrated Communications, PR & Media Relations | PR73',
+  description: 'PR73 is an integrated communications and media relations firm in New York City.',
+  h1: 'Integrated communications for brands that want to be heard',
+} };
+const PR73_SEVEN = [
+  "What's the best PR agency in New York City, NY?",
+  'Top rated PR agency in New York City, NY',
+  'Can you recommend a PR agency in New York City NY?',
+  'PR agency with good reviews near New York City, NY',
+  'Affordable PR agency near New York City NY',
+  "What's a good boutique PR agency in New York City, NY for a small company?",
+  'Which PR agency in New York City, NY specializes in integrated communications?',
+];
+// The live PR 73 audit (Oct 1 2026) asked these, before the professional wording and the small-firm questions.
+const PR73_OLD_FIVE = [
+  { id: 'q1', intent: 'best', text: "What's the best pr agency in New York City, NY?" },
+  { id: 'q2', intent: 'urgent', text: 'Pr agency open now near New York City NY' },
+  { id: 'q3', intent: 'job', text: 'Can you recommend a pr agency in New York City NY?' },
+  { id: 'q4', intent: 'trust', text: 'Pr agency with good reviews near New York City, NY' },
+  { id: 'q5', intent: 'price', text: 'Affordable pr agency near New York City NY' },
+];
+const stored = (token, scannedAt, questions, extra = {}) => ({ report_token: token, version: 2, scanned_at: scannedAt, report: { questions, ...extra } });
+
+test('paid scan asks the 5 + 2 small-firm questions; the specialty comes from the free report’s website check', async () => {
+  const env = baseEnv({ AUTO_SCAN: 'off', PERPLEXITY_API_KEY: 'k4' });
+  const db = fakeDb();
+  const q = await startRequestScan(env, req(PR73), { now: NOW, fetchImpl: db.fetch });
+  // The free scan's stored report: 3 questions and the homepage it read.
+  db.reports.push(stored(q.token, '2026-10-01T18:00:00Z', PR73_SEVEN.slice(0, 3).map((text, i) => ({ id: `q${i + 1}`, intent: ['best', 'urgent', 'job'][i], text })), { siteCheck: PR73_SITE }));
+  const r = await startPaidScan(env, { token: q.token, sessionId: 'cs_pr73', tier: 'xray' }, { fetchImpl: db.fetch });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const wf = env.SCAN_WORKFLOW.created.at(-1);
+  assert.deepEqual(wf.params.questions.map((x) => x.text), PR73_SEVEN);
+  assert.deepEqual(wf.params.questions.map((x) => `${x.id}:${x.intent}`), ['q1:best', 'q2:urgent', 'q3:job', 'q4:trust', 'q5:price', 'q6:small', 'q7:niche']);
+  const row = db.rows.find((x) => x.id === r.scanId);
+  assert.equal(row.questions, 7);
+  assert.equal(row.calls_total, 7 * wf.params.engines.length);
+  // The admin's cost estimate for this scan is for 7 questions, not 5.
+  assert.equal(row.est_cost_usd, estimatePaidScanUsd(wf.params.engines, 7));
+  assert.ok(estimatePaidScanUsd(wf.params.engines, 7) > estimatePaidScanUsd(wf.params.engines, 5));
+
+  // No website check stored (or it can't be read): the budget question instead of a guessed specialty.
+  const db2 = fakeDb();
+  const q2 = await startRequestScan(env, req(PR73), { now: NOW, fetchImpl: db2.fetch });
+  await startPaidScan(env, { token: q2.token, sessionId: 'cs_pr73b', tier: 'xray' }, { fetchImpl: db2.fetch });
+  assert.equal(env.SCAN_WORKFLOW.created.at(-1).params.questions[6].text, 'Is there a PR agency in New York City, NY that works with small businesses on a budget?');
+});
+
+test('free scans never ask the small-firm questions: 3 questions, no question list', async () => {
+  const env = baseEnv();
+  const db = fakeDb();
+  const q = await startRequestScan(env, req(PR73), { now: NOW, fetchImpl: db.fetch });
+  assert.equal(q.status, 'running');
+  const wf = env.SCAN_WORKFLOW.created.at(-1);
+  assert.equal(wf.params.questionLimit, 3);
+  assert.equal(wf.params.questions, undefined, 'the workflow builds the free 3 itself');
+  assert.equal(db.rows.find((x) => x.id === q.scanId).questions, 3);
+});
+
+test('30-day re-check asks exactly the questions of the audit it is compared with', async () => {
+  const now = Date.parse('2026-10-30T14:00:00Z');
+  const day = 86400_000;
+  const env = baseEnv({ AUTO_SCAN: 'off' });
+  const seedDb = fakeDb();
+  const oldAudit = await startRequestScan(env, req({ ...PR73 }), { now: NOW, fetchImpl: seedDb.fetch });
+  const newAudit = await startRequestScan(env, req({ businessName: 'Otter Plumbing' }), { now: NOW, fetchImpl: seedDb.fetch });
+  const seven = PR73_SEVEN.map((text, i) => ({ id: `q${i + 1}`, intent: ['best', 'urgent', 'job', 'trust', 'price', 'small', 'niche'][i], text }));
+  const db = fakeDb(seedDb.rows, [
+    // An audit bought before the small-firm questions: the free report (3), then the paid one (5, older wording).
+    stored(oldAudit.token, '2026-09-29T10:00:00Z', PR73_OLD_FIVE.slice(0, 3), { siteCheck: PR73_SITE }),
+    stored(oldAudit.token, '2026-09-29T11:00:00Z', PR73_OLD_FIVE, { siteCheck: PR73_SITE }),
+    // An audit with all 7.
+    stored(newAudit.token, '2026-09-29T11:00:00Z', seven),
+  ], [
+    { report_token: oldAudit.token, tier: 'xray', livemode: true, paid_at: new Date(now - 31 * day).toISOString() },
+    { report_token: newAudit.token, tier: 'xray', livemode: true, paid_at: new Date(now - 31 * day).toISOString() },
+  ]);
+  const r = await startDueRechecks(env, { now, fetchImpl: db.fetch });
+  assert.deepEqual(r.started.sort(), [oldAudit.token, newAudit.token].sort());
+  const byToken = Object.fromEntries(env.SCAN_WORKFLOW.created.filter((w) => w.params.trigger === 'recheck').map((w) => [w.params.reportToken, w.params]));
+  // The old audit: its own 5, word for word (not today's wording, no small-firm questions), so the before/after is like for like.
+  assert.deepEqual(byToken[oldAudit.token].questions, PR73_OLD_FIVE);
+  assert.equal(db.rows.find((x) => x.trigger === 'recheck' && x.report_token === oldAudit.token).questions, 5);
+  // The 7-question audit: the same 7.
+  assert.deepEqual(byToken[newAudit.token].questions, seven);
+  assert.equal(db.rows.find((x) => x.trigger === 'recheck' && x.report_token === newAudit.token).questions, 7);
+});
+
+test('a re-check whose baseline questions can’t be read starts nothing (never unlike for like)', async () => {
+  const now = Date.parse('2026-10-30T14:00:00Z');
+  const env = baseEnv({ AUTO_SCAN: 'off' });
+  const seedDb = fakeDb();
+  const a = await startRequestScan(env, req(PR73), { now: NOW, fetchImpl: seedDb.fetch });
+  const db = fakeDb(seedDb.rows, [], [{ report_token: a.token, tier: 'xray', livemode: true, paid_at: new Date(now - 31 * 86400_000).toISOString() }]);
+  const broken = async (input, init) => (String(input).includes('/scan_results?') ? new Response('down', { status: 503 }) : db.fetch(input, init));
+  const before = env.SCAN_WORKFLOW.created.length;
+  const r = await quiet(() => startDueRechecks(env, { now, fetchImpl: broken }));
+  assert.deepEqual(r.started, []);
+  assert.equal(r.skipped.error, 1);
+  assert.equal(env.SCAN_WORKFLOW.created.length, before);
+  assert.equal(db.rows.filter((x) => x.trigger === 'recheck').length, 0, 'no row: tomorrow’s run tries again');
+});
+
+test('Be the Answer months keep the small-firm questions month to month; a plan from before them gets all 7', async () => {
+  const env = baseEnv({ AUTO_SCAN: 'off' });
+  const business = { name: 'PR 73', trade: 'pr agency', town: 'New York City', state: 'NY', zip: '10001' };
+  const seven = PR73_SEVEN.map((text, i) => ({ id: `q${i + 1}`, intent: ['best', 'urgent', 'job', 'trust', 'price', 'small', 'niche'][i], text }));
+  // Last month asked 7 (its site said "integrated communications"; this month's site check may differ): the same 7.
+  const changedSite = { meta: { title: 'PR73 | Healthcare PR' } };
+  let db = fakeDb([], [stored('planTok_12345', '2026-10-01T00:00:00Z', seven, { siteCheck: changedSite })]);
+  let r = await fullScanQuestions(env, { token: 'planTok_12345', trigger: 'monthly', business }, { fetchImpl: db.fetch });
+  assert.equal(r.basis, 'baseline');
+  assert.deepEqual(r.questions, seven);
+  // Last month asked the old 5: this month asks all 7 (no before/after that month: different searches).
+  db = fakeDb([], [stored('planTok_12345', '2026-10-01T00:00:00Z', PR73_OLD_FIVE, { siteCheck: PR73_SITE })]);
+  r = await fullScanQuestions(env, { token: 'planTok_12345', trigger: 'monthly', business }, { fetchImpl: db.fetch });
+  assert.equal(r.basis, 'new');
+  assert.deepEqual(r.questions.map((x) => x.text), PR73_SEVEN);
+  // The paid trigger never reuses an old list: it always asks today's 7.
+  r = await fullScanQuestions(env, { token: 'planTok_12345', trigger: 'paid', business }, { fetchImpl: db.fetch });
+  assert.deepEqual(r.questions.map((x) => x.text), PR73_SEVEN);
 });
 
 test('Be the Answer monthly scan: a failed month is started once more, then left for /admin', async () => {

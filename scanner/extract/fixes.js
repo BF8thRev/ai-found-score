@@ -9,7 +9,7 @@
 // Output shape per fix: { steps: [string], copyText: [{ label, text, format? }] }
 //   format: 'code' for a code block (JSON-LD), absent for plain text.
 
-import { normalizeTrade, TRADES, INTENTS, kindClass } from '../questions.js';
+import { normalizeTrade, TRADES, PAID_INTENTS, kindClass } from '../questions.js';
 import { US_STATES, stateAbbr } from '../config.js';
 import { is24 } from './verify.js';
 import { spellingOnSite, titleParts, squashName } from './normalize.js';
@@ -148,9 +148,12 @@ const INTENT_FACTS = {
   job: ['services', 'hours', 'price'],
   trust: ['services', 'hours'],
   price: ['price', 'services'],
+  // The paid audit's small-firm questions (scanner/questions.js smallFirmQuestions).
+  small: ['services', 'hours'],
+  niche: ['services', 'price'],
 };
 /** The fact an answer to this intent can't do without. */
-const INTENT_KEY_FACT = { urgent: 'hours', job: 'services', price: 'price' };
+const INTENT_KEY_FACT = { urgent: 'hours', job: 'services', price: 'price', niche: 'services' };
 const FACT_SENTENCE = { hours: (v) => `Hours: ${v}.`, services: (v) => `Services: ${v}.`, price: (v) => `Prices: ${v}.` };
 
 /** A website FAQ answer to one of our questions, built from real details only. */
@@ -313,7 +316,7 @@ export function baselineFixes({ business, questions = [] }) {
 
   const qs = questions.filter((x) => x && x.text);
   if (qs.length) {
-    const block = qs.map((x) => `${x.text}\n${faqAnswer(d, INTENTS.includes(x.intent) ? x.intent : 'best')}`).join('\n\n');
+    const block = qs.map((x) => `${x.text}\n${faqAnswer(d, PAID_INTENTS.includes(x.intent) ? x.intent : 'best')}`).join('\n\n');
     const missing = [...new Set(qs.map((x) => missingKeyFact(d, x.intent)).filter(Boolean))].map((f) => FIELD_LABEL[f]);
     out.push({
       kind: 'baseline_faq',

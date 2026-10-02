@@ -1,7 +1,7 @@
 // Step 2 of extraction: plain code checks every model proposal against the raw text.
 // The model proposes; this file decides. Pure, runtime-agnostic.
 
-import { normalizeName, phoneKey, streetKey, findPhones, findStreets, domainOf, digits } from './normalize.js';
+import { normalizeName, phoneKey, streetKey, findPhones, findStreets, domainOf, digits, squashName } from './normalize.js';
 
 /**
  * verifyBusinesses(text, proposed) → { kept:[{name,pos}], rejected:[{name,pos,reason}] }
@@ -48,6 +48,9 @@ function nameRelation(cand, ownerNames) {
   const c = normalizeName(cand);
   if (!c) return 'none';
   if (ownerNames.includes(c)) return 'exact';
+  // The same name written with or without spaces ("PR73" for "PR 73", as the owner's own website writes it).
+  const sq = squashName(c);
+  if (sq.length >= 4 && ownerNames.some((o) => squashName(o) === sq)) return 'exact';
   const cw = c.split(' ');
   for (const o of ownerNames) {
     const ow = o.split(' ');

@@ -146,3 +146,90 @@ test('the Fix Kit page shows the note on the name row', () => {
   assert.match(script, /kit\.notes/);
   assert.match(script, /notes\[r\[0\]\]\.note/);
 });
+
+// ---------------------------------------------------------------------------
+// The paid audit's small-firm questions (scanner/questions.js smallFirmQuestions), built by the real
+// scanner (buildReport), served by the Worker and rendered by public/js/report.js.
+// ---------------------------------------------------------------------------
+import { SCAN, PROPOSALS, BUSINESS, HOME, fakeWeb } from '../../../scanner/test/fixtures/pr73.js';
+import { paidQuestions } from '../../../scanner/questions.js';
+import { metaCheck } from '../../../scanner/owner-checks.js';
+import { buildReport } from '../../../scanner/extract/build.js';
+import { buildFaq } from '../../../shared/faq.js';
+import { computeVisibilityScore, lostIntents } from '../../../shared/report-v2.js';
+
+const GIANTS = '**Edelman** and **Weber Shandwick** are the largest PR firms in New York.';
+const BOUTIQUE = '**Juniper & Vale PR** is a boutique agency that takes small clients. **Kestrel PR** also works with startups. **Clutch** lists more.';
+const NICHE = '**PR73** focuses on integrated communications. **Juniper & Vale PR** does too.';
+
+/** A 7-question PR 73 audit (2 engines → 14 answers): the giants on the 5, boutique firms on q6, PR73 on q7. */
+async function buildSevenQuestionReport() {
+  const questions = paidQuestions(BUSINESS, { siteCheck: { meta: metaCheck(HOME, BUSINESS) } }).map(({ id, intent, text }) => ({ id, intent, text }));
+  const textFor = (qid) => (qid === 'q6' ? BOUTIQUE : qid === 'q7' ? NICHE : GIANTS);
+  const calls = [];
+  const proposals = {};
+  for (const q of questions) {
+    for (const engine of SCAN.engines) {
+      const text = textFor(q.id);
+      calls.push({ engine, questionId: q.id, run: 1, ok: true, text, askedAt: '2026-10-02T15:00:00Z', model: `${engine}-x`, citations: [] });
+      const names = [...text.matchAll(/\*\*([^*]+)\*\*/g)].map((m) => ({ name: m[1], pos: m.index + 2 }));
+      proposals[`${engine}:${q.id}:1`] = { businesses: names, ownerFacts: [] };
+    }
+  }
+  const { report, validation } = await buildReport({ scan: { ...SCAN, questions, calls }, business: BUSINESS, proposalsByAnswer: proposals, env: { GOOGLE_PLACES_API_KEY: 'test-key' }, fetchImpl: fakeWeb(), id: 'pr73-seven' });
+  return { report, validation, questions };
+}
+
+test('paid PR 73 audit with the small-firm questions: "When customers ask for a firm your size" lists who AI named there', async () => {
+  const { report, validation, questions } = await buildSevenQuestionReport();
+  assert.deepEqual(validation.errors, []);
+  assert.equal(questions.length, 7);
+  assert.equal(report.questions.length, 7);
+  assert.equal(report.totals.answers, 14);
+  await withWorker(report, async (call) => {
+    const body = await (await call(`/api/report/${TOKEN}`)).json();
+    const html = render(body);
+    // Counts: every answer, all 7 questions.
+    assert.match(html, /We asked AI 14 times\./);
+    const i = html.indexOf('id="your-size"');
+    assert.ok(i >= 0, 'the small-firm section renders');
+    const sec = html.slice(i, html.indexOf('</section>', i));
+    assert.match(sec, /When customers ask for a firm your size/);
+    assert.match(sec, /What&#39;s a good boutique PR agency in New York City, NY for a small company\?/);
+    assert.match(sec, /Which PR agency in New York City, NY specializes in integrated communications\?/);
+    // Boutique question: the firms AI named there, the directory left out, the owner not named.
+    const [q6, q7] = sec.split('class="r2-small-q"').slice(1);
+    assert.match(q6, /Juniper &amp; Vale PR<\/span> <span class="c">2 of 2 answers/);
+    assert.match(q6, /Kestrel PR/);
+    assert.doesNotMatch(q6, /Clutch/, 'a directory is never a competitor');
+    assert.doesNotMatch(q6, /Edelman|Weber Shandwick/, 'only the names from these answers');
+    assert.match(q6, /AI didn’t name you in any of the 2 answers\./);
+    // Specialty question: PR73 named by both engines (and never listed as its own rival).
+    assert.match(q7, /ChatGPT and Gemini named you \(2 of 2 answers\)\./);
+    assert.doesNotMatch(q7, /<span class="nm">PR73<\/span>/);
+    // Comes right after "Who AI recommended instead".
+    assert.ok(html.indexOf('id="who"') < i, 'after Who AI recommended instead');
+    // Our copy has no banned words.
+    assert.deepEqual(lintText(sec.replace(/href="[^"]*"/g, '').replace(/<[^>]+>/g, ' ')).map((h) => h.word), []);
+    // The score, the lost-question logic and the FAQ take all 7.
+    const score = computeVisibilityScore(body);
+    assert.equal(score.parts.find((p) => p.key === 'named').detail, '2 of 14 answers');
+    assert.deepEqual(lostIntents(body), ['best', 'urgent', 'job', 'trust', 'price', 'small']);
+    const faq = buildFaq(body, { name: 'PR73', trade: 'PR agency', town: 'New York City', state: 'NY' });
+    assert.ok(faq.items.some((x) => x.intent === 'small' && /boutique PR agency/.test(x.question)));
+    assert.ok(faq.items.some((x) => x.intent === 'niche' && /integrated communications/.test(x.question)));
+    // The action plan's FAQ step counts the 6 questions AI didn't name them for (q7 named them).
+    const step = body.xray.actionPlan.items.find((x) => x.id === 'faq');
+    assert.match(step.title, /^Answer the 6 questions AI didn’t name you for/);
+    assert.match(step.why, /boutique PR agency/);
+    assert.doesNotMatch(step.why, /specializes in integrated communications/);
+  });
+});
+
+test('a report without the small-firm questions (free, or an audit from before) has no such section', async () => {
+  const { report } = await buildPr73Report();
+  await withWorker(report, async (call) => {
+    const html = render(await (await call(`/api/report/${TOKEN}`)).json());
+    assert.doesNotMatch(html, /id="your-size"|firm your size/);
+  });
+});

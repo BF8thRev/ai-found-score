@@ -52,7 +52,7 @@ const QUERIES = {
   requests: 'report_requests?select=business_name,town,trade,email,requested_at&order=requested_at.desc&limit=10',
   // Finished free (request) and paid scans: real cost per report for "Costs and break-even".
   // v_scan_costs, not scans.total_cost_usd: its Gemini cost leaves out the free searches (supabase/v11_gemini_free_tier.sql).
-  unitScans: 'v_scan_costs?select=trigger,total_cost_usd&status=eq.done&trigger=in.(request,paid)&total_cost_usd=gt.0&order=started_at.desc.nullslast&limit=200',
+  unitScans: 'v_scan_costs?select=trigger,total_cost_usd,calls_total,engines&status=eq.done&trigger=in.(request,paid)&total_cost_usd=gt.0&order=started_at.desc.nullslast&limit=200',
   // Gemini search queries this month against the 5,000 free (supabase/v11_gemini_free_tier.sql).
   gemini: 'v_gemini_searches?select=*&order=month.desc&limit=1',
   leads: 'leads?select=arm,status,created_at&order=created_at.desc&limit=10',

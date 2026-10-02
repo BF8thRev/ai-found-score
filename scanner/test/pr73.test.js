@@ -185,3 +185,11 @@ test('buildReport (PR 73): the Google listing is found, the lists are read, the 
   assert.match(lists.copyText[0].text, /^Business name: PR73$/m);
   assert.doesNotMatch(JSON.stringify(lists.copyText), /PR 73/);
 });
+
+test('an answer that writes "PR73" names the owner "PR 73" (the same name without the space)', async () => {
+  const { matchOwner } = await import('../extract/verify.js');
+  const text = '**PR73** focuses on integrated communications.';
+  assert.equal(matchOwner({ text, entry: { name: 'PR73', pos: 2 }, business: BUSINESS }), 'match');
+  assert.equal(matchOwner({ text: '**PR 7** is a studio.', entry: { name: 'PR 7', pos: 2 }, business: BUSINESS }), 'none', 'a different name is never the owner');
+  assert.equal(matchOwner({ text: '**PR** firms', entry: { name: 'PR', pos: 2 }, business: { name: 'P R' } }), 'none', 'too short to squash');
+});

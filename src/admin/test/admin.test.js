@@ -552,4 +552,34 @@ test('fixed plans: charged monthly from the start date; break-even from unit cos
   assert.equal(real.free.n, 2);
   assert.equal(Math.round(real.free.usd * 100), 50);
   assert.equal(real.paid.usd, 1.2);
+  // Paid audits now ask 7 questions: a finished 5-question audit (15 calls on 3 engines) is scaled to 7;
+  // a 7-question one (21 calls) is taken as it is; free scans are never scaled.
+  const seven = unitEconomics({ paidQuestions: 7, est: { free: 9, paid: 9 }, scans: [
+    { trigger: 'paid', total_cost_usd: 1.0, calls_total: 15, engines: ['chatgpt', 'gemini', 'claude'] },
+    { trigger: 'paid', total_cost_usd: 1.4, calls_total: 21, engines: ['chatgpt', 'gemini', 'claude'] },
+    { trigger: 'request', total_cost_usd: 0.3, calls_total: 9, engines: ['chatgpt', 'gemini', 'claude'] },
+  ] });
+  assert.equal(Math.round(seven.paid.usd * 100), 140);
+  assert.equal(seven.free.usd, 0.3);
+});
+
+test('/admin costs: the $49 audit scan estimate is for the 7 paid questions', async () => {
+  const { estimatePaidScanUsd } = await import('../../lib/auto-scan.js');
+  const html = renderDashboard({ configured: true, data: { scans: [], engines: [], unitScans: [] }, errors: {} },
+    { nonce: 'n', engineIds: ENGINE_IDS, watch: [], activeIds: ['chatgpt', 'gemini', 'claude'] });
+  const usd2 = (n) => `$${n.toFixed(2)}`;
+  const seven = estimatePaidScanUsd(['chatgpt', 'gemini', 'claude']);
+  assert.notEqual(usd2(seven), usd2(estimatePaidScanUsd(['chatgpt', 'gemini', 'claude'], 5)));
+  assert.ok(html.includes(`<b>${usd2(seven)}</b><span>Cost of one $49 audit scan, 7 questions (estimate from the price table`), 'the 7-question estimate');
+});
+
+test('cleanQuestionList: the exact list a paid-tier scan asks (scan-workflow.js uses it, else builds its own)', async () => {
+  const { cleanQuestionList } = await import('../scan-core.js');
+  const seven = [1, 2, 3, 4, 5, 6, 7].map((i) => ({ id: `q${i}`, intent: ['best', 'urgent', 'job', 'trust', 'price', 'small', 'niche'][i - 1], text: ` Question  ${i}? ` }));
+  assert.deepEqual(cleanQuestionList(seven).map((q) => q.text), [1, 2, 3, 4, 5, 6, 7].map((i) => `Question ${i}?`));
+  assert.equal(cleanQuestionList(undefined), null, 'no list: the workflow builds the questions (free and admin scans)');
+  assert.equal(cleanQuestionList([]), null);
+  assert.equal(cleanQuestionList([seven[0], seven[0]]), null, 'duplicate ids');
+  assert.equal(cleanQuestionList([{ id: 'x1', intent: 'best', text: 'Hi there' }]), null, 'bad id');
+  assert.equal(cleanQuestionList([{ id: 'q1', intent: 'best', text: '' }]), null, 'no text');
 });

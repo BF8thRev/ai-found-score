@@ -115,3 +115,23 @@ test('about page: no prices, says the business is AI-run, and has the note about
   assert.match(about, /My mom has spent her life helping people/);
   assert.match(about, /unsubscribed with one click/);
 });
+
+test('the paid audit’s question count in the copy matches the scanner (the 5 + 2 small-firm questions)', async () => {
+  const { PAID_QUESTION_COUNT } = await import('../../../scanner/questions.js');
+  assert.equal(PAID_QUESTION_COUNT, 7);
+  const src = (p) => readFileSync(new URL(p, new URL('../../../', import.meta.url)), 'utf8');
+  const files = {
+    'public/index.html': 4, 'public/checkout.html': 1, 'public/success.html': 1, 'public/llms.txt': 1,
+    'public/js/report.js': 2, 'src/lib/email.js': 3,
+  };
+  for (const [f, n] of Object.entries(files)) {
+    const text = src(f);
+    assert.ok(!/\ball (5|five) customer questions\b/i.test(text), `${f} still says all 5 customer questions`);
+    const hits = text.match(new RegExp(String.raw`\ball ${PAID_QUESTION_COUNT} customer questions\b`, 'gi')) || [];
+    assert.equal(hits.length, n, `${f}: "all ${PAID_QUESTION_COUNT} customer questions" ${hits.length} times`);
+    assert.ok(/including 2 for businesses your size/.test(text), `${f} says what the 2 extra questions are`);
+    assert.deepEqual(lintText(text.match(/[^.<>"']*all 7 customer questions[^.<>"']*/gi).join(' ')).map((h) => h.word), [], f);
+  }
+  // The free snapshot is still the first three.
+  assert.match(read('index.html'), /gets these three questions/);
+});

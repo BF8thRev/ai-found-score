@@ -15,7 +15,9 @@
 //   mark failed                  only if something above threw
 //
 // Params (event.payload): { scanId, business, engines, runs, questionLimit, reportToken,
-//                           trigger, notes, dryRun }
+//                           trigger, notes, dryRun, questions? }
+//   questions: the exact [{ id, intent, text }] to ask (paid tiers: 5 + the 2 small-firm questions,
+//              or a re-check's baseline list word for word); without it, buildQuestions + questionLimit.
 // Output: the finalize summary (also readable through instance.status().output).
 
 import { WorkflowEntrypoint } from 'cloudflare:workers';
@@ -35,6 +37,7 @@ import {
   ENGINE_BATCH, EXTRACT_BATCH, ENGINE_RETRIES, EXTRACT_RETRIES, answerRef, rawIdSeed, extractIdSeed,
   adapterThrew, callFromStoredRaw, extractionResult, proposalsFromExtractions, publishGate,
   shouldConfirmHeadline, headlineTarget, confirmHeadline, confirmationForBuild, confirmRef, CONFIRM_RUN,
+  cleanQuestionList,
 } from './admin/scan-core.js';
 import { dryRunEnabled, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 import { redact } from './admin/redact.js';
@@ -60,13 +63,15 @@ export class ScanWorkflow extends WorkflowEntrypoint {
     const fetchImpl = dry ? dryRunFetch() : (...a) => fetch(...a);
     const store = !dry && canStore(env);
     const safe = (v) => redact(this.env, v?.message || v);
+    const givenQuestions = cleanQuestionList(p.questions);
 
     try {
       // ---- setup -------------------------------------------------------------------------
       const setup = await step.do('setup', STEP_DB, async () => {
         let business = { ...p.business };
         if (store) business = await ensureBusiness(env, business, { fetchImpl });
-        const questions = buildQuestions(business).slice(0, p.questionLimit || undefined);
+        // The paid tiers pass their exact list (src/lib/auto-scan.js fullScanQuestions); else the 5 (or fewer).
+        const questions = givenQuestions || buildQuestions(business).slice(0, p.questionLimit || undefined);
         const callsTotal = questions.length * p.engines.length * p.runs;
         const startedAt = new Date().toISOString();
         if (store) {
@@ -80,8 +85,9 @@ export class ScanWorkflow extends WorkflowEntrypoint {
       });
       const { business, questions } = setup;
       const qById = Object.fromEntries(questions.map((q) => [q.id, q]));
-      // buildQuestions is deterministic; the adapters get the full question objects.
-      const fullQuestions = Object.fromEntries(buildQuestions(business).map((q) => [q.id, q]));
+      // buildQuestions is deterministic; the adapters get the full question objects. A given list is
+      // asked word for word (a re-check repeats the paid scan's questions exactly).
+      const fullQuestions = givenQuestions ? qById : Object.fromEntries(buildQuestions(business).map((q) => [q.id, q]));
 
       // ---- engine calls ------------------------------------------------------------------
       const calls = [];
@@ -219,14 +225,16 @@ export class ScanWorkflow extends WorkflowEntrypoint {
       const build = await step.do('build report', STEP_BUILD, async (ctx) => {
         const proposalsByAnswer = proposalsFromExtractions(extractions);
         const scan = { scanId, questions, engines: p.engines, runs: p.runs, calls, window: callWindow(calls) };
+        // Before/after only between scans that asked exactly these searches (ids and wording): never the
+        // free 3-question snapshot, never a 5-question audit made before the small-firm questions.
         let baseline = null;
         if (store && business.id) {
-          baseline = await getBaseline(env, business.id, { excludeScanId: scanId, fetchImpl }).catch(() => null);
+          baseline = await getBaseline(env, business.id, { excludeScanId: scanId, questions, fetchImpl }).catch(() => null);
         }
         // Request tokens have no business id: a rescan of the same link (the 30-day re-check) compares
         // against the last report under that token that asked the same questions.
         if (store && !baseline && p.reportToken) {
-          baseline = await getBaselineByToken(env, p.reportToken, { excludeScanId: scanId, questionCount: questions.length, fetchImpl }).catch(() => null);
+          baseline = await getBaselineByToken(env, p.reportToken, { excludeScanId: scanId, questions, fetchImpl }).catch(() => null);
         }
         // Any answer without a recorded proposal would be extracted here; record that spend too.
         let extraExtractCostUsd = 0;
