@@ -1,77 +1,289 @@
 // public/js/fix-kit.js — the Fix Kit page (/fix-kit/<token>, public/fix-kit.html).
 //
-// Loads GET /api/fix-kit/<token> ({ paid, confirmed, sample, plan, details }), fills the form with the saved
-// or prefilled details, and on "Confirm my details" POSTs { confirm, details } as JSON. The server
-// checks everything (src/lib/fix-kit.js validateDetails) and answers 422 with [{ field, message }] for
-// anything to fix, shown under that field. Once confirmed, the download button links to
-// /api/fix-kit/<token>.zip. Plain script, no build step, no dependencies.
+// The kit is already built when the page opens: GET /api/fix-kit/<token> answers { paid, confirmed,
+// sample, plan, details, kit, problems } where kit (src/lib/fix-kit-route.js kitView) holds the jobs
+// left for this business with each file's contents, what's already done, the FAQ and the details we're
+// missing. The page shows the key details to check, the FAQ answers that need one detail from the
+// owner, and every file. "Edit details" and "Add to my answers" POST { preview: true, details } and
+// redraw the rebuilt kit (nothing is saved). "Download my Fix Kit" needs the ownership tick: it POSTs
+// { confirm: true, details } (saved) and then opens /api/fix-kit/<token>.zip.
+// Plain script, no build step, no dependencies. Everything from the server is set as text, never HTML.
 
 (function () {
   var token = decodeURIComponent(location.pathname.replace(/^\/fix-kit\//, '').replace(/\/+$/, ''));
   var api = '/api/fix-kit/' + encodeURIComponent(token);
   var states = document.querySelectorAll('[data-state]');
   var form = document.querySelector('.fk-form');
-  var status = document.querySelector('.fk-status');
-  var download = document.querySelector('[data-download]');
   var LIST_FIELDS = ['services', 'serviceTowns'];
-  var TEXT_FIELDS = ['name', 'trade', 'phone', 'website', 'street', 'town', 'state', 'zip', 'hours', 'description', 'googleMapsUrl', 'googleReviewUrl'];
+  var TEXT_FIELDS = ['name', 'trade', 'phone', 'website', 'street', 'town', 'state', 'zip', 'hours', 'price', 'description', 'googleMapsUrl', 'googleReviewUrl'];
+  var current = null; // the details the kit on screen was built from
 
-  function show(name) {
-    states.forEach(function (el) { el.hidden = el.getAttribute('data-state') !== name; });
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
   }
+  function show(name) {
+    states.forEach(function (s) { s.hidden = s.getAttribute('data-state') !== name; });
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function copy(o) { return JSON.parse(JSON.stringify(o || {})); }
 
+  // ---- the details form (opened by "Edit details") ----
   function fill(d) {
     TEXT_FIELDS.forEach(function (f) { if (form.elements[f]) form.elements[f].value = d[f] || ''; });
     LIST_FIELDS.forEach(function (f) { form.elements[f].value = (d[f] || []).join('\n'); });
     count();
   }
-
   function read() {
-    var d = {};
-    TEXT_FIELDS.forEach(function (f) { d[f] = form.elements[f].value; });
+    var d = copy(current);
+    TEXT_FIELDS.forEach(function (f) { if (form.elements[f]) d[f] = form.elements[f].value; });
     LIST_FIELDS.forEach(function (f) { d[f] = form.elements[f].value.split(/\r?\n/); });
     return d;
   }
-
   function count() {
-    var n = document.querySelector('[data-count]');
+    var n = $('[data-count]');
     if (n) n.textContent = String(form.elements.description.value.length);
   }
-
   function clearErrors() {
-    document.querySelectorAll('.fk-field').forEach(function (el) {
-      el.classList.remove('has-error');
-      var e = el.querySelector('.fk-err');
+    document.querySelectorAll('.fk-field').forEach(function (f) {
+      f.classList.remove('has-error');
+      var e = f.querySelector('.fk-err');
       if (e) e.textContent = '';
     });
   }
-
   function showErrors(errors) {
     var first = null;
     errors.forEach(function (err) {
-      var el = document.querySelector('.fk-field[data-field="' + err.field + '"]');
-      if (!el) return;
-      el.classList.add('has-error');
-      var e = el.querySelector('.fk-err');
+      var f = document.querySelector('.fk-field[data-field="' + err.field + '"]');
+      if (!f) return;
+      f.classList.add('has-error');
+      var e = f.querySelector('.fk-err');
       if (e && !e.textContent) e.textContent = err.message;
-      if (!first) first = el;
+      if (!first) first = f;
     });
     if (first) {
       first.scrollIntoView({ behavior: 'smooth', block: 'center' });
       var input = first.querySelector('input, textarea');
       if (input) input.focus({ preventScroll: true });
     }
+    return first;
+  }
+  function setStatus(node, text, kind) {
+    node.textContent = text;
+    node.className = 'fk-status' + (kind ? ' ' + kind : '');
+  }
+  function openForm(open) {
+    form.hidden = !open;
+    $('[data-edit]').hidden = open;
+    if (open) { fill(current); form.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   }
 
-  function setStatus(text, kind) {
-    status.textContent = text;
-    status.className = 'fk-status' + (kind ? ' ' + kind : '');
+  // ---- drawing the kit ----
+  function addressText(d) {
+    var place = [d.town, d.state].filter(Boolean).join(', ');
+    if (d.street) return [d.street, place].filter(Boolean).join(', ') + (d.zip ? ' ' + d.zip : '');
+    return place;
   }
 
-  function showDownload(fresh) {
-    download.hidden = false;
-    download.querySelector('[data-download-link]').href = api + '.zip';
-    if (fresh) download.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  function drawFacts(d, kit) {
+    var list = $('[data-facts]');
+    list.textContent = '';
+    var missing = {};
+    (kit.missing || []).forEach(function (m) { missing[m.field] = m; });
+    var towns = (d.serviceTowns || []).filter(function (t) { return t && t.toLowerCase() !== String(d.town || '').toLowerCase(); });
+    var rows = [
+      ['name', 'Business name', d.name],
+      ['phone', 'Phone', d.phone],
+      ['website', 'Website', d.website],
+      ['street', d.street ? 'Address' : 'Where you are', addressText(d) + (towns.length ? ' (also serving ' + towns.join(', ') + ')' : ''), d.street ? '' : 'No street address: fine if customers don’t visit you.'],
+      ['services', 'Services', (d.services || []).join(', ')],
+      ['description', 'Description', d.description],
+    ];
+    rows.forEach(function (r) {
+      var li = el('li');
+      li.appendChild(el('span', 'k', r[1]));
+      var v = el('span', 'v');
+      var m = missing[r[0]];
+      if (m || !r[2]) {
+        v.appendChild(el('span', 'fk-miss', 'Missing — add it'));
+        if (m) v.appendChild(el('span', 'note', m.note));
+      } else {
+        v.appendChild(document.createTextNode(r[2]));
+        if (r[3]) v.appendChild(el('span', 'note', r[3]));
+      }
+      li.appendChild(v);
+      list.appendChild(li);
+    });
+    $('[data-fact-count]').textContent = String(rows.length);
+  }
+
+  function drawSlots(d, kit) {
+    var box = $('[data-needs]');
+    var wrap = $('[data-slots]');
+    wrap.textContent = '';
+    var items = (kit.faq && kit.faq.items || []).filter(function (i) { return i.slot; });
+    box.hidden = !items.length;
+    if (!items.length) return;
+    var needs = kit.faq.needs || 0;
+    $('#fk-needs-h').textContent = needs
+      ? plural(needs, 'answer', 'answers') + (needs === 1 ? ' needs' : ' need') + ' one detail from you'
+      : 'Your details in the answers';
+    var why = (kit.faq.attributes || []).slice(0, 3).map(function (a) { return a.label; });
+    $('[data-needs-why]').textContent = why.length ? why.join(', ') : 'what you specialize in and who you work with';
+    var facts = (d.faqFacts) || {};
+    // The ones still waiting first.
+    items.sort(function (a, b) { return (a.complete ? 1 : 0) - (b.complete ? 1 : 0); });
+    items.forEach(function (it) {
+      var id = 'fk-slot-' + it.slot.type;
+      var row = el('div', 'fk-slot fk-field');
+      row.setAttribute('data-field', 'faqFacts.' + it.slot.type);
+      var label = el('label', null, it.slot.prompt);
+      label.setAttribute('for', id);
+      row.appendChild(label);
+      row.appendChild(el('p', 'for', 'For: “' + it.question + '”'));
+      var input = el('input');
+      input.type = 'text';
+      input.id = id;
+      input.maxLength = 240;
+      input.setAttribute('data-slot', it.slot.type);
+      input.placeholder = 'e.g. ' + it.slot.example;
+      input.value = facts[it.slot.type] || '';
+      row.appendChild(input);
+      row.appendChild(el('p', 'fk-err'));
+      wrap.appendChild(row);
+    });
+  }
+
+  function qaPreview(items) {
+    var box = el('div', 'fk-qa');
+    items.forEach(function (it) {
+      var row = el('div', it.complete ? '' : 'todo');
+      var q = el('strong', null, it.question);
+      if (!it.complete) q.appendChild(el('span', 'fk-tag', 'Needs one detail'));
+      row.appendChild(q);
+      var p = el('p');
+      String(it.answer).split(/(\[[^\]]*\])/).forEach(function (part) {
+        if (!part) return;
+        p.appendChild(/^\[/.test(part) ? el('mark', null, part) : document.createTextNode(part));
+      });
+      row.appendChild(p);
+      box.appendChild(row);
+    });
+    return box;
+  }
+
+  function fileDetails(f) {
+    var det = el('details');
+    det.appendChild(el('summary', null, 'See the file: ' + f.path));
+    if (/\.svg$/.test(f.path)) {
+      var img = el('img', 'fk-qr');
+      img.alt = 'Your review QR code';
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(f.content);
+      det.appendChild(img);
+    } else {
+      det.appendChild(el('pre', null, f.content));
+    }
+    return det;
+  }
+
+  var WHO = { web: 'For whoever runs your website', you: 'You can do this', both: 'You, with your web person' };
+
+  function drawJobs(kit) {
+    var list = $('[data-jobs]');
+    list.textContent = '';
+    (kit.jobs || []).forEach(function (j) {
+      var li = el('li', 'fk-job');
+      li.setAttribute('data-job', j.id);
+      var h = el('h3', null, j.title);
+      if (j.optional) h.appendChild(el('span', 'fk-opt', 'Optional'));
+      li.appendChild(h);
+      li.appendChild(el('span', 'fk-tech', j.tech));
+      li.appendChild(el('p', null, j.what));
+      var where = el('p');
+      where.appendChild(el('strong', null, 'Where it goes: '));
+      where.appendChild(document.createTextNode(j.where));
+      li.appendChild(where);
+      li.appendChild(el('p', 'who', WHO[j.who] || ''));
+      if (j.note) li.appendChild(el('p', 'fk-note sample', j.note));
+      if (j.id === 'faq' && kit.faq) {
+        var why = (kit.faq.attributes || []).slice(0, 4).map(function (a) { return a.label; });
+        if (why.length) li.appendChild(el('p', null, 'When AI picked other businesses, it mentioned ' + why.join(', ') + '. These answers cover the same things for you.'));
+        var qa = el('details');
+        qa.appendChild(el('summary', null, 'Read all ' + plural((kit.faq.items || []).length, 'question and answer', 'questions and answers')));
+        qa.appendChild(qaPreview(kit.faq.items || []));
+        li.appendChild(qa);
+      }
+      (j.files || []).forEach(function (f) { li.appendChild(fileDetails(f)); });
+      list.appendChild(li);
+    });
+    if (kit.readme) {
+      var r = el('li', 'fk-job');
+      r.appendChild(el('h3', null, 'A one-page guide for your web person'));
+      r.appendChild(el('span', 'fk-tech', 'README.txt'));
+      r.appendChild(el('p', null, 'What each file does and where it goes, in plain words, in order.'));
+      r.appendChild(fileDetails({ path: 'README.txt', content: kit.readme }));
+      list.appendChild(r);
+    }
+    var done = $('[data-done]');
+    done.textContent = '';
+    (kit.done || []).forEach(function (x) { done.appendChild(el('li', null, x.note)); });
+    $('[data-done-wrap]').hidden = !(kit.done || []).length;
+  }
+
+  function draw(details, kit) {
+    current = copy(details);
+    current.faqFacts = current.faqFacts || {};
+    $('[data-biz-name]').textContent = details.name || 'your business';
+    drawFacts(details, kit);
+    drawSlots(details, kit);
+    drawJobs(kit);
+    var needs = (kit.faq && kit.faq.needs) || 0;
+    var miss = (kit.missing || []).length;
+    var note = $('[data-dl-note]');
+    note.textContent = 'Every file below, with a one-page guide for whoever runs your website. Nothing changes on your website until someone puts the files in place.';
+    if (needs || miss) {
+      note.appendChild(document.createTextNode(' You can download now; ' + [miss ? plural(miss, 'detail is', 'details are') + ' missing' : '', needs ? plural(needs, 'answer still needs', 'answers still need') + ' one detail from you' : ''].filter(Boolean).join(' and ') + ', and the guide says so. '));
+      if (needs) {
+        var a = el('a', null, 'Fill them in below');
+        a.href = '#fk-needs';
+        note.appendChild(a);
+        note.appendChild(document.createTextNode(' for a finished kit.'));
+      }
+    }
+  }
+
+  // ---- talking to the server ----
+  function post(body) {
+    return fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { status: r.status, body: b }; }); });
+  }
+
+  function rebuild(details, statusNode, button, after) {
+    clearErrors();
+    button.disabled = true;
+    setStatus(statusNode, 'Rebuilding your kit…');
+    post({ preview: true, details: details }).then(function (res) {
+      button.disabled = false;
+      if (res.body && res.body.ok) {
+        draw(res.body.details, res.body.kit);
+        setStatus(statusNode, 'Done. Your kit is rebuilt below.', 'ok');
+        if (after) after();
+        return;
+      }
+      if (res.body && res.body.errors) {
+        if (res.body.errors.some(function (e) { return !/^faqFacts\./.test(e.field) && e.field !== 'confirm'; })) openForm(true);
+        setStatus(statusNode, 'A few details need a fix. See the notes.', 'bad');
+        showErrors(res.body.errors);
+        return;
+      }
+      setStatus(statusNode, (res.body && res.body.error) || 'Something went wrong. Try again in a minute.', 'bad');
+    }).catch(function () {
+      button.disabled = false;
+      setStatus(statusNode, 'Could not reach us. Check your connection and try again.', 'bad');
+    });
   }
 
   document.querySelectorAll('[data-report-link]').forEach(function (a) { a.href = '/report/' + encodeURIComponent(token); });
@@ -86,56 +298,65 @@
     })
     .then(function (data) {
       if (!data) return;
-      if (!data.paid) { show('unpaid'); return; }
-      fill(data.details || {});
-      document.querySelector('[data-sample-note]').hidden = !data.sample;
+      if (!data.paid || !data.kit) { show('unpaid'); return; }
+      $('[data-sample-note]').hidden = !data.sample;
       // Be the Answer: the kit also carries the directory checklist and the Google posts.
-      document.querySelectorAll('[data-plan-only]').forEach(function (el) { el.hidden = !data.plan; });
+      document.querySelectorAll('[data-plan-only]').forEach(function (x) { x.hidden = !data.plan; });
       document.querySelectorAll('[data-plan-link]').forEach(function (a) { a.href = '/plan/' + encodeURIComponent(token); });
-      if (data.confirmed) {
-        form.elements.confirm.checked = true;
-        showDownload(false);
-      }
-      show('form');
+      draw(data.details || {}, data.kit);
+      if (data.confirmed) $('[data-confirm]').checked = true;
+      show('kit');
+      // Something we read doesn't pass the checks (a state we can't use, say): open the form on it.
+      if (data.problems && data.problems.length) { openForm(true); showErrors(data.problems); }
     })
     .catch(function () { show('error'); });
 
   form.elements.description.addEventListener('input', count);
+  $('[data-edit]').addEventListener('click', function () { openForm(true); });
+  $('[data-cancel]').addEventListener('click', function () { clearErrors(); openForm(false); });
 
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
+    rebuild(read(), $('[data-form-status]'), form.querySelector('button[type=submit]'), function () {
+      openForm(false);
+      $('#fk-check-h').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  $('[data-save-slots]').addEventListener('click', function () {
+    var d = copy(current);
+    d.faqFacts = d.faqFacts || {};
+    document.querySelectorAll('[data-slot]').forEach(function (input) { d.faqFacts[input.getAttribute('data-slot')] = input.value; });
+    rebuild(d, $('[data-slots-status]'), $('[data-save-slots]'));
+  });
+
+  $('[data-download]').addEventListener('click', function () {
+    var status = $('[data-dl-status]');
+    var button = $('[data-download]');
     clearErrors();
-    if (!form.elements.confirm.checked) {
+    if (!$('[data-confirm]').checked) {
       showErrors([{ field: 'confirm', message: 'Tick the box to confirm you own or manage this business and the details are right.' }]);
       return;
     }
-    var button = form.querySelector('button[type=submit]');
     button.disabled = true;
-    setStatus('Saving…');
-    fetch(api, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ confirm: true, details: read() }),
-    })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (body) { return { status: r.status, body: body }; }); })
-      .then(function (res) {
-        button.disabled = false;
-        if (res.body && res.body.ok) {
-          if (res.body.details) fill(res.body.details);
-          setStatus('Thanks. Your details are confirmed.', 'ok');
-          showDownload(true);
-          return;
-        }
-        if (res.body && res.body.errors) {
-          setStatus('A few details need a fix. See the notes above.', 'bad');
-          showErrors(res.body.errors);
-          return;
-        }
-        setStatus((res.body && res.body.error) || 'Something went wrong. Try again in a minute.', 'bad');
-      })
-      .catch(function () {
-        button.disabled = false;
-        setStatus('Could not reach us. Check your connection and try again.', 'bad');
-      });
+    setStatus(status, 'Getting your kit ready…');
+    post({ confirm: true, details: current }).then(function (res) {
+      button.disabled = false;
+      if (res.body && res.body.ok) {
+        setStatus(status, 'Your download has started. Hand the folder to whoever runs your website.', 'ok');
+        location.href = api + '.zip';
+        return;
+      }
+      if (res.body && res.body.errors) {
+        if (res.body.errors.some(function (e) { return e.field !== 'confirm'; })) openForm(true);
+        setStatus(status, 'A few details need a fix first. See the notes.', 'bad');
+        showErrors(res.body.errors);
+        return;
+      }
+      setStatus(status, (res.body && res.body.error) || 'Something went wrong. Try again in a minute.', 'bad');
+    }).catch(function () {
+      button.disabled = false;
+      setStatus(status, 'Could not reach us. Check your connection and try again.', 'bad');
+    });
   });
 })();

@@ -4,9 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  prefillDetails, validateDetails, buildFixKitFiles, zipFiles, crc32, parseOpeningHours, faqItems,
+  prefillDetails, validateDetails, buildFixKitFiles, buildKit, zipFiles, crc32, parseOpeningHours, faqItems,
   gbpDescriptionText, localBusinessSchema, splitList, tradeKey, zipName, FIX_KIT_TIERS,
 } from '../fix-kit.js';
+import { officeReport } from './fixtures/office-report.js';
 import { handleFixKit } from '../fix-kit-route.js';
 import { qrMatrix, qrSvg } from '../vendor/qrcode.js';
 import { TIER_BY_CENTS } from '../stripe.js';
@@ -101,20 +102,52 @@ test('validateDetails: required fields, formats and limits', () => {
 // ---------------------------------------------------------------------------
 // files
 // ---------------------------------------------------------------------------
-test('buildFixKitFiles: the expected files; the QR code only with a review link', () => {
-  assert.deepEqual(Object.keys(fileMap(confirmed())), ['README.txt', 'robots.txt', 'llms.txt', 'schema-localbusiness.html', 'faq-page.html', 'google-business-profile.txt']);
+// The plumber sample's website check: AI allowed, business code already there (Plumber), no llms.txt.
+const withSite = (over) => ({ ...SAMPLE, siteCheck: { ...SAMPLE.siteCheck, ...over } });
+const BLOCKED = withSite({ robots: { found: true, blocked: [{ agent: 'GPTBot', who: 'ChatGPT (training)' }, { agent: 'ClaudeBot', who: 'Claude' }] } });
+
+test('buildFixKitFiles: only the files that help this business; the QR code only with a review link', () => {
+  assert.deepEqual(Object.keys(fileMap(confirmed())), ['README.txt', 'faq-page.html', 'faq-page.txt', 'google-business-profile.txt', 'schema-localbusiness.html', 'llms.txt']);
   const withQr = fileMap(confirmed({ googleReviewUrl: 'https://g.page/r/abc/review' }));
   assert.ok(withQr['review-qr.svg'].startsWith('<svg'));
   assert.match(withQr['README.txt'], /review-qr\.svg/);
+  // The site already has an llms.txt: none in the kit, and the README says so.
+  const hasLlms = fileMap(confirmed(), withSite({ llmsTxt: true }));
+  assert.equal(hasLlms['llms.txt'], undefined);
+  assert.match(hasLlms['README.txt'], /You already have an llms\.txt file\. Nothing to do\./);
 });
 
-test('robots.txt: allows every AI crawler, notes merging, points at the sitemap', () => {
-  const t = fileMap(confirmed())['robots.txt'];
+test('buildKit: the jobs left, in order; what the site already has is done or optional', () => {
+  const k = buildKit(confirmed(), SAMPLE, { token: 'tok_1', date: DATE });
+  assert.deepEqual(k.jobs.map((j) => [j.id, j.optional]), [['faq', false], ['google', false], ['schema', true], ['llms', true]]);
+  assert.match(k.jobs.find((j) => j.id === 'schema').note, /already has business code \(Plumber\)/);
+  assert.deepEqual(k.done.map((x) => x.id), ['robots']);
+  // Plain words first; the technical name is the small print.
+  assert.equal(k.jobs[0].title, 'A Questions page AI can quote');
+  assert.equal(k.jobs.find((j) => j.id === 'schema').title, 'Your business details in the format Google and AI read');
+  for (const j of k.jobs) assert.doesNotMatch(j.title, /JSON-LD|schema|llms\.txt|robots/i, j.title);
+  // Blocked crawlers: letting AI back in is the first job. No website check at all: robots.txt in case.
+  const blocked = buildKit(confirmed(), BLOCKED, { date: DATE });
+  assert.equal(blocked.jobs[0].id, 'robots');
+  assert.match(blocked.jobs[0].what, /ChatGPT \(training\) and Claude/);
+  const unchecked = buildKit(confirmed(), { ...SAMPLE, siteCheck: null }, { date: DATE });
+  assert.ok(unchecked.jobs.some((j) => j.id === 'robots'));
+  assert.deepEqual(unchecked.done, []);
+  assert.equal(unchecked.jobs.find((j) => j.id === 'schema').optional, false, 'unknown: not marked optional');
+});
+
+test('robots.txt: only when AI is blocked (or we could not check); allows every AI crawler, notes merging', () => {
+  assert.equal(fileMap(confirmed())['robots.txt'], undefined, 'the sample site already lets AI in');
+  assert.match(fileMap(confirmed())['README.txt'], /Your robots\.txt already lets AI read your site\. Nothing to do\./);
+  const office = buildKit(validateDetails(prefillDetails(officeReport())).details, officeReport(), { date: DATE });
+  assert.match(office.done[0].note, /Nothing on your website blocks AI from reading it/, 'no robots.txt at all is not a block');
+  const t = fileMap(confirmed(), BLOCKED)['robots.txt'];
   for (const b of AI_BOTS) assert.match(t, new RegExp(`User-agent: ${b.agent}\\nAllow: /\\n`));
+  assert.match(t, /^# Your robots\.txt blocks ChatGPT \(training\) and Claude today\./m);
   assert.match(t, /^# Already have a robots\.txt\? Do not replace it\. Add the lines below to it/m);
   assert.match(t, /Sitemap: https:\/\/harborviewplumbing\.example\.com\/sitemap\.xml/);
   assert.ok(!/Disallow/.test(t.replace(/^#.*$/gm, '')), 'never blocks anything');
-  assert.ok(!/Sitemap:/.test(fileMap(confirmed({ website: '' }))['robots.txt']));
+  assert.ok(!/Sitemap:/.test(fileMap(confirmed({ website: '' }), BLOCKED)['robots.txt']));
 });
 
 test('llms.txt: H1, summary, services, service area, contact', () => {
@@ -160,25 +193,54 @@ test('parseOpeningHours: only what reads without guessing', () => {
   }
 });
 
-test('faq-page.html: the report questions, answered with confirmed facts only; valid FAQPage JSON-LD', () => {
+test('faq-page.html: semantic Q&A section; the FAQ code holds exactly the finished answers', () => {
   const d = confirmed({ serviceTowns: ['Massapequa', 'Seaford'] });
   const html = fileMap(d)['faq-page.html'];
+  const items = faqItems(d, SAMPLE);
   const [ld] = ldBlocks(html);
   assert.equal(ld['@type'], 'FAQPage');
-  const items = faqItems(d, SAMPLE);
-  assert.equal(ld.mainEntity.length, items.length);
-  assert.equal(items.length, SAMPLE.questions.length + 3);
-  assert.equal(items[0].question, "What's the best plumber in Massapequa, NY?", 'real questions stay as asked');
-  assert.equal(items[3].question, 'Which plumber near Massapequa has good reviews?', 'search phrases become questions');
+  // The visible page: an h2, then every question (h3) and answer (p), escaped.
+  assert.match(html, /<section class="faq" id="faq">\n {2}<h2>Frequently asked questions<\/h2>/);
   for (const it of items) {
-    assert.ok(it.answer.includes('(516) 555-0148'), it.question);
-    assert.ok(!/best|cheapest|top-rated|#1|guarantee/i.test(it.answer), `answer makes a claim: ${it.answer}`);
+    assert.ok(html.includes(`<h3>${it.question.replace(/'/g, '&#39;').replace(/&(?!#39;)/g, '&amp;')}</h3>`), it.question);
   }
-  assert.match(items[1].answer, /Hours: Mon–Fri 8am–6pm/);
-  assert.match(items.find((i) => i.question === 'What areas do you serve?').answer, /^We serve Massapequa and Seaford, NY\./);
-  assert.ok(html.includes('<h3>What&#39;s the best plumber in Massapequa, NY?</h3>'), 'escaped in the HTML');
-  // No report questions: the scanner's questions for the trade and town.
-  assert.equal(faqItems(d, {}).length, 8);
+  // The code: only finished answers, word for word; never a [bracket].
+  const done = items.filter((i) => i.complete);
+  assert.deepEqual(ld.mainEntity.map((m) => [m.name, m.acceptedAnswer.text]), done.map((i) => [i.question, i.answer]));
+  for (const m of ld.mainEntity) assert.doesNotMatch(m.acceptedAnswer.text, /[[\]]/, m.name);
+  assert.ok(items.some((i) => !i.complete), 'the sample has answers waiting for a detail');
+  assert.match(html, /answers still have a part in \[brackets\]/);
+  // Filled in on the kit page: the sentence goes in and the answer joins the code.
+  const filled = confirmed({ faqFacts: { specialty: 'Most of our work is boiler repair [and more]' } });
+  const f = faqItems(filled, SAMPLE).find((i) => i.slot && i.slot.type === 'specialty');
+  assert.ok(f.complete);
+  assert.match(f.answer, /Most of our work is boiler repair and more\./, 'their words, brackets stripped');
+  assert.ok(ldBlocks(fileMap(filled)['faq-page.html'])[0].mainEntity.some((m) => m.name === f.question));
+  // A report without questions (an old one): the scanner's questions for the trade and town.
+  assert.ok(faqItems(d, {}).length >= 5);
+});
+
+test('faq-page.txt: the same questions and answers as plain text for a site builder', () => {
+  const d = confirmed();
+  const t = fileMap(d)['faq-page.txt'];
+  assert.match(t, /^QUESTIONS AND ANSWERS: Harborview Plumbing & Heating\n/);
+  assert.match(t, /Wix, Squarespace, WordPress/);
+  for (const it of faqItems(d, SAMPLE)) assert.ok(t.includes(`${it.question}\n${it.answer}`), it.question);
+});
+
+test('a missing phone is flagged and left out of every file, never invented', () => {
+  const v = validateDetails({ ...prefillDetails(SAMPLE), phone: '' });
+  assert.deepEqual(v.errors, [], 'a phone is not required');
+  const k = buildKit(v.details, SAMPLE, { date: DATE });
+  assert.deepEqual(k.missing.map((m) => m.field), ['phone']);
+  const files = Object.fromEntries(k.files.map((f) => [f.path, f.content]));
+  assert.equal(ldBlocks(files['schema-localbusiness.html'])[0].telephone, undefined);
+  assert.match(files['schema-localbusiness.html'], /Your phone number is not in it yet/);
+  assert.doesNotMatch(files['llms.txt'], /Phone/);
+  assert.match(files['google-business-profile.txt'], /PHONE\n\[Missing: add your phone number/);
+  assert.match(files['README.txt'], /Missing: Phone number\./);
+  for (const it of k.faq.items) assert.doesNotMatch(it.answer, /Call |\(\d{3}\)/, it.question);
+  assert.match(k.faq.items[0].answer, /Visit harborviewplumbing\.example\.com\./);
 });
 
 test('google-business-profile.txt: description ≤ 750, categories, services, areas', () => {
@@ -195,25 +257,37 @@ test('google-business-profile.txt: description ≤ 750, categories, services, ar
   assert.match(fileMap(confirmed({ trade: 'hvac' }))['google-business-profile.txt'], /OTHER CATEGORIES TO CONSIDER.*\n- Air conditioning contractor\n- Heating contractor/);
 });
 
-test('README.txt: every file, where it goes, the confirmed details and the link back', () => {
+test('README.txt: plain words first, only the jobs left (in order), what is done, the details and the link back', () => {
   const t = fileMap(confirmed())['README.txt'];
-  for (const f of ['robots.txt', 'llms.txt', 'schema-localbusiness.html', 'faq-page.html', 'google-business-profile.txt']) assert.ok(t.includes(f), f);
-  assert.match(t, /opens at https:\/\/harborviewplumbing\.example\.com\/robots\.txt/);
+  const at = (s) => { const i = t.indexOf(s); assert.ok(i >= 0, s); return i; };
+  assert.ok(at('1. A Questions page AI can quote') < at('2. Your Google Business Profile text'));
+  assert.ok(at('2. Your Google Business Profile text') < at('3. Your business details in the format Google and AI read (optional)'));
+  assert.ok(at('4. A short summary for AI tools (optional)') < at('ALREADY DONE ON YOUR WEBSITE'));
+  assert.doesNotMatch(t, /^\d\. .*(JSON-LD|schema|llms\.txt|robots\.txt)/m, 'no job leads with jargon');
+  assert.doesNotMatch(t, /File: robots\.txt/, 'no robots.txt to install');
+  assert.match(t, /answers in your Questions page need one detail from you/);
   assert.match(t, /Phone: \(516\) 555-0148/);
   assert.match(t, /https:\/\/aifoundscore\.com\/fix-kit\/tok_1/);
   assert.ok(!/review-qr/.test(t));
 });
 
 test('copy: no banned words, no "unlock", "seamless" or "leverage"', () => {
-  const files = fileMap(confirmed({ googleReviewUrl: 'https://g.page/r/abc/review' }));
+  const office = validateDetails(prefillDetails(officeReport())).details;
+  const files = {
+    ...fileMap(confirmed({ googleReviewUrl: 'https://g.page/r/abc/review' }), BLOCKED),
+    ...Object.fromEntries(buildFixKitFiles(office, officeReport(), { date: DATE }).map((f) => [`office/${f.path}`, f.content])),
+  };
   const page = readFileSync(new URL('../../../public/fix-kit.html', import.meta.url), 'utf8');
   const script = readFileSync(new URL('../../../public/js/fix-kit.js', import.meta.url), 'utf8');
   for (const [name, text] of [...Object.entries(files).filter(([p]) => !p.endsWith('.svg')), ['fix-kit.html', page], ['fix-kit.js', script]]) {
     assert.deepEqual(lintText(text).map((h) => h.match), [], name);
     assert.ok(!/\b(unlock\w*|seamless\w*|leverag\w*)\b/i.test(text), name);
   }
-  assert.match(page, /Check every detail\. We only use what you confirm here\./);
+  assert.match(page, /Your Fix Kit is ready/);
+  assert.match(page, /Check these <span data-fact-count>6<\/span> details/);
+  assert.match(page, /Download my Fix Kit/);
   assert.match(page, /I own or manage this business and these details are correct/);
+  assert.doesNotMatch(page, /Check every detail\. We only use what you confirm here\./, 'no form-first wall');
 });
 
 // ---------------------------------------------------------------------------
@@ -386,7 +460,7 @@ test('zip: paid and confirmed only; an attachment named for the business', async
   assert.equal(res.headers.get('Content-Disposition'), 'attachment; filename="harborview-plumbing-heating-fix-kit.zip"');
   const z = new Uint8Array(await res.arrayBuffer());
   assert.deepEqual([...z.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
-  assert.equal(u16(z, z.length - 22 + 10), 7, 'six files plus the README');
+  assert.equal(u16(z, z.length - 22 + 10), 7, 'README, the FAQ (page + text), Google text, business code, llms.txt and the QR code');
   // The sample zip works with no database.
   const sample = await handleFixKit(...req('/api/fix-kit/sample-001.zip'), ENV, fakes().deps);
   assert.equal(sample.status, 200);

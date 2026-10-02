@@ -95,7 +95,9 @@ test('FAQ drafts: their own homepage words, "a PR agency", and [brackets] for wh
   assert.match(qa, /^What's the best PR agency in New York City, NY\?\nHarbor Lane PR is a PR agency in New York City, NY\. Harbor Lane's integrated communications team/);
   assert.match(qa, /\[[^\]]+\]/);
   assert.doesNotMatch(qa, /\ban PR\b|\bpr agency\b/);
-  assert.equal(qa.split('\n\n').length, 2, 'the "open now" question is left out for an office');
+  // The 2 scan questions AI didn't name them for (no "open now" for an office), then 4 more.
+  assert.equal(qa.split('\n\n').length, 6);
+  assert.doesNotMatch(qa, /open now/i, 'the "open now" question is left out for an office');
   assert.match(faq.copyText[1].text, /"@type": "FAQPage"/);
   assert.doesNotMatch(faq.copyText[1].text, /\[[A-Z]/, 'no [bracket] placeholder can go live in the FAQ code');
   // The homepage words appear once, not in every answer.
@@ -331,12 +333,18 @@ test('contact code uses the real phone and street when known; placeholders only 
 
 test('FAQ code is added only once the answers are final, and matches the page', () => {
   const faq = byId(buildActionPlan(officeReport()), 'faq');
-  assert.match(faq.copyText[1].label, /once your answers are final/);
+  assert.match(faq.copyText[1].label, /finished answers only/);
   assert.match(faq.steps.join(' '), /The code must say exactly what the page says/);
-  // Every question on the page is in the code.
-  const questions = faq.copyText[0].text.split(/\n\n/).map((b) => b.split(/\n/)[0]);
-  assert.equal(questions.length, 2);
-  for (const q of questions) assert.ok(faq.copyText[1].text.includes(JSON.stringify(q)), q);
+  // Every finished answer on the page is in the code, word for word; one still waiting for a detail is not.
+  const blocks = faq.copyText[0].text.split(/\n\n/).map((b) => b.split(/\n/));
+  assert.equal(blocks.length, 6);
+  const code = JSON.parse(faq.copyText[1].text.replace(/^<script[^>]*>|<\/script>$/g, ''));
+  for (const [q, a] of blocks) {
+    const inCode = code.mainEntity.find((m) => m.name === q);
+    if (/\[/.test(a)) assert.equal(inCode, undefined, q);
+    else assert.equal(inCode.acceptedAnswer.text, a, q);
+  }
+  assert.ok(code.mainEntity.length >= 1);
 });
 
 test('Fix Kit notes show on a paid report and never on a sample', () => {
@@ -556,4 +564,18 @@ test('upsells on a paid page: no Be the Answer box when it isn’t on sale; the 
   assert.ok(bd > at(html, 'How we searched'), 'after everything else');
   assert.match(html, /<strong>Optional extra:<\/strong> the Competitor Breakdown \(\$25\)/);
   assert.ok(at(html, 'class="r2-verdict') < at(html, 'id="action-plan"') && at(html, 'id="action-plan"') < bd, 'never right after the verdict');
+});
+
+test('Fix Kit card names only the files this business gets: no robots.txt when AI can already read the site', () => {
+  const card = (html) => html.slice(at(html, 'class="ap-kitcard"'), html.indexOf('</div>', at(html, 'class="ap-kitcard"')));
+  const office = card(paidOffice());
+  assert.doesNotMatch(office, /robots\.txt/, 'the PR agency site lets AI in');
+  assert.match(office, /your Questions page, written from the questions AI was asked/);
+  assert.match(office, /llms\.txt, optional/);
+  const blockedRep = officeReport();
+  blockedRep.siteCheck.robots = { found: true, blocked: [{ agent: 'GPTBot', who: 'ChatGPT (training)' }] };
+  blockedRep.siteCheck.llmsTxt = true;
+  const blocked = card(render(loadPage({}, { tiers: LIVE_TIERS }), reportBody(blockedRep, true)));
+  assert.match(blocked, /lets AI tools read your site \(robots\.txt\)/);
+  assert.doesNotMatch(blocked, /llms\.txt/);
 });

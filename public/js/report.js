@@ -608,6 +608,19 @@ function recheckCard(report) {
     </div>`;
 }
 
+// The website files the Fix Kit holds for this business (src/lib/fix-kit.js buildKit): no robots.txt when
+// AI can already read the site, no llms.txt when the site has one.
+function kitFilesText(report) {
+  const sc = report.siteCheck || {};
+  const checked = sc.reachable === true;
+  const blocked = checked && sc.robots && Array.isArray(sc.robots.blocked) ? sc.robots.blocked.length : 0;
+  const parts = ['your Questions page, written from the questions AI was asked', 'the business code that tells AI your name and contact details'];
+  if (!checked || blocked) parts.push('a file that lets AI tools read your site (robots.txt)');
+  if (!(checked && sc.llmsTxt === true)) parts.push('a short summary written for AI tools (llms.txt, optional)');
+  parts.push('a one-page guide for whoever runs your website');
+  return listJoin(parts);
+}
+
 // The Fix Kit comes with every paid audit (src/lib/fix-kit.js FIX_KIT_TIERS): the owner checks the
 // files on /fix-kit/<token> and downloads them. Only on paid reports without an action plan.
 function fixKitIncluded(report) {
@@ -616,7 +629,7 @@ function fixKitIncluded(report) {
   return `
     <div class="cta-band r2-xray-offer">
       <h2>Your Fix Kit is included.</h2>
-      <p>The files are built for you from this report: robots.txt, llms.txt, schema code, an FAQ page, your Google profile text and a review QR code, with a one-page guide for whoever runs your website. Check them, then send them on.</p>
+      <p>The files are built for you from this report: ${kitFilesText(report)}, plus your Google profile text. Check them, then send them on.</p>
       <p><a class="btn big" href="${kitUrl}">Get my Fix Kit</a></p>
     </div>`;
 }
@@ -732,7 +745,7 @@ function kitCard(report, kitUrl) {
   return `
       <div class="ap-kitcard">
         <h3>Hand the website work to your web person</h3>
-        <p>Your Fix Kit has the website files built for you from this report: your FAQ page, the business code that tells AI your name and contact details, a file that lets AI tools read your site (robots.txt), a short summary written for AI tools (llms.txt) and a one-page guide. Check them, then send them on. Your Google profile text is in there too; that one is for you to paste in.</p>
+        <p>Your Fix Kit has the website files built for you from this report: ${kitFilesText(report)}. Check them, then send them on. Your Google profile text is in there too; that one is for you to paste in.</p>
         <p class="ap-kitcard-btns"><a class="btn" href="${kitUrl}">Open my Fix Kit</a> <a class="btn-secondary" href="${escapeHtml(mailto)}">Email it to my web person</a></p>
       </div>`;
 }

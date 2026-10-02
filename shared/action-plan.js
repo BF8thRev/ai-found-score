@@ -11,12 +11,15 @@
 //     lists AI read (rankings, directories) come first for them;
 //   - "your title doesn't say what you do" is re-checked with the trade's other names ("PR" and
 //     "public relations" for a PR agency) before it is shown;
-//   - FAQ answers use the business's own homepage description, not a one-line template.
+//   - FAQ answers use the business's own homepage description, not a one-line template;
+//   - the FAQ is the Fix Kit's own (shared/faq.js): the same questions and answers in the report and the kit.
 
 import { kindClass, ACRONYMS } from '../scanner/questions.js';
 import { tradeWords, mentionsAny } from '../scanner/owner-checks.js';
 import { businessDetails, napBlock, GBP_DESCRIPTION_MAX } from '../scanner/extract/fixes.js';
 import { isDirectoryName } from './report-v2.js';
+import { faqPlainText, faqJsonLdScript } from './faq.js';
+import { reportFaq } from '../src/lib/fix-kit.js';
 
 export const IMPACT_LABELS = Object.freeze({ high: 'Biggest impact', medium: 'Next', low: 'Quick extra' });
 export const WHO_LABELS = Object.freeze({ you: 'You can do this', web: 'For whoever runs your website', both: 'You, with your web person' });
@@ -234,12 +237,12 @@ export function buildActionPlan(report) {
   const faqSchema = take((x) => x.kind === 'site_no_faq_schema');
   const qs = (r.questions || []).filter((q) => q && q.text)
     // An office has no "open now": the question was a scan mistake for them (scanner/questions.js PROFESSIONAL).
-    .filter((q) => !(office && (q.intent === 'urgent' || /\bopen now\b/i.test(q.text))));
+    .filter((q) => !(office && /\bopen now\b/i.test(q.text)));
   const lostQs = qs.filter((q) => lostAnswers.some((a) => a.questionId === q.id));
   if (qs.length && (lostQ.length || faqBase.length || faqSchema.length)) {
-    // Draft the questions AI missed (all of them when it missed none). The owner's own homepage words go
-    // in the first answer only: five copies of one paragraph make a weak page.
-    const pairs = (lostQs.length ? lostQs : qs).map((q, n) => ({ q: fixCase(q.text), a: draftAnswer({ d, noun, where, words: n === 0 ? words : '', intent: q.intent, office }) }));
+    // The same questions and answers as the Fix Kit's Questions page (shared/faq.js, built from the
+    // details the kit starts with), so the report and the kit never disagree.
+    const faq = reportFaq(r);
     // The rivals named most in the answers to these questions (directories left out). Names, not a
     // count: AI writes one firm several ways ("5WPR", "5W Public Relations"), so a count overstates.
     const lostQIds = new Set(lostQs.map((q) => q.id));
@@ -265,15 +268,17 @@ export function buildActionPlan(report) {
       who: 'both',
       steps: [
         'Add a “Questions” section to your website: a new page, or the bottom of your homepage.',
-        'Paste the questions and answers below. Replace every part in [brackets] with something true and specific (a client, a result, a specialty), then delete the brackets.',
-        'When your answers are final, ask whoever runs your website to put them into the FAQ code below, word for word, and add it to the same page. The code must say exactly what the page says.',
+        ...(faq.needs
+          ? [`Paste the questions and answers below. ${faq.needs === 1 ? 'One answer has' : `${faq.needs} answers have`} a part in [brackets] that only you know (a specialty, a client, a result): write one true sentence in its place, then delete the brackets.`]
+          : ['Paste the questions and answers below.']),
+        'Ask whoever runs your website to add the FAQ code below to the same page. The code must say exactly what the page says, so it holds only the finished answers: add each of the others to it once it’s filled in.',
         'Check the page at validator.schema.org: it should read each question and answer.',
       ],
       copyText: [
-        { label: 'Questions and answers for your website (fill in the brackets)', text: pairs.map((p) => `${p.q}\n${p.a}`).join('\n\n') },
-        { label: 'FAQ code: add once your answers are final (JSON-LD)', text: faqJsonLd(pairs.map((p) => ({ q: p.q, a: p.a.replace(/\s*\[[^\]]*\]/g, '').trim() }))), format: 'code' },
+        { label: faq.needs ? 'Questions and answers for your website (fill in the brackets)' : 'Questions and answers for your website', text: faqPlainText(faq.items) },
+        { label: 'FAQ code: the finished answers only (JSON-LD)', text: faqJsonLdScript(faq.items), format: 'code' },
       ],
-      kitNote: 'Done for you: your FAQ page is ready in your Fix Kit. Check it, then send it to whoever runs your website in place of the FAQ code above.',
+      kitNote: 'Done for you: your Questions page and its code are ready in your Fix Kit. The kit asks you for each [bracket] detail and puts it into the page and the code for you.',
       time: 'About an hour for you, then 1–2 hours for your web person',
       cost: 'No cost',
       week: true,
@@ -446,22 +451,6 @@ const EFFORT = {
   site_no_faq_schema: { time: 'About half an hour for your web person', cost: 'No cost', week: true },
 };
 
-// A draft answer: the real details we have, the owner's own homepage words, and [brackets] for the
-// specifics only they know. Never presented as finished.
-function draftAnswer({ d, noun, where, words, intent, office }) {
-  const lead = `${d.name || 'We'} ${d.name ? 'is' : 'are'} ${article(noun)} ${kindText(noun)}${where ? ` in ${where}` : ''}.`;
-  const facts = [d.services && `Services: ${d.services}.`, !office && d.hours && `Hours: ${d.hours}.`, intent === 'price' && d.price && `Prices: ${d.price}.`].filter(Boolean);
-  const proof = {
-    best: office ? '[Name a specialty, a client you can mention, or a result: “We got X featured in Y.”]' : '[Say what you’re known for: a specialty, a guarantee, or how long you’ve served the area.]',
-    job: office ? '[Name the kinds of clients and projects you take on, and one example.]' : '[Name the jobs you do most and one recent example.]',
-    trust: '[Mention reviews, awards or how long you’ve been in business.]',
-    price: '[Say how you price: a starting price, a typical range, or “free quote”.]',
-    urgent: '[Say how fast you can help and how to reach you now.]',
-  }[intent] || '[Add one specific reason to pick you.]';
-  const contact = d.phone ? `Call ${d.phone}${d.websiteUrl ? ` or visit ${d.websiteUrl}` : ''}.` : d.websiteUrl ? `Visit ${d.websiteUrl}.` : '';
-  return [lead, words, ...facts, proof, contact].filter(Boolean).join(' ');
-}
-
 function profileDescription(d, noun, where, words) {
   const parts = [
     `${d.name} is ${article(noun)} ${kindText(noun)}${where ? ` in ${where}` : ''}.`,
@@ -501,13 +490,4 @@ function withPlaceholders(text, { phone = '', street = '', wantStreet = true } =
   }
   const json = JSON.stringify(out, null, 2).replace(/</g, '\\u003c');
   return m ? `${m[1].trim()}\n${json}\n</script>` : json;
-}
-
-function faqJsonLd(pairs) {
-  const o = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: pairs.map((p) => ({ '@type': 'Question', name: p.q, acceptedAnswer: { '@type': 'Answer', text: p.a } })),
-  };
-  return `<script type="application/ld+json">\n${JSON.stringify(o, null, 2).replace(/</g, '\\u003c')}\n</script>`;
 }

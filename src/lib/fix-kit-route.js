@@ -1,12 +1,17 @@
 // src/lib/fix-kit-route.js — /api/fix-kit/<token>: the Fix Kit's details form and zip download.
 //
-//   GET  /api/fix-kit/<token>      → { ok, paid, confirmed, confirmedAt, sample, details }
-//                                    details = the saved confirmed details, else prefillDetails(report).
-//                                    404 when there is no report for the token.
-//   POST /api/fix-kit/<token>      JSON { confirm: true, details: {...} } → validate, save → { ok, details }
+//   GET  /api/fix-kit/<token>      → { ok, paid, confirmed, confirmedAt, sample, plan, details, kit? }
+//                                    details = the saved details, else prefillDetails(report): the kit is
+//                                    built before the owner does anything. kit (paid only) = kitView():
+//                                    the jobs left for this business, each file's contents, what's already
+//                                    done, the FAQ and the details we're missing. 404 when there is no report.
+//   POST /api/fix-kit/<token>      JSON { preview: true, details } → validate, rebuild → { ok, details, kit }
+//                                    (an edit on the kit page; nothing saved).
+//                                    JSON { confirm: true, details } → validate, save → { ok, details, kit }:
+//                                    the ownership tick, sent by the page right before the download.
 //                                    422 { ok:false, errors:[{ field, message }] } when something needs fixing.
 //                                    Only for a token paid for 'xray', 'fix_kit' or 'be_the_answer' (402 otherwise).
-//   GET  /api/fix-kit/<token>.zip  → the zip (src/lib/fix-kit.js), paid AND confirmed only (402 / 409).
+//   GET  /api/fix-kit/<token>.zip  → the zip (src/lib/fix-kit.js), paid AND ticked (saved) only (402 / 409).
 //
 // Paid = a payments row for the token whose tier (or amount, TIER_BY_CENTS) is one of FIX_KIT_TIERS,
 // read with the service key (src/lib/db.js getPaidTiers). If that read fails the answer is "not paid",
@@ -18,7 +23,7 @@
 
 import { getReport, getPaidTiers, getFixKitDetails, saveFixKitDetails } from './db.js';
 import { rateLimit } from './rate-limit.js';
-import { FIX_KIT_TIERS, prefillDetails, validateDetails, buildFixKitFiles, zipFiles, zipName } from './fix-kit.js';
+import { FIX_KIT_TIERS, prefillDetails, validateDetails, buildKit, zipFiles, zipName } from './fix-kit.js';
 import { directoryChecklistTxt, googlePostsTxt } from './plan.js';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{1,200}$/;
@@ -68,7 +73,7 @@ export async function handleFixKit(request, url, env, deps = {}) {
     onPlan = tiers.includes('be_the_answer');
   }
 
-  if (request.method === 'POST') return postDetails(request, env, d, token, paid, isSample);
+  if (request.method === 'POST') return postDetails(request, env, d, token, paid, isSample, report, url);
 
   if (wantZip) {
     if (!paid) return notPaid();
@@ -81,11 +86,11 @@ export async function handleFixKit(request, url, env, deps = {}) {
         console.error('[fix-kit] details read failed', e);
         return json({ ok: false, error: 'Could not load your details. Try again in a minute.' }, 503);
       }
-      if (!saved) return json({ ok: false, error: 'Confirm your details first.' }, 409);
+      if (!saved) return json({ ok: false, error: 'Tick the box to confirm you own or manage this business first.' }, 409);
       // Re-checked on the way out, so the files only ever carry clean, capped values.
       details = validateDetails(saved.details).details;
     }
-    const files = buildFixKitFiles(details, report, { origin: url.origin, token, date: d.now() });
+    const files = buildKit(details, report, { origin: url.origin, token, date: d.now() }).files;
     // Be the Answer adds the directory checklist and the year's Google posts (src/lib/plan.js).
     if (onPlan) {
       files.push({ path: 'directory-checklist.txt', content: directoryChecklistTxt(details) });
@@ -104,6 +109,8 @@ export async function handleFixKit(request, url, env, deps = {}) {
   if (!isSample && paid) {
     saved = await d.getFixKitDetails(env, token).catch((e) => { console.error('[fix-kit] details read failed', e); return null; });
   }
+  const details = saved?.details || prefillDetails(report);
+  const v = validateDetails(details);
   return json({
     ok: true,
     paid,
@@ -111,11 +118,26 @@ export async function handleFixKit(request, url, env, deps = {}) {
     confirmedAt: saved?.confirmed_at || null,
     sample: isSample,
     plan: onPlan,
-    details: saved?.details || prefillDetails(report),
+    details,
+    // Built from what we know before the owner touches anything; what's wrong or missing is flagged.
+    ...(paid ? { kit: kitView(v.details, report, { origin: url.origin, token, date: d.now() }), problems: v.errors } : {}),
   });
 }
 
-async function postDetails(request, env, d, token, paid, isSample) {
+/** The kit for the page: each job with its files' contents, what's already done, the FAQ, what's missing. */
+export function kitView(details, report, opts) {
+  const kit = buildKit(details, report, opts);
+  const content = new Map(kit.files.map((f) => [f.path, f.content]));
+  return {
+    jobs: kit.jobs.map((j) => ({ ...j, files: j.files.map((path) => ({ path, content: content.get(path) })) })),
+    done: kit.done,
+    faq: { items: kit.faq.items, attributes: kit.faq.attributes, needs: kit.faq.needs },
+    missing: kit.missing,
+    readme: content.get('README.txt'),
+  };
+}
+
+async function postDetails(request, env, d, token, paid, isSample, report, url) {
   if (!paid) return notPaid();
   if (!(request.headers.get('Content-Type') || '').includes('application/json')) {
     return json({ ok: false, error: 'Send the details as JSON.' }, 415);
@@ -128,15 +150,20 @@ async function postDetails(request, env, d, token, paid, isSample) {
 
   const v = validateDetails(body.details);
   const errors = [...v.errors];
+  const kit = () => kitView(v.details, report, { origin: url.origin, token, date: d.now() });
+  if (body.preview === true) {
+    if (errors.length) return json({ ok: false, errors }, 422);
+    return json({ ok: true, preview: true, details: v.details, kit: kit() });
+  }
   if (body.confirm !== true) errors.push({ field: 'confirm', message: 'Tick the box to confirm you own or manage this business and the details are right.' });
   if (errors.length) return json({ ok: false, errors }, 422);
 
-  if (isSample) return json({ ok: true, sample: true, details: v.details });
+  if (isSample) return json({ ok: true, sample: true, details: v.details, kit: kit() });
   try {
     await d.saveFixKitDetails(env, token, v.details);
   } catch (e) {
     console.error('[fix-kit] save failed', e);
     return json({ ok: false, error: 'Could not save your details. Try again in a minute.' }, 500);
   }
-  return json({ ok: true, details: v.details });
+  return json({ ok: true, details: v.details, kit: kit() });
 }
