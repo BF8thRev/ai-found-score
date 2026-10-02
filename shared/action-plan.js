@@ -264,7 +264,7 @@ export function buildActionPlan(report) {
       steps: [
         ...(missing ? [`Pages marked “You’re not on it”: we read the page and didn’t find ${lookFor} or a link to your website.${shown.some((s) => s.status === 'missing' && s.addUrl) ? ` Use the “Add your ${office ? 'company' : 'business'}” link next to it.` : ''}`] : []),
         ...(notFound ? [`Sites marked “No profile found”: the site turns automated reads away, so we searched Google for ${lookFor} on ${notFound === 1 ? 'it' : 'each one'} and found no profile. Google may have missed it: search the site once yourself, and if you’re not there, ${shown.some((s) => s.status === 'not_found' && s.addUrl) ? `use the “Add your ${office ? 'company' : 'business'}” link next to it` : 'look for “add your company” or “get listed”'}.`] : []),
-        ...(waiting ? [`Sites marked “We’ll check this on your next scan”: ${shown.some((s) => s.nextScan && s.reason) ? `we couldn’t read ${waiting === 1 ? 'it' : 'them'} (the reason is next to ${waiting === 1 ? 'it' : 'each'})` : `we haven’t checked ${waiting === 1 ? 'it' : 'them'} for your name yet`}. Your next scan searches Google for your profile there for you; until then, open each one and search it for ${lookFor}.`] : []),
+        ...(waiting ? [`Sites marked “Pending check”: ${shown.some((s) => s.nextScan && s.reason) ? `we couldn’t read ${waiting === 1 ? 'it' : 'them'} (the reason is next to ${waiting === 1 ? 'it' : 'each'})` : `we haven’t checked ${waiting === 1 ? 'it' : 'them'} for your name yet`}. Your next scan searches Google for your profile there for you; until then, open each one and search it for ${lookFor}.`] : []),
         ...(unread > waiting ? [`Sites marked “Couldn’t check”: we couldn’t check ${unread - waiting === 1 ? 'it' : 'them'} ourselves${shown.some((s) => s.status === 'check' && !s.nextScan && s.reason) ? ' (the reason is next to each)' : ''}, so open each one and search it for ${lookFor}.`] : []),
         ...(listed ? [`Sites marked “You’re listed”: open your profile${shown.some((s) => s.foundBy === 'search') ? ' (the link next to it is the one Google showed us)' : ''} and make every detail match the block below.`] : []),
         ...(dirs.length
@@ -290,7 +290,7 @@ export function buildActionPlan(report) {
     items.push({
       id: 'awards',
       impact: 'medium',
-      title: `Put the entry dates for ${awards.length === 1 ? 'the industry list' : `the ${awards.length} industry lists`} AI read in your calendar`,
+      title: `Later, not this week: enter ${awards.length === 1 ? 'the industry list' : `the ${awards.length} industry lists`} AI read when the next round opens`,
       why: `AI also read ${listJoin(awards.map((s) => s.domain))} when it named ${rivalsText} instead of you. Industry lists and awards like ${plural(awards.length, 'this', 'these')} take entries, often once a year and sometimes with a fee or a size rule, so this is for the next round, not a job for this week.`,
       who: 'you',
       steps: [

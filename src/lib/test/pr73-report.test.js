@@ -2,7 +2,7 @@
 // renders it (public/js/report.js), and /api/fix-kit/<token>. Two stored reports:
 //   - a new scan (scanner/test/fixtures/pr73.js, built offline by the scanner): each list AI cited says
 //     "You’re not on it" (with the directory's add link), "You’re listed — check the details" (with the
-//     profile) or "Not checked yet" (with why);
+//     profile) or "Pending check" (with why);
 //   - a report stored before Oct 2 2026 (no list checks, no siteCheck.brand): nothing is fetched at serve
 //     time; only the spelling is read off the stored homepage title and description.
 // The name: the website writes "PR73", the request said "PR 73". One spelling everywhere, and a plain ask.
@@ -85,8 +85,8 @@ test('GET /api/report/<token>, a new scan: each list says listed, not on it, or 
     assert.match(cm, /<span class="badge match">You’re listed — check the details<\/span>/);
     assert.match(cm, /href="https:\/\/www\.communicationsmatch\.com\/company\/pr73"/);
     // Couldn't check: the reason, never "not on it".
-    assert.match(siteRow(plan, 'clutch.co'), /We’ll check this on your next scan<\/span>.*\(the site blocks automated checks\)/s);
-    assert.match(siteRow(plan, 'designrush.com'), /We’ll check this on your next scan<\/span>.*\(the site asks crawlers not to read this page\)/s);
+    assert.match(siteRow(plan, 'clutch.co'), /Pending check<\/span>.*\(the site blocks automated checks\)/s);
+    assert.match(siteRow(plan, 'designrush.com'), /Pending check<\/span>.*\(the site asks crawlers not to read this page\)/s);
     // One name in the plan, and the plain ask to pick one.
     assert.match(plan, /Your website writes “PR73” and your report request said “PR 73” — pick one and use it everywhere\./);
     assert.match(plan, /Business name: PR73/);
@@ -110,14 +110,14 @@ function storedBeforeOct2() {
   return r;
 }
 
-test('GET /api/report/<token>, a report stored before: the spelling is fixed from its stored title; lists stay "Not checked yet"', async () => {
+test('GET /api/report/<token>, a report stored before: the spelling is fixed from its stored title; lists stay "Pending check"', async () => {
   await withWorker(storedBeforeOct2(), async (call, seen) => {
     const body = await (await call(`/api/report/${TOKEN}`)).json();
     const lists = body.xray.actionPlan.items.find((i) => i.id === 'lists');
     for (const s of lists.sites) assert.equal(s.status, 'check', 'never read: never "not on it"');
     assert.ok(lists.sites.every((s) => !s.reason), 'no reason we don’t have');
     const plan = planOf(render(body));
-    assert.match(plan, /<span class="badge low">We’ll check this on your next scan<\/span>/);
+    assert.match(plan, /<span class="badge low">Pending check<\/span>/);
     assert.doesNotMatch(plan, /You’re not on it|You’re listed/);
     assert.match(plan, /Your website writes “PR73” and your report request said “PR 73” — pick one and use it everywhere\./);
     assert.match(plan, /Business name: PR73/);
@@ -310,7 +310,7 @@ test('GET /api/report/<token>, a paid scan with the Google lookup: listed via se
     assert.match(siteRow(plan, 'goodfirms.co'), /You’re not on it<\/span>.*Free basic profile/s);
     // The how: only the sub-steps that apply; nothing waits for a next scan.
     assert.match(plan, /Sites marked “No profile found”: the site turns automated reads away, so we searched Google for “PR73” or “PR 73” on each one and found no profile\./);
-    assert.doesNotMatch(plan, /next scan|Couldn’t check|Not checked yet/);
+    assert.doesNotMatch(plan, /next scan|Couldn’t check|Pending check/);
     assert.deepEqual(lintText(plan.replace(/href="[^"]*"/g, '').replace(/<[^>]+>/g, ' ')).map((h) => h.word), []);
     assert.ok(seen.every((u) => u.startsWith('https://sb.example/')), 'serving never searches');
   });
@@ -321,7 +321,7 @@ test('GET /api/report/<token>, the live PR 73 report as stored: join terms and s
     const body = await (await call(`/api/report/${TOKEN}`)).json();
     const plan = planOf(render(body));
     const clutch = siteRow(plan, 'clutch.co');
-    assert.match(clutch, /<span class="badge low">We’ll check this on your next scan<\/span>/);
+    assert.match(clutch, /<span class="badge low">Pending check<\/span>/);
     assert.match(clutch, /<span class="ap-join">Free basic profile<\/span>/);
     assert.match(clutch, /<a class="ap-add" href="https:\/\/vendor\.clutch\.co\/profile\/create\/basic"[^>]*>Add your company<\/a>/);
     assert.match(siteRow(plan, 'themanifest.com'), /Free to join<\/span>.*href="https:\/\/clutch\.co\/get-listed"/s);
@@ -331,11 +331,44 @@ test('GET /api/report/<token>, the live PR 73 report as stored: join terms and s
     assert.match(od, /<span class="ap-join">Entry fee<\/span>/);
     assert.match(od, /<a class="ap-add" href="https:\/\/www\.odwyerpr\.com\/pr_firm_[a-z]+\/Rank-Your-Firm-With-ODwyers-2026\.pdf"[^>]*>How to enter<\/a>/);
     // The how adapts: the next scan does the search; costs only as known.
-    assert.match(plan, /Sites marked “We’ll check this on your next scan”: we haven’t checked them for your name yet\. Your next scan searches Google for your profile there for you/);
+    assert.match(plan, /Sites marked “Pending check”: we haven’t checked them for your name yet\. Your next scan searches Google for your profile there for you/);
     assert.match(plan, /clutch\.co and themanifest\.com have a free basic profile; you don’t need the paid upgrades\. communicationsmatch\.com charges to be listed at all/);
     assert.match(plan, /Use the “How to enter” link next to it/);
     assert.doesNotMatch(plan, /Not checked yet|No profile found|A basic profile costs nothing/);
+    // The badge is short; the step says once what it means (it read 4 times: buyer review, Oct 2).
+    assert.equal((plan.match(/next scan/g) || []).length, 1, 'one "next scan" line, not one per site');
     assert.deepEqual(lintText(plan.replace(/href="[^"]*"/g, '').replace(/<[^>]+>/g, ' ')).map((h) => h.word), []);
     assert.ok(seen.every((u) => u.startsWith('https://sb.example/')), 'a pure lookup: nothing fetched at serve time');
   });
+});
+
+test('buyer review 3 (Oct 2): an answer that named no business is an "open spot", not a plain ✕; the score is unchanged', async () => {
+  const { report } = await buildPr73Report();
+  const before = await (async () => { let b; await withWorker(report, async (call) => { b = await (await call(`/api/report/${TOKEN}`)).json(); }); return b; })();
+  // Two answers where AI named nobody.
+  const open = structuredClone(report);
+  open.answers[0].businessesNamed = [];
+  open.answers[1].businessesNamed = [];
+  // Keep the stored report valid: the rivals' counts and the headline follow the answers.
+  for (const e of open.entities) {
+    e.answerIds = e.answerIds.filter((id) => !['a1', 'a2'].includes(id));
+    e.named = e.answerIds.length;
+    e.first = Math.min(e.first, e.named);
+  }
+  open.headline.answerId = 'a3';
+  await withWorker(open, async (call) => {
+    const res = await call(`/api/report/${TOKEN}`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(typeof before.score.score, 'number');
+    assert.equal(body.score.score, before.score.score, 'not named is still not named: same score');
+    const html = render(body);
+    assert.equal((html.match(/<i class="open" title="AI named no business: an open spot">○<\/i>/g) || []).length, 2);
+    assert.match(html, /<b class="o">○ named no one<\/b>/);
+    assert.match(html, /In 2 answers AI named no business at all\. Nobody holds those spots yet, so they are the easiest to win\./);
+    assert.equal((html.match(/<span class="open">Open spot: AI named no one<\/span>/g) || []).length, 2);
+  });
+  // None open: no extra key, no line.
+  const html = render(before);
+  assert.doesNotMatch(html, /class="open"|named no one|r2-verdict-open/);
 });
