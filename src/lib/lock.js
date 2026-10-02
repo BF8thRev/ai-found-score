@@ -10,6 +10,7 @@
 // titles, descriptions, steps and copyText, and the X-Ray sections (gap sheet, checklist, reviews).
 // Any recorded payment for the token unlocks all of it.
 import { xraySections, computeVisibilityScore, isGenericFix, buildCompetitorBreakdown } from '../../shared/report-v2.js';
+import { buildActionPlan } from '../../shared/action-plan.js';
 
 /** The fields of an issue that survive locking. Everything else (description, steps, copyText, …) is dropped. */
 export const LOCKED_ISSUE_FIELDS = ['kind', 'severity', 'title'];
@@ -131,6 +132,6 @@ export function reportBody(report, unlocked, { breakdown = false } = {}) {
   if (!unlocked) return withScore(lockReport(report));
   if (report.version !== 2) return report;
   return withScore({
-    ...report, locked: false, xray: xraySections(report), ...(breakdown ? { breakdown: buildCompetitorBreakdown(report) } : {}),
+    ...report, locked: false, xray: { ...xraySections(report), actionPlan: buildActionPlan(report) }, ...(breakdown ? { breakdown: buildCompetitorBreakdown(report) } : {}),
   });
 }

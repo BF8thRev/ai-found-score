@@ -9,7 +9,7 @@
 // Output shape per fix: { steps: [string], copyText: [{ label, text, format? }] }
 //   format: 'code' for a code block (JSON-LD), absent for plain text.
 
-import { normalizeTrade, TRADES, INTENTS } from '../questions.js';
+import { normalizeTrade, TRADES, INTENTS, kindClass } from '../questions.js';
 import { US_STATES, stateAbbr } from '../config.js';
 import { is24 } from './verify.js';
 
@@ -245,7 +245,7 @@ export function baselineFixes({ business, questions = [] }) {
     d.hours ? `Set your hours to match your website: ${d.hours}.` : 'Add your opening hours, the same as on your website.',
     `Choose the primary category closest to ${q(d.tradeNoun || 'your trade')}, then add each service you offer by name.`,
     `Paste the description below into your profile's description field (it fits the ${GBP_DESCRIPTION_MAX}-character limit).`,
-    'Add a few recent photos of your storefront and your work.',
+    kindClass(business.trade) === 'professional' ? 'Add a few photos of your team and your work.' : 'Add a few recent photos of your storefront and your work.',
   ];
   const gbpCopy = [];
   const desc = gbpDescription(d);

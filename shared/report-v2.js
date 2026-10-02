@@ -275,6 +275,15 @@ export function xrayOffered(report) {
 // nothing is fetched or guessed. Withheld server-side until paid (src/lib/lock.js).
 // ---------------------------------------------------------------------------
 
+/**
+ * A name AI listed as if it were a business but is a directory or ranking site ("Clutch", "The Manifest"):
+ * never a competitor. Same list as DIRECTORY_NAME_RE in public/js/report.js.
+ */
+export const DIRECTORY_NAME_RE = /^(?:the\s+)?(?:clutch(?:\.co)?|manifest|yelp|angi(?:'?s list)?|angie'?s list|thumbtack|bbb|better business bureau|homeadvisor|upcity|designrush|goodfirms|expertise(?:\.com)?|sortlist|agency spotter|o'?dwyer'?s?|prweek|provoke(?: media)?|google(?: maps)?|nextdoor|tripadvisor|yellow ?pages|houzz|porch|avvo|justia|martindale(?:-hubbell)?|findlaw|healthgrades|zocdoc)$/i;
+export function isDirectoryName(name) {
+  return DIRECTORY_NAME_RE.test(String(name || '').trim().replace(/[.,]+$/, ''));
+}
+
 /** Business names compared loosely: case, punctuation, "&"/"and" and spacing don't matter. */
 export function normalizeBizName(s) {
   return ` ${String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
@@ -354,7 +363,7 @@ export function buildGapSheet(report) {
   const rvComps = rv && Array.isArray(rv.competitors) ? rv.competitors.filter((c) => c && typeof c.name === 'string') : [];
   const competitors = [];
   for (const e of (report && report.entities) || []) {
-    if (!e || !e.id || e.isYou) continue;
+    if (!e || !e.id || e.isYou || isDirectoryName(e.name)) continue;
     const named = [];
     let first = 0;
     for (const a of answers) {
