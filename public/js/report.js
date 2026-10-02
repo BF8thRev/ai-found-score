@@ -1049,7 +1049,8 @@ function renderV2(root, report) {
   // findings-first order.
   // A paid report with an action plan is a to-do list: the score, then the plan (which replaces the
   // fix list, the checklist and the Fix Kit band), then the evidence, and anything for sale last.
-  const hasPlan = paid && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
+  // Sample reports show it too: they show a buyer exactly what the audit gives them.
+  const hasPlan = !locked && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
   sec.actionPlan = hasPlan ? actionPlanV2(report) : '';
   sec.breakdownUpsell = hasPlan ? breakdownUpsell(report) : '';
   const order = xrayOk

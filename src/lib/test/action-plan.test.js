@@ -60,7 +60,10 @@ test('office business: biggest impact first, and the lists AI read come first', 
 test('lists step: the directories and rankings AI cited, never rivals’ own sites, job boards or wires', () => {
   const lists = byId(buildActionPlan(officeReport()), 'lists');
   const domains = lists.sites.map((s) => s.domain);
-  assert.deepEqual(domains.sort(), ['clutch.co', 'odwyerpr.com', 'themanifest.com']);
+  assert.deepEqual(domains.sort(), ['clutch.co', 'communicationsmatch.com', 'odwyerpr.com', 'themanifest.com']);
+  // A rival's own profile page on a directory links to the directory, not to the rival.
+  assert.equal(lists.sites.find((s) => s.domain === 'communicationsmatch.com').url, 'https://communicationsmatch.com/');
+  assert.equal(lists.sites.find((s) => s.domain === 'clutch.co').url, 'https://clutch.co/pr-firms/new-york');
   for (const s of lists.sites) assert.equal(s.status, 'check', 'not read: the owner checks');
   assert.match(lists.why, /Brightline Communications/);
   assert.doesNotMatch(lists.why, /Clutch/, 'a directory is never named as a rival');
@@ -190,6 +193,12 @@ test('paid page: saved ticks come back (done steps struck, the first undone step
   assert.match(html, /<b data-ap-count>1<\/b>/);
   assert.match(html, /<li class="ap-item done" id="step-1">/);
   assert.match(html, /id="step-2">[\s\S]*?<details class="ap-how" open>/);
+});
+
+test('sample report shows the plan as a buyer would see it, with nothing to buy and no Fix Kit link', () => {
+  const html = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
+  assert.match(html, /<h2>Your action plan<\/h2>/);
+  assert.doesNotMatch(html, /Open my Fix Kit|Get my Competitor Breakdown|Want us to keep watching\?/);
 });
 
 test('free (locked) page is unchanged: no action plan', () => {

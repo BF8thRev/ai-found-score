@@ -62,6 +62,7 @@ export function officeReport() {
       source('https://themanifest.com/public-relations/agencies/new-york', ['a1']),
       source('https://www.publicnow.com/view/123', ['a1']),
       source('https://www.odwyerpr.com/pr_firm_rankings/newyork.htm', ['a2']),
+      source('https://www.communicationsmatch.com/company/brightline-communications', ['a2']),
       source('https://www.brightlinecommunications.example.com/offices', ['a2']),
       source('https://4dayweek.io/company/kestrel', ['a4']),
       source('https://kestrelpr.example.com/careers', ['a5']),

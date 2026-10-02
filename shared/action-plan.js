@@ -129,7 +129,11 @@ export function buildActionPlan(report) {
     if (s.youListed !== false && !LIST_SITE_RE.test(dom) && !/rank|best|top|list|director|agencies|firms|companies/i.test(String(s.url || ''))) continue;
     if (sites.some((x) => x.domain === dom)) continue;
     const engines = [...new Set(lostIn.map((id) => (answers.find((a) => a.id === id) || {}).engine).filter(Boolean))].map((e) => ENGINE[e] || e);
-    sites.push({ domain: dom, url: s.url || `https://${dom}`, status: s.youListed === false ? 'missing' : 'check', engines, count: lostIn.length, topListed: s.topListed || null });
+    // A rival's profile page on a directory (aaaa.org/agency-profile/…/edelman-new-york): send the owner
+    // to the site itself, not to the rival's page.
+    const path = squash(String(s.url || '').replace(/^https?:\/\/[^/]+/i, ''));
+    const rivalPage = entities.some((e) => { const n = squash(e.name); return n.length >= 4 && !isDirectoryName(e.name) && path.includes(n); });
+    sites.push({ domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, status: s.youListed === false ? 'missing' : 'check', engines, count: lostIn.length, topListed: s.topListed || null });
   }
   sites.sort((x, y) => (x.status === 'missing' ? 0 : 1) - (y.status === 'missing' ? 0 : 1) || y.count - x.count);
   if (sites.length) {
