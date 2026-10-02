@@ -93,3 +93,25 @@ test('hero shows who got the call and who did not; nav and card link the real re
   assert.match(index, /href="\/report\/mega-wash-and-dry">Sample report</);
   assert.ok(!/lost-band|stopped Googling/.test(index), 'the made-up lost-call strip and the "stopped Googling" claim are gone');
 });
+
+test('about page carries the founder note, the founder bio and the css it uses', () => {
+  const about = read('about.html');
+  assert.match(about, /<h2>A note from the founder<\/h2>\s*<div class="founder-note">/);
+  assert.match(about, /My dad ran a small service business/);
+  assert.match(about, /<h2>How we(&rsquo;|')re different<\/h2>/);
+  assert.match(about, /more than eight years/);
+  assert.match(about, /"founder": \{"@type": "Person", "name": "Bryan Fields"/);
+  assert.match(about, /href="\/#request"/, 'about page links to the free check');
+  const css = read('css/styles.css');
+  for (const cls of ['founder-note', 'about-cta']) assert.ok(css.includes(`.${cls}`), `styles.css is missing .${cls}`);
+  assert.match(about, /styles\.css\?v=17/, 'about page loads the stylesheet version that has the new classes');
+});
+
+test('about page: no prices, says the business is AI-run, and has the note about mom', () => {
+  const about = read('about.html');
+  assert.ok(!/\$\d/.test(visible(about)), 'about page states a price');
+  assert.match(about, /<h2>An AI-run business, on purpose<\/h2>/);
+  assert.match(about, /goes looking for local businesses|go looking for local businesses/);
+  assert.match(about, /My mom has spent her life helping people/);
+  assert.match(about, /unsubscribed with one click/);
+});
