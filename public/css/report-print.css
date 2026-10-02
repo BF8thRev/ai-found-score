@@ -1,20 +1,54 @@
 /* "Save as PDF": print stylesheet for report.html (linked with media="print").
-   Hides navigation, buttons and offers; prints every answer expanded.
-   report.js also opens every <details> on beforeprint (closed details hide their content). */
+   A plain document: a light first-page header (report.js printHeadV2), the report in screen order with
+   every section open, a footer line on every page (report.js printFooterCss, page-margin boxes), black on
+   white. Hides navigation, buttons, offers and forms.
+   report.js also opens every <details> and sets the PDF's file name (the page title) on beforeprint. */
 
-@page { margin: 14mm 12mm; }
+@page { size: auto; margin: 14mm 13mm 16mm; }
 
 html, body { background: #fff !important; }
-body { font-size: 12pt; color: #000; }
+body { font-size: 11pt; line-height: 1.45; color: #000; }
+* { box-shadow: none !important; text-shadow: none !important; }
 
-.site-header, .site-footer, nav, .header-cta,
-.cta-band, .offer-band, .unlock-panel, .lead-form, .r2-tools, .r2-copy-btn,
+/* Screen-only chrome. */
+.site-header, .site-footer, nav, .header-cta, .hdr-tools, .share-pop,
+.cta-band, .offer-band, .unlock-panel, .lead-form, .r2-tools, .r2-copy-btn, .r2-upsell,
+.r2-hero-read, .ap-tick, .ap-bar, .ap-kitcard-btns .btn-secondary, .sample-switch,
+.r2-skel, .r2-score-how summary,
 [data-tier], .locked-note, .r2-sticky, .r2-strip, .ob-sample { display: none !important; }
+
+/* Print-only: the first-page header and the closing line. */
+.print-only { display: block !important; }
+.print-head { padding: 0 0 10pt; margin: 0 0 12pt; border-bottom: 1.5pt solid #000; break-inside: avoid; }
+.print-head img { height: 22pt; width: auto; display: block; margin: 0 0 10pt; }
+.print-head-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16pt; }
+.print-head-k { margin: 0; font-size: 9pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #444; }
+.print-head-name { margin: 2pt 0 0; font-size: 20pt; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+.print-head-meta { margin: 3pt 0 0; font-size: 10pt; color: #333; }
+.print-head-score { margin: 0; flex: none; font-size: 11pt; color: #333; text-align: right; }
+.print-head-score b { font-size: 26pt; font-weight: 800; color: #000; }
+.print-head-score span { display: block; font-size: 10pt; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.print-head-note { margin: 8pt 0 0; font-size: 10pt; font-style: italic; }
+.print-end { margin: 18pt 0 0; padding-top: 6pt; border-top: 1pt solid #999; font-size: 9pt; color: #444; }
+
+/* The navy band on screen: its name, date and score are in the print header instead. */
+.report-header.r2-band { display: none !important; }
 
 .report-header { background: none !important; padding: 0 0 8pt !important; }
 .wrap { max-width: none !important; padding: 0 !important; }
 .report-section { break-inside: auto; margin: 14pt 0 !important; }
 .issue-card, .listing-card, .r2-copy, .r2-desc, .r2-tile { break-inside: avoid; box-shadow: none !important; }
+
+/* Headings stay with what follows; small blocks don't split across pages. */
+h1, h2, h3, h4, summary, .ap-how-k, .r2-copy-head, .r2-verdict-k, .r2-hero .k, .r2-hero .q, .r2-hero .a { break-after: avoid; }
+h2, h3 { break-inside: avoid; }
+p, li { orphans: 3; widows: 3; }
+.r2-verdict, .r2-hero, .ap-week, .ap-progress, .ap-kitcard, .r2-recheck, .r2-score,
+.ap-why, .ap-who, .ap-sites li, .r2-steps li, .r2-row, .r2-src li, .print-end { break-inside: avoid; }
+/* A step is kept on one page when it fits; a long one (big copy blocks) runs on rather than leaving a gap. */
+.ap-item { break-inside: avoid; }
+.ap-item:has(.r2-copy) { break-inside: auto; }
+.r2-copy:has(.r2-code) { break-inside: auto; }
 
 /* Every answer expanded. */
 details > summary { list-style: none; }
@@ -24,12 +58,15 @@ details .body { display: block !important; }
 .r2-ans { break-inside: avoid-page; }
 
 /* Code prints light, and wraps instead of running off the page. */
-.r2-code { background: #f4f4f4 !important; color: #000 !important; border: 1px solid #ccc; }
-.r2-code code { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+.r2-code { background: #f4f4f4 !important; color: #000 !important; border: 1px solid #ccc; overflow: visible !important; max-width: 100%; }
+.r2-code code { white-space: pre-wrap !important; overflow-wrap: anywhere; word-break: break-word; }
+.r2-copytext { white-space: pre-wrap; overflow-wrap: anywhere; }
+.r2-copy-head { background: none !important; border-bottom: 1px solid #ccc !important; }
 .r2-grid-wrap { overflow: visible !important; }
 
-/* Links: show where cited sources point. */
-.r2-src a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #555; overflow-wrap: anywhere; }
+/* Links: show where cited sources and the plan's sites point. */
+.r2-src a[href^="http"]::after,
+.ap-sites a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #555; overflow-wrap: anywhere; font-weight: 400; }
 a { color: #000; text-decoration: none; }
 
 /* The dark top band prints as plain black on white. */
@@ -37,9 +74,37 @@ a { color: #000; text-decoration: none; }
 .r2-band h1, .r2-band .biz-meta, .r2-band .fine, .r2-band .fine a, .r2-band-k { color: #000 !important; }
 .r2-band .r2-score { box-shadow: none !important; border: 1px solid #ccc !important; }
 
-/* Show where the example page in Why AI skips you points. */
+/* The result box: a thin outline, no colour wash. */
+.r2-verdict-main { border: 1.5pt solid #000 !important; border-left-width: 5pt !important; border-radius: 6pt; padding: 10pt 12pt !important; }
+.r2-verdict-k, .r2-verdict-line, .r2-verdict-ask, .r2-verdict-key, .r2-verdict-key b, .r2-rival { color: #000 !important; }
+.r2-verdict-line { font-size: 17pt !important; }
+.r2-boxes i { background: none !important; color: #000 !important; border: 1pt solid #000 !important; }
+.r2-verdict-next { border-top: 1px solid #999 !important; }
+.r2-verdict-next a { color: #000 !important; }
+.r2-verdict-next span { display: none; }
 
 /* The dark search card prints as plain text. */
 .r2-hero { background: none !important; color: #000 !important; border: 1px solid #ccc; }
 .r2-hero *, .r2-hero a { color: #000 !important; }
 .r2-hero-list li { background: none !important; border: 1px solid #ccc !important; }
+
+/* Coloured labels: backgrounds don't print by default, so print them as outlined text. */
+.badge, .r2-verdict-badge, .chip, .ap-whotag, .ap-type, .r2-sc-pill { background: none !important; color: #000 !important; border: 1px solid #555 !important; }
+
+/* Action plan: every step open, done steps say so in words, the Fix Kit as a plain address. */
+.ap-week, .ap-kitcard, .r2-recheck, .ap-item, .ap-item.done { background: none !important; border: 1px solid #bbb !important; }
+.ap-week li a { color: #000 !important; }
+.ap-num { background: none !important; color: #000 !important; border: 1pt solid #000 !important; }
+.ap-item.done .ap-title { text-decoration: none !important; color: #000 !important; }
+.ap-item.done .ap-title::before { content: "Done \2713  "; font-weight: 800; }
+.ap-body { margin-left: 0 !important; }
+.ap-kitnote a::after, .ap-kitcard-btns .btn::after { content: ": aifoundscore.com" attr(href); font-weight: 400; }
+.ap-kitcard-btns .btn { background: none !important; color: #000 !important; padding: 0 !important; border: 0 !important; font-weight: 700; }
+
+/* Open/close markers and "Read the answers" toggles mean nothing on paper. */
+details > summary::after { content: none !important; display: none !important; }
+.r2-qans > summary { display: none !important; }
+.r2-rival { background: none !important; padding: 0 !important; font-weight: 800; }
+/* A copy block can be a page long (the FAQ answers): let it run on rather than leave a blank page. */
+.r2-copy { break-inside: auto !important; }
+.r2-copy-head { break-after: avoid; break-inside: avoid; }

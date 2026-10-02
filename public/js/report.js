@@ -295,12 +295,15 @@ async function runLivePreview(root, live) {
 // The header button. On a report page "Get my free report" is redundant: it becomes "Check another business".
 // The report page's header carries one button, by state (public/report.html): the $49 audit on a real
 // report that has the offer, "Get my free report" on an example, nothing otherwise (pending, paid, no
-// offer). After the top band scrolls away it also shows the business and score. Phones use the bottom
+// offer). Paid reports and samples also get Share and Save as PDF there (icons only on phones). After the top band scrolls away it also shows the business and score. Phones use the bottom
 // bar instead (CSS hides this button there).
 function setHeaderForReport(root, report) {
   const cta = document.querySelector('.site-header [data-hdr-cta]');
   const ctx = document.querySelector('.site-header [data-hdr-ctx]');
+  const tools = document.querySelector('.site-header [data-hdr-tools]');
   const band = root.querySelector('[data-offer-band]');
+  // Share and Save as PDF: on paid reports and samples (a free report's header keeps its one button).
+  if (tools) tools.hidden = !!report.locked || report.version !== 2;
   if (cta) {
     if (isDemoReport(report)) {
       cta.textContent = 'Get my free report';
@@ -641,14 +644,22 @@ function fixKitIncluded(report) {
 // Kit covers say so, and one card after the last step hands the website files to the web person.
 const AP_IMPACT = { high: 'Biggest impact', medium: 'Next', low: 'Quick extra' };
 const AP_WHO = { you: 'You can do this', web: 'For whoever runs your website', both: 'You, with your web person' };
-function actionPlanV2(report) {
+// The plan's steps, the ticks saved in this browser, and "Do these 3 this week" (the first steps, biggest
+// impact first, the owner can finish this week and hasn't ticked). Shared by the plan and the result box.
+function planState(report) {
   const plan = report.xray && report.xray.actionPlan;
   const items = ((plan && plan.items) || []).filter((i) => i && i.title && i.id);
-  if (!items.length) return '';
-  const name = (report.business && report.business.name) || 'your business';
   const key = 'afs_plan_' + String(report.id || '');
   let ticked = {};
   try { ticked = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { ticked = {}; }
+  const week = items.map((i, n) => ({ i, n })).filter((x) => x.i.week && !ticked[x.i.id]).slice(0, 3);
+  return { items, key, ticked, week };
+}
+
+function actionPlanV2(report) {
+  const { items, key, ticked, week } = planState(report);
+  if (!items.length) return '';
+  const name = (report.business && report.business.name) || 'your business';
   const done = items.filter((i) => ticked[i.id]).length;
   const firstOpen = items.findIndex((i) => !ticked[i.id]);
   const pct = (n) => Math.round((100 * n) / items.length);
@@ -658,10 +669,8 @@ function actionPlanV2(report) {
   const WHO_TAG = { web: 'Web person', both: 'You + web person' };
   // Time and cost for one step: "Under half an hour per site · No cost for a basic profile".
   const effort = (i) => [i.time, i.cost].filter((x) => typeof x === 'string' && x).map(escapeHtml).join(' · ');
-  // Do these 3 this week: the first steps (biggest impact first) the owner can finish this week, not done yet.
-  const week = items.map((i, n) => ({ i, n })).filter((x) => x.i.week && !ticked[x.i.id]).slice(0, 3);
   const weekBlock = week.length ? `
-      <div class="ap-week">
+      <div class="ap-week" id="this-week">
         <h3>Do ${week.length === 1 ? 'this' : `these ${week.length}`} this week</h3>
         <ol>${week.map(({ i, n }) => `
           <li><a href="#step-${n + 1}">${escapeHtml(i.title)}</a><span>${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}${effort(i) ? ` · ${effort(i)}` : ''}</span></li>`).join('')}
@@ -784,12 +793,17 @@ function tierOn(tier) {
   return typeof window.tierOffered === 'function' ? window.tierOffered(tier) : false;
 }
 
-// Share + Save as PDF, and the copy buttons on fix steps. One delegated listener.
-function reportTools() {
+// Share + Save as PDF: in the header (public/report.html [data-hdr-tools], shown on paid reports and
+// samples), by the result (same reports) and at the bottom of every report. One delegated listener on the
+// document handles all of them and the copy buttons on fix steps.
+const ICON_SHARE = '<svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M12 15V3M7 8l5-5 5 5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_PDF = '<svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M12 11v6M9 14l3 3 3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function reportTools(where = 'bottom') {
+  const top = where === 'top';
   return `
-    <div class="r2-tools" role="group" aria-label="Share or save this report">
-      <button type="button" class="btn-secondary" data-action="share">Share this report</button>
-      <button type="button" class="btn-secondary" data-action="print">Save as PDF</button>
+    <div class="r2-tools${top ? ' r2-tools-top' : ''}" role="group" aria-label="Share or save this report" data-tools="${top ? 'top' : 'bottom'}">
+      <button type="button" class="btn-secondary" data-action="share" aria-haspopup="dialog">${top ? `${ICON_SHARE}<span>Share<span class="wide"> with your team</span></span>` : 'Share this report'}</button>
+      <button type="button" class="btn-secondary" data-action="print">${top ? `${ICON_PDF}<span>Save as PDF</span>` : 'Save as PDF'}</button>
       <span class="r2-tools-status" role="status"></span>
     </div>`;
 }
@@ -826,11 +840,146 @@ function restoreAfterPrint() {
   document.querySelectorAll('details[data-print-opened]').forEach((d) => { d.open = false; delete d.dataset.printOpened; });
 }
 
+// The PDF's file name: browsers name a saved PDF after the page title, so while printing the title is
+// "AI Found Score - Harbor Lane PR - Oct 1 2026" (no characters a file name can't hold).
+function printTitle(report) {
+  const clean = (x) => String(x).replace(/&/g, ' and ')
+    .replace(/[\\/:*?"<>|#%{}$!'`~^=+@;[\]\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ').trim().slice(0, 80).replace(/[. ]+$/, '');
+  const name = clean((report.business && report.business.name) || 'report') || 'report';
+  const date = clean(fmtDate(report.generatedAt).replace(/,/g, ''));
+  return `AI Found Score - ${name}${date ? ` - ${date}` : ''}`;
+}
+
+// The line at the foot of every printed page (CSS page-margin boxes; browsers without them skip it,
+// and the print-end line closes the report either way).
+function printFooterCss(report) {
+  const name = (report.business && report.business.name) || 'your business';
+  const date = fmtDate(report.generatedAt);
+  const q = (s) => '"' + String(s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  const font = 'font-family: Inter, Arial, sans-serif; font-size: 8pt; color: #555;';
+  return `@page { @bottom-left { content: ${q(`aifoundscore.com · Report for ${name}${date ? ` · checked ${date}` : ''}`)}; ${font} } `
+    + `@bottom-right { content: "Page " counter(page) " of " counter(pages); ${font} } }`;
+}
+
+// Shared by email: the report link and one line on what it is. Only the report link goes in it.
+function shareMailto(report, url) {
+  const name = (report.business && report.business.name) || 'our business';
+  const plan = !report.locked && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
+  const what = `what AI assistants like ChatGPT say when customers ask, who they mention, and ${plan ? 'our plan to get mentioned' : 'what to fix first'}`;
+  const body = `Hi,\n\nHere’s the AI Found Score report for ${name}: ${what}.\n\n${url}\n\nAnyone with this link can see the report, so please keep it within the team.`;
+  return `mailto:?subject=${encodeURIComponent(`AI Found Score report for ${name}`)}&body=${encodeURIComponent(body)}`;
+}
+
+// Analytics for the tools: where the button was and what kind of report. Never the report token.
+function trackTool(event, data) {
+  try { if (window.dataLayer) window.dataLayer.push({ event, ...data }); } catch { /* ignore */ }
+}
+
+// Phones and tablets get the system share sheet; computers get the small share box (copy link, email).
+function useShareSheet() {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return false;
+  try { return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches; } catch { return false; }
+}
+
+let sharePop = null;
+function closeSharePop(focusBack = true) {
+  if (!sharePop) return;
+  const { el, opener, off } = sharePop;
+  sharePop = null;
+  off();
+  el.remove();
+  opener.setAttribute('aria-expanded', 'false');
+  if (focusBack && typeof opener.focus === 'function') opener.focus();
+}
+function placeSharePop(el, btn) {
+  const r = btn.getBoundingClientRect();
+  const vw = (document.documentElement && document.documentElement.clientWidth) || window.innerWidth || 360;
+  const vh = window.innerHeight || 640;
+  const w = Math.min(360, vw - 32);
+  // From the sticky header the box stays with the header; elsewhere it scrolls with the page.
+  const fixed = !!btn.closest('.site-header');
+  const sx = fixed ? 0 : (window.scrollX || 0);
+  const sy = fixed ? 0 : (window.scrollY || 0);
+  el.style.position = fixed ? 'fixed' : 'absolute';
+  el.style.width = `${w}px`;
+  el.style.left = `${Math.max(16, Math.min(r.right - w, vw - w - 16)) + sx}px`;
+  const h = el.offsetHeight || 0;
+  const below = r.bottom + 8;
+  el.style.top = `${(below + h > vh && r.top - 8 - h > 0 ? r.top - 8 - h : below) + sy}px`;
+}
+function openSharePop(btn, report, track) {
+  const again = sharePop && sharePop.opener === btn;
+  closeSharePop(false);
+  if (again) return; // a second click on the same button closes it
+  const url = reportUrl();
+  const el = document.createElement('div');
+  el.className = 'share-pop';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Share this report');
+  el.innerHTML = `
+    <button type="button" class="share-pop-x" data-share="close" aria-label="Close">×</button>
+    <p class="share-pop-h">Share this report</p>
+    <p class="share-pop-note">Anyone with this link can see the report, so send it only to people you’d show it to.</p>
+    <input class="share-pop-url" type="text" readonly value="${escapeHtml(url)}" aria-label="Link to this report">
+    <div class="share-pop-btns">
+      <button type="button" class="btn" data-share="copy">Copy link</button>
+      <a class="btn-secondary" data-share="email" href="${escapeHtml(shareMailto(report, url))}">Email to a teammate</a>
+    </div>
+    <p class="share-pop-status" role="status"></p>`;
+  document.body.appendChild(el);
+  placeSharePop(el, btn);
+  el.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-share]');
+    if (!t) return;
+    if (t.dataset.share === 'close') { closeSharePop(); return; }
+    if (t.dataset.share === 'email') { track('email'); return; } // the mail app opens from the link itself
+    if (t.dataset.share === 'copy') {
+      const ok = await copyText(url);
+      track('copy_link');
+      const st = el.querySelector('.share-pop-status');
+      if (st) st.textContent = ok ? 'Link copied. Paste it into an email or a chat.' : 'Select the link above and copy it.';
+      if (!ok) el.querySelector('.share-pop-url')?.select?.();
+    }
+  });
+  const onKey = (e) => { if (e.key === 'Escape') closeSharePop(); };
+  const onDown = (e) => { if (!el.contains(e.target) && !btn.contains(e.target)) closeSharePop(false); };
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('mousedown', onDown);
+  document.addEventListener('touchstart', onDown, { passive: true });
+  const off = () => {
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('mousedown', onDown);
+    document.removeEventListener('touchstart', onDown);
+  };
+  sharePop = { el, opener: btn, off };
+  btn.setAttribute('aria-expanded', 'true');
+  el.querySelector('[data-share="copy"]')?.focus?.();
+  track('menu');
+}
+
 function wireReportTools(root, report) {
-  const status = root.querySelector('.r2-tools-status');
-  const say = (msg) => { if (status) status.textContent = msg; };
-  root.addEventListener('click', async (e) => {
-    const btn = e.target.closest('button[data-action], button[data-copy]');
+  const kind = isDemoReport(report) ? 'sample' : report.locked ? 'free' : 'paid';
+  const whereOf = (btn) => (btn.closest('[data-hdr-tools]') ? 'header' : (btn.closest('[data-tools]')?.dataset.tools || 'bottom'));
+  // While printing: every section open, and the title the PDF is named after.
+  let titleWas = null;
+  const beforePrint = () => {
+    openAllForPrint();
+    if (titleWas == null) { titleWas = document.title; document.title = printTitle(report); }
+  };
+  const afterPrint = () => {
+    restoreAfterPrint();
+    if (titleWas != null) { document.title = titleWas; titleWas = null; }
+  };
+  try {
+    const style = document.createElement('style');
+    style.setAttribute('media', 'print');
+    style.setAttribute('data-print-footer', '');
+    style.textContent = printFooterCss(report);
+    document.head.appendChild(style);
+  } catch { /* no footer line: the print-end line still closes the report */ }
+  document.addEventListener('click', async (e) => {
+    const btn = e.target && typeof e.target.closest === 'function' ? e.target.closest('button[data-action], button[data-copy]') : null;
     if (!btn) return;
     if (btn.dataset.copy != null) {
       const text = COPY_STORE[Number(btn.dataset.copy)];
@@ -841,22 +990,29 @@ function wireReportTools(root, report) {
       setTimeout(() => { btn.textContent = was; }, 1800);
       return;
     }
+    const where = whereOf(btn);
     if (btn.dataset.action === 'print') {
-      openAllForPrint();
+      closeSharePop(false);
+      trackTool('report_print', { where, report_kind: kind });
+      beforePrint();
       window.print();
       return;
     }
     if (btn.dataset.action === 'share') {
-      const url = reportUrl();
-      const title = `AI Found Score — ${report.business?.name || 'report'}`;
-      if (navigator.share) {
-        try { await navigator.share({ title, url }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
+      const track = (method) => trackTool('report_share', { method, where, report_kind: kind });
+      if (useShareSheet()) {
+        const name = (report.business && report.business.name) || 'your business';
+        try {
+          track('native');
+          await navigator.share({ title: `AI Found Score report for ${name}`, text: `AI Found Score report for ${name}`, url: reportUrl() });
+          return;
+        } catch (err) { if (err && err.name === 'AbortError') return; }
       }
-      say((await copyText(url)) ? 'Link copied. Paste it anywhere to share.' : url);
+      openSharePop(btn, report, track);
     }
   });
-  window.addEventListener('beforeprint', openAllForPrint);
-  window.addEventListener('afterprint', restoreAfterPrint);
+  window.addEventListener('beforeprint', beforePrint);
+  window.addEventListener('afterprint', afterPrint);
 }
 
 // Text behind each copy button (kept out of HTML attributes, so nothing needs escaping twice).
@@ -1112,8 +1268,11 @@ function renderV2(root, report) {
   const missingSources = (report.sources || []).filter((s) => s.youListed === false);
   const missingCount = report.sourcesSummary ? num(report.sourcesSummary.missingYou) : missingSources.length;
 
+  // A paid report (or a sample) with an action plan: the plan replaces the fix list (see `order` below).
+  const hasPlan = !locked && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
   const sec = {
-    verdict: verdictV2(report, { t, N, cw, proven, zero, allNamed, b, engineList }),
+    verdict: verdictV2(report, { t, N, cw, proven, zero, allNamed, b, engineList, next: hasPlan ? verdictNextV2(report, { zero, allNamed }) : '' }),
+    topTools: locked ? '' : reportTools('top'),
     hero: heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
     baseline: baselineV2(report, t),
     plan: report.plan ? planPanel(report) : '',
@@ -1139,22 +1298,23 @@ function renderV2(root, report) {
   // A paid report with an action plan is a to-do list: the score, then the plan (which replaces the
   // fix list, the checklist and the Fix Kit band), then the evidence, and anything for sale last.
   // Sample reports show it too: they show a buyer exactly what the audit gives them.
-  const hasPlan = !locked && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
   sec.actionPlan = hasPlan ? actionPlanV2(report) : '';
   sec.breakdownUpsell = hasPlan ? breakdownUpsell(report) : '';
   const order = xrayOk
     ? ['verdict', 'who', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
     : hasPlan
-      ? ['verdict', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'hero', 'who', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell']
-      : ['verdict', 'hero', 'baseline', 'plan', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'recheckCard', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method', 'recheck'];
+      ? ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'hero', 'who', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell']
+      : ['verdict', 'topTools', 'hero', 'baseline', 'plan', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'recheckCard', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method', 'recheck'];
 
   root.innerHTML = [
+    printHeadV2(report, b),
     headerV2(report, b, scoreV2(report)),
     '<div class="wrap r2">',
     report.fullScanPending ? fullScanNote() : '',
     ...order.map((k) => sec[k]),
     xrayOk ? '' : bottomLead(report),
-    reportTools(),
+    reportTools('bottom'),
+    '<p class="print-only print-end">End of report. AI answers change; this is a snapshot from the date above. aifoundscore.com</p>',
     xrayOk ? stickyCtaV2(report) : '',
     '</div>',
   ].join('');
@@ -1193,6 +1353,29 @@ function headerV2(report, b, scoreHtml = '') {
         </div>
       </div>
     </section>`;
+}
+
+// Printed only (Save as PDF): a plain first-page header in place of the navy band. The PDF's file name
+// and per-page footer are set in wireReportTools.
+function printHeadV2(report, b) {
+  const sc = report.score;
+  const has = sc && Number.isFinite(Number(sc.score));
+  const n = has ? Math.max(0, Math.min(100, Math.round(Number(sc.score)))) : 0;
+  const pill = n >= 70 ? 'Strong' : n >= 40 ? 'Fair' : 'Low';
+  const where = [b.town || b.city, b.state].filter(Boolean).join(', ');
+  return `
+    <div class="print-only print-head">
+      <img src="/img/logo.svg" alt="AI Found Score" width="187" height="30">
+      <div class="print-head-row">
+        <div>
+          <p class="print-head-k">AI Found Score report</p>
+          <p class="print-head-name">${escapeHtml(b.name)}</p>
+          <p class="print-head-meta">Checked ${escapeHtml(fmtDate(report.generatedAt))}${where ? ` · ${escapeHtml(where)}` : ''}</p>
+        </div>
+        ${has ? `<p class="print-head-score"><b>${n}</b>/100 <span>${pill}</span></p>` : ''}
+      </div>
+      ${report.sample ? '<p class="print-head-note">Sample report: a fictional business, fictional competitors and made-up answers.</p>' : ''}
+    </div>`;
 }
 
 // Paid, and the full scan (every question, every assistant we have) is still running.
@@ -1248,7 +1431,7 @@ function N_TIMES(n) { return n === 1 ? '1 time' : `${n} times`; }
 // The 5-second answer, first on the page: one literal verdict line next to the AI Found Score.
 // "Named" is a literal name match in the answer text, so the line only says what the answers did.
 // The top competitor is the most-named business with proof (named in 2+ answers, provenEntities).
-function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineList = '' }) {
+function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineList = '', next = '' }) {
   if (!N) return '';
   const asked = N === 1 ? 'We asked AI once.' : `We asked AI ${N} times.`;
   const answers = report.answers || [];
@@ -1281,8 +1464,20 @@ function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineLis
         ${ask}
         <div class="r2-boxes" role="img" aria-label="${N_TIMES(N)} we asked: ${t.namedYou} mentioned you">${boxes}</div>
         <p class="r2-verdict-key">One box per answer: <b class="y">✓ mentioned you</b> <b class="n">✕ didn’t</b>${allUnsure || answers.some((a) => a.ownerMatch === 'unsure') ? ' <b class="u">? not sure</b>' : ''}</p>
+        ${next}
       </div>
     </section>`;
+}
+
+// Paid reports with an action plan: one line in the result box that points at what to do about it,
+// "Do these 3 this week" when there are steps for this week, else the plan itself.
+function verdictNextV2(report, { zero, allNamed }) {
+  const { week } = planState(report);
+  const lead = allNamed ? 'Here’s how to stay on top' : zero ? 'Here’s how to fix it, starting today' : 'Here’s how to get mentioned more, starting today';
+  const what = week.length
+    ? `${week.length === 1 ? '1 thing' : `${week.length} things`} to do this week`
+    : 'your action plan, biggest impact first';
+  return `<p class="r2-verdict-next"><a href="${week.length ? '#this-week' : '#action-plan'}">${lead}: ${what} <span aria-hidden="true">↓</span></a></p>`;
 }
 
 // The AI Found Score: computed by the Worker from this report's own answers
