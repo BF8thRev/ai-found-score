@@ -168,6 +168,31 @@ function servicesFor(question, services) {
   return hit.length ? hit.slice(0, 3) : services.slice(0, 3);
 }
 
+// "you" / "your" in lower case anywhere, or capitalised only as a sentence's first word: "Thank You Roofing" is a name.
+const SECOND_PERSON = /(?:^|[.!?]\s+)(?:You|Your|You're|You’re)\b|\b(?:you|your|yours|you're|you’re|you’ll|you’ve)\b/;
+
+/**
+ * Site copy talks to the visitor ("…media relations to help you build trust"). In a listing or an FAQ answer
+ * about the business that reads wrong. Keep the sentences that never say "you"; when the first sentence does,
+ * keep what comes before its "you" clause ("…specializes in public relations & media relations"). Nothing is
+ * reworded; '' when nothing usable is left.
+ */
+export function aboutTheBusiness(text) {
+  const t = clean(text);
+  if (!SECOND_PERSON.test(t)) return t;
+  const sentences = t.split(/(?<=[.!?])\s+/);
+  const kept = [];
+  for (const x of sentences) { if (SECOND_PERSON.test(x)) break; kept.push(x); }
+  if (kept.length) return kept.join(' ');
+  const first = sentences[0];
+  const m = SECOND_PERSON.exec(first);
+  const head = first.slice(0, m.index);
+  // Back up to where that clause starts: after the last comma, " to ", " so ", " and ", " that " or " which ".
+  const cut = Math.max(head.lastIndexOf(','), ...[' to ', ' so ', ' and ', ' that ', ' which ', ' while ', ' – ', ' — ', ' - '].map((w) => head.lastIndexOf(w)));
+  const before = clean((cut > 0 ? head.slice(0, cut) : '').replace(/[,;:\s–—-]+$/, ''));
+  return before.length >= 20 && !SECOND_PERSON.test(before) ? sentence(before) : '';
+}
+
 /** The owner's words about what they do: their description beyond our one-line default, else their homepage description. */
 export function ownWords(details, report, lead) {
   const desc = clean(details.description);
@@ -177,7 +202,7 @@ export function ownWords(details, report, lead) {
   else if (/^.{0,160}\bis an? [^.]+ in [^.]+\.\s*$/.test(desc)) rest = ''; // just a "X is a Y in Z." line
   if (rest.length < 20) {
     const m = report && report.siteCheck && report.siteCheck.meta;
-    rest = m && typeof m.description === 'string' ? clean(m.description) : '';
+    rest = m && typeof m.description === 'string' ? aboutTheBusiness(m.description) : '';
   }
   if (rest.length < 20) return '';
   if (rest.length > 240) rest = rest.slice(0, 240).replace(/\s+\S*$/, '') + '…';

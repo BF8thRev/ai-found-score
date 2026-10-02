@@ -390,7 +390,7 @@ test('Fix Kit: no box above step 1; "Done for you" on the steps it covers; one h
   for (const id of ['faq', 'contact']) {
     const n = items.findIndex((i) => i.id === id) + 1;
     const step = plan.slice(plan.indexOf(`id="step-${n}"`), plan.indexOf('</li>', plan.indexOf(`id="step-${n}"`)));
-    assert.match(step, /<div class="ap-kitdone">\s*<p><b>Already written for you\.<\/b>[^]*?<a class="btn-secondary" href="\/fix-kit\/office-test-token">Open my Fix Kit<\/a>/, id);
+    assert.match(step, /<div class="ap-kitdone">\s*<p><b>(?:Drafted|Already written) for you\.<\/b>[^]*?<a class="btn-secondary" href="\/fix-kit\/office-test-token">Open my Fix Kit<\/a>/, id);
     assert.doesNotMatch(step, /class="r2-copy"|application\/ld\+json|FAQPage/, id);
   }
   // The card, after the last step.

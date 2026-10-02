@@ -27,7 +27,7 @@
 // Everything here is pure (no fetch, no Node APIs), so it runs in the Worker and in node --test.
 
 import { AI_BOTS, formatPhone } from '../../scanner/owner-checks.js';
-import { normalizeTrade, TRADES, caseKind, buildQuestions } from '../../scanner/questions.js';
+import { normalizeTrade, TRADES, caseKind, buildQuestions, kindClass } from '../../scanner/questions.js';
 import { US_STATES } from '../../scanner/config.js';
 import { SCHEMA_TYPES, GBP_DESCRIPTION_MAX, alwaysOpen, siteSpelling } from '../../scanner/extract/fixes.js';
 import { phoneKey, squashName } from '../../scanner/extract/normalize.js';
@@ -61,6 +61,28 @@ export const GBP_CATEGORIES = Object.freeze({
   auto_repair: ['Auto repair shop', 'Mechanic'],
   laundromat: ['Laundromat'],
 });
+
+/**
+ * Offices (agencies, firms, consultants): Google Business Profile categories by the words in the kind of
+ * business, real Google category names, first = primary. Checked in order; the first match wins.
+ */
+const OFFICE_CATEGORIES = [
+  [/\bpr\b|public relations|communications/i, ['Public relations firm', 'Marketing agency', 'Consultant']],
+  [/attorney|lawyer|\blaw\b|legal/i, ['Law firm', 'Lawyer']],
+  [/software|\bsaas\b|\bit\b|\bmsp\b/i, ['Software company', 'Information technology company']],
+  [/\bseo\b|\bppc\b|marketing|advertis|\bad\b agency|branding|creative agency|digital agency/i, ['Marketing agency', 'Advertising agency', 'Internet marketing service']],
+  [/apprais/i, ['Real estate appraiser']],
+  [/financial|\badvisor|\badviser|wealth/i, ['Financial planner', 'Financial consultant']],
+  [/\bcpa\b|\baccountan|\baccounting|bookkeep|payroll|\btax\b/i, ['Accountant', 'Tax preparation service', 'Bookkeeping service']],
+  [/insurance/i, ['Insurance agency']],
+  [/real estate|realt/i, ['Real estate agency']],
+  [/mortgage|\bloan/i, ['Mortgage broker', 'Mortgage lender']],
+  [/staffing|recruit/i, ['Employment agency']],
+  [/architect/i, ['Architect']],
+  [/engineer/i, ['Engineering consultant']],
+  [/notary/i, ['Notary public']],
+  [/consult/i, ['Business management consultant', 'Consultant']],
+];
 
 /** Starting services per trade when the website listed none. The owner edits them before confirming. */
 export const DEFAULT_SERVICES = Object.freeze({
@@ -484,9 +506,18 @@ export function gbpDescriptionText(d) {
   return out || parts[0].slice(0, GBP_DESCRIPTION_MAX);
 }
 
-export function gbpTxt(d) {
+/** Google Business Profile categories for this business: a trade's list, an office's by its words, else []. */
+export function gbpCategories(d) {
   const key = tradeKey(d.trade);
-  const cats = GBP_CATEGORIES[key] || [];
+  if (key && GBP_CATEGORIES[key]) return [...GBP_CATEGORIES[key]];
+  const kind = clean(d.trade);
+  const hit = kind && OFFICE_CATEGORIES.find(([re]) => re.test(kind));
+  return hit ? [...hit[1]] : [];
+}
+
+export function gbpTxt(d) {
+  const cats = gbpCategories(d);
+  const kind = caseKind(clean(d.trade));
   const desc = gbpDescriptionText(d);
   const out = [
     `GOOGLE BUSINESS PROFILE: ${d.name}`,
@@ -499,7 +530,8 @@ export function gbpTxt(d) {
     '(Use your real business name only. Adding towns or services to the name breaks Google\'s rules.)',
     '',
     'PRIMARY CATEGORY (our suggestion)',
-    cats[0] || 'Pick the category that best matches your main work.',
+    cats[0] || (kind ? `Type "${kind}" into the category box and pick the closest match Google offers.` : 'Pick the category that best matches your main work.'),
+    ...(cats[0] ? ['(Google words its categories its own way: if you don\'t see this exact name, pick the closest one.)'] : []),
     '',
   ];
   if (cats.length > 1) {
@@ -575,6 +607,78 @@ export function detailNotes(d, report) {
   return out;
 }
 
+/** Two short messages that ask a customer for a Google review, and what Google allows. Text only. */
+export function reviewsTxt(d) {
+  const office = kindClass(d.trade) === 'professional';
+  const who = office ? 'client' : 'customer';
+  const link = d.googleReviewUrl || '[Missing: your Google review link. In your Google Business Profile look for "Ask for reviews" (Google may word it differently), copy the link, and add it on your Fix Kit page.]';
+  return [
+    `ASK FOR REVIEWS: ${d.name}`,
+    '',
+    `Reviews are public, and AI assistants and Google can read them. Ask every ${who} after the job is done, while it is fresh.`,
+    'Google does not allow paying for reviews or offering a reward for them, so just ask. Only text people who have agreed to be messaged.',
+    '',
+    'TEXT MESSAGE',
+    `Hi [first name], thank you for choosing ${d.name}. If you have a minute, a short Google review helps other people find us: ${link}`,
+    '',
+    'EMAIL',
+    'Subject: How did we do?',
+    '',
+    'Hi [first name],',
+    '',
+    `Thank you for working with ${d.name}. If you were happy with the work, would you leave us a short review on Google? It takes about a minute: ${link}`,
+    '',
+    'Thank you,',
+    '[Your name]',
+    d.name,
+    ...(d.googleReviewUrl ? ['', 'Print review-qr.svg on invoices, receipts or a card you leave behind. Scan it with your own phone first to check it opens the right page.'] : []),
+    '',
+  ].join('\n');
+}
+
+/** "https://www.pr73.com" or "your website address": where a file should show up. */
+const siteOrigin = (d) => { try { return d.website ? new URL(d.website).origin : ''; } catch { return ''; } };
+
+/**
+ * check-it-worked.txt: how to tell each file is live, what to expect, and how to see whether AI changed.
+ * It promises nothing about what AI will say. The free re-check 30 days after the audit asks the same questions again.
+ */
+export function checkTxt(d, report, jobs = [], { token = '', origin = 'https://aifoundscore.com' } = {}) {
+  const site = siteOrigin(d);
+  const at = (path) => (site ? `${site}${path}` : `your website address followed by ${path}`);
+  // A job the kit says to skip (the builder can't take it, or makes it itself) has nothing to check.
+  const ids = new Set(jobs.filter((j) => !j.skip).map((j) => j.id));
+  const steps = [];
+  if (ids.has('robots')) steps.push(`robots.txt: open ${at('/robots.txt')}. You should see lines that start with "User-agent:" for the AI crawlers.`);
+  if (ids.has('faq')) steps.push('Questions page: open your FAQ page and read it through. Then paste its address into https://validator.schema.org and press Run test. It should list FAQPage with no errors. Only the answers with no [bracket] left are in the code. (Google shows FAQ boxes in search only for some sites, so do not expect one.)');
+  if (ids.has('schema')) steps.push('Business code: paste your home page address into the same test. It should list your business type with your name and address and no errors. If it finds nothing, the code is not on the page yet.');
+  if (ids.has('llms')) steps.push(`llms.txt: open ${at('/llms.txt')}. You should see your business name at the top.`);
+  if (ids.has('google')) steps.push('Google profile: search Google for your business name. A new description or category can take a few days to show.');
+  if (ids.has('qr')) steps.push(d.googleReviewUrl ? 'Review link: scan the QR code with your phone, or send yourself the text message from ask-for-reviews.txt. It should open your Google review page.' : 'Review link: add your Google review link on your Fix Kit page and download again, then send yourself the text message from ask-for-reviews.txt. It should open your Google review page.');
+  const qs = (Array.isArray(report && report.questions) ? report.questions : []).map((q) => clean(q && q.text)).filter(Boolean).slice(0, 7);
+  return [
+    `CHECK IT WORKED: ${d.name}`,
+    '',
+    'WHAT TO EXPECT',
+    '- These files give AI assistants and Google correct facts about your business to read. We cannot promise any assistant will name you: each one decides for itself, and its answers change from one asking to the next.',
+    '- Changes show up at different speeds. Google can take a few days. AI assistants refresh on their own schedule, so look again in about a month.',
+    '- Your next scan asks AI the same questions again and shows what changed. The audit includes a re-check 30 days after you buy; Be the Answer re-scans every month.',
+    '',
+    'STEP 1: CHECK EACH FILE IS LIVE (under half an hour, once your web person is done)',
+    ...(steps.length ? steps.map((x, n) => `${n + 1}. ${x}`) : ['Nothing on your website to check: everything it needed is already in place.']),
+    '',
+    'STEP 2: SEE WHAT AI SAYS (in about a month)',
+    ...(qs.length
+      ? ['Ask these same questions, word for word, in ChatGPT, Gemini and Claude, and note who each one names:', ...qs.map((q) => `- ${q}`)]
+      : ['Ask ChatGPT, Gemini and Claude the questions customers ask about businesses like yours, and note who each one names.']),
+    'One answer proves little, because AI answers vary. Look for a pattern across several tries. Your next scan does this for you with the same questions.',
+    '',
+    ...(token ? [`Your Fix Kit page (change a detail and download again): ${origin}/fix-kit/${encodeURIComponent(token)}`, ''] : []),
+    'Questions: hello@aifoundscore.com',
+    '',
+  ].join('\n');
+}
+
 /**
  * buildKit(details, report, opts) → { jobs, done, faq, missing, files, platform? }
  *   jobs: [{ id, title, tech, what, where, who, optional, note?, platform?, files: [path] }] — only what is
@@ -620,6 +724,7 @@ export function buildKit(details, report, opts = {}) {
         : 'We couldn’t load your website to check it, so this file is here in case: it lets AI assistants read your site.',
       where: 'The top folder of your website. If you already have a robots.txt, add these lines to it instead of replacing it.',
       who: 'web',
+      time: 'Under half an hour for your web person',
       optional: false,
       files: [add('robots.txt', robotsTxt(d, { blocked: site.blocked }))],
       ...onBuilder(['aiCrawlers', 'robots']),
@@ -642,6 +747,7 @@ export function buildKit(details, report, opts = {}) {
     what: `${plural(faq.items.length, 'question', 'questions')} customers ask${lost ? `, starting with the ${lost === 1 ? 'one' : lost} AI didn’t name you for` : ''}, each answered with your details in the plain style AI repeats.`,
     where: 'A page on your website called “FAQ” or “Questions”. On Wix or Squarespace, paste faq-page.txt into a text block; your web person adds the code from faq-page.html.',
     who: 'both',
+    time: 'About an hour for you, then about half an hour for your web person',
     optional: false,
     ...(site.faqSchema ? { note: 'Your website already has some FAQ code. Add these questions to that page rather than making a second one.' } : {}),
     files: [add('faq-page.html', faqHtml(d, report, faq)), add('faq-page.txt', faqTxt(d, report, faq))],
@@ -655,6 +761,7 @@ export function buildKit(details, report, opts = {}) {
     what: 'Your description, categories, services and service area, ready to paste.',
     where: 'Sign in at business.google.com and copy each part into the box with the same name.',
     who: 'you',
+    time: 'Under half an hour for you',
     optional: false,
     files: [add('google-business-profile.txt', gbpTxt(d))],
   });
@@ -667,6 +774,7 @@ export function buildKit(details, report, opts = {}) {
     what: 'Your name, phone, address and service area as a small block of code search engines and AI read directly.',
     where: 'Pasted into the <head> section of your home page by whoever runs your website.',
     who: 'web',
+    time: 'Under half an hour for your web person',
     optional: hasSchema,
     ...(hasSchema ? { note: `Your website already has business code (${site.businessSchema.slice(0, 2).join(', ')}). Use ours only if yours is missing your phone, address or hours.` } : {}),
     files: [add('schema-localbusiness.html', schemaHtml(d))],
@@ -683,22 +791,33 @@ export function buildKit(details, report, opts = {}) {
       what: 'A plain summary of your business written for AI assistants. Newer and optional: helpful, not essential.',
       where: 'The top folder of your website. If your site builder won’t let you add files, skip it.',
       who: 'web',
+      time: 'Under half an hour for your web person',
       optional: true,
       files: [add('llms.txt', llmsTxt(d))],
       ...onBuilder(['llms']),
     });
   }
 
-  if (d.googleReviewUrl) {
+  // Reviews: when AI named others for their reviews, or the owner gave their review link.
+  const reviewsMatter = faq.attributes.some((a) => a.type === 'reviews');
+  if (d.googleReviewUrl || reviewsMatter) {
     jobs.push({
       id: 'qr',
-      title: 'A QR code for Google reviews',
-      tech: 'QR code (SVG)',
-      what: 'Opens your Google review page on a customer’s phone.',
-      where: 'Print it on invoices, receipts or a card you leave after a job.',
+      title: 'Ask happy customers for a Google review',
+      tech: d.googleReviewUrl ? 'Message templates and a QR code (SVG)' : 'Message templates',
+      what: d.googleReviewUrl
+        ? 'Two short messages to send after a job, and a QR code that opens your Google review page on a customer’s phone.'
+        : 'Two short messages to send after a job. Add your Google review link on this page and the kit adds a QR code you can print.',
+      where: d.googleReviewUrl
+        ? 'Send a message after each job. Print the QR code on invoices, receipts or a card you leave behind.'
+        : 'Send a message after each job.',
       who: 'you',
+      time: 'Under half an hour to set up, then seconds per customer',
       optional: false,
-      files: [add('review-qr.svg', qrSvg(d.googleReviewUrl, { ecl: 'M', title: `Leave ${d.name} a Google review` }))],
+      files: [
+        add('ask-for-reviews.txt', reviewsTxt(d)),
+        ...(d.googleReviewUrl ? [add('review-qr.svg', qrSvg(d.googleReviewUrl, { ecl: 'M', title: `Leave ${d.name} a Google review` }))] : []),
+      ],
     });
   }
 
@@ -709,6 +828,8 @@ export function buildKit(details, report, opts = {}) {
       if (!own) continue;
       if (own.can === false) {
         j.optional = true;
+        j.skip = true;
+        delete j.time;
         // Said once, in "Where it goes", not again as a step.
         if (j.platform) j.platform.steps = j.platform.steps.filter((x) => x !== platformStep(pf, own));
         j.where = j.id === 'robots' && platformJob(pf, 'aiCrawlers')
@@ -716,6 +837,8 @@ export function buildKit(details, report, opts = {}) {
           : `${pf.name} can’t take this file, so skip it. ${own.steps}`;
       } else if (own.auto === true) {
         j.optional = true;
+        j.skip = true;
+        delete j.time;
         j.where = `${pf.name} makes this file for you, so you don’t need ours. Use ours only if you’d rather write your own.`;
       }
     }
@@ -724,13 +847,28 @@ export function buildKit(details, report, opts = {}) {
   // Required jobs first (in the order above), the optional ones after.
   const rank = (j) => (j.optional ? 10 : j.order ?? ({ faq: 1, google: 2, schema: 3 }[j.id] || 6));
   const ordered = jobs.map((j, n) => ({ j, n })).sort((a, b) => rank(a.j) - rank(b.j) || a.n - b.n).map(({ j }) => { const { order, ...rest } = j; return rest; });
+  // The builder's plan warning ("custom code needs a paid plan") once, on the first job that has it.
+  if (pf) {
+    const warned = new Set();
+    const warnings = Object.values(pf.jobs).map((e) => e && e.plan).filter(Boolean);
+    for (const j of ordered) {
+      if (!j.platform) continue;
+      j.platform.steps = j.platform.steps.map((step) => {
+        const w = warnings.find((x) => step.endsWith(` ${x}`));
+        if (!w) return step;
+        if (!warned.has(w)) { warned.add(w); return step; }
+        return step.slice(0, -(w.length + 1));
+      });
+    }
+  }
   const missing = missingDetails(d);
   const notes = detailNotes(d, report);
   const platform = pf ? { id: pf.id, name: pf.name } : null;
   const readme = { path: 'README.txt', content: readmeTxt(d, { jobs: ordered, done, faq, missing, notes, platform }, opts) };
+  const check = { path: 'check-it-worked.txt', content: checkTxt(d, report, ordered, opts) };
   const byPath = new Map(files.map((f) => [f.path, f]));
-  const out = [readme, ...ordered.flatMap((j) => j.files.map((p) => byPath.get(p)))];
-  return { jobs: ordered, done, faq, missing, notes, files: out, ...(platform ? { platform } : {}) };
+  const out = [readme, ...ordered.flatMap((j) => j.files.map((p) => byPath.get(p))), check];
+  return { jobs: ordered, done, faq, missing, notes, files: out, check, ...(platform ? { platform } : {}) };
 }
 
 export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token = '', date = new Date() } = {}) {
@@ -742,6 +880,7 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
     'These files help AI assistants and Google describe your business correctly.',
     'Give this folder to whoever looks after your website. Each job below says what it does and where it goes.',
     'Nothing changes on your website until someone puts these files in place.',
+    'The files give AI and Google correct facts to read. We can’t promise any assistant will name you: check-it-worked.txt says what to expect and how to tell.',
     '',
     ...(platform ? [`Your website is built on ${platform.name}. Where a job can be done in ${platform.name}, it says exactly where to click, with ${platform.name}’s own guide.`, ''] : []),
   ];
@@ -758,6 +897,7 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
       `${n + 1}. ${j.title}${j.optional ? ' (optional)' : ''}`,
       `   ${j.files.length > 1 ? 'Files' : 'File'}: ${j.files.join(', ')}`,
       `   What it does: ${j.what}`,
+      ...(j.time ? [`   Time: ${j.time}. No cost from us.`] : []),
       `   Where it goes: ${j.where}`,
       ...(j.platform ? j.platform.steps.map((x) => `   ${x}`) : []),
       ...(j.platform ? j.platform.guides.map((g) => `   ${g.label}: ${g.url}`) : []),

@@ -11,7 +11,7 @@
 // templates filled only with what the owner confirmed. No AI call, no offers, prices or claims invented.
 // Pure: no fetch, no Node APIs.
 
-import { tradeKey, tradeNoun, gbpDescriptionText, GBP_CATEGORIES } from './fix-kit.js';
+import { tradeKey, tradeNoun, gbpDescriptionText, gbpCategories } from './fix-kit.js';
 
 /** How many towns a plan covers: the report's own town plus 2 more. */
 export const PLAN_MAX_TOWNS = 3;
@@ -93,7 +93,7 @@ const joinAnd = (list) => (list.length < 2 ? list.join('') : `${list.slice(0, -1
 
 /** The text to paste on every site, written exactly the same way everywhere. */
 export function directoryPaste(d) {
-  const cats = GBP_CATEGORIES[tradeKey(d.trade)] || [];
+  const cats = gbpCategories(d);
   return {
     name: d.name,
     phone: d.phone,
