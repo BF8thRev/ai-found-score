@@ -312,6 +312,11 @@ a.sample-tab:hover { border-color: var(--blue); color: var(--blue); }
 .page .lede-page { font-size: 20px; line-height: 1.55; color: var(--ink); margin: 0 0 18px; }
 .page ul { padding-left: 22px; }
 .page li { margin-bottom: 8px; }
+.founder-note { border-left: 4px solid var(--blue); background: #F6F9FE; border-radius: 0 var(--radius) var(--radius) 0; padding: 6px 24px; margin: 8px 0; }
+.founder-note p { margin: 14px 0; }
+.founder-note .founder-sign { color: var(--navy); }
+.about-cta { background: #EEF4FE; border: 1px solid #C9DBFA; border-radius: var(--radius); padding: 22px 24px; margin: 36px 0 24px; text-align: center; }
+.about-cta p { margin: 0 0 14px; font-size: 18px; }
 .unsub-form { display: grid; gap: 12px; max-width: 420px; margin-top: 18px; }
 .unsub-form label { font-weight: 700; color: var(--navy); }
 .unsub-form input { font: inherit; padding: 12px 14px; border: 2px solid var(--line); border-radius: 8px; }
