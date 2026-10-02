@@ -12,7 +12,8 @@
 //   - "your title doesn't say what you do" is re-checked with the trade's other names ("PR" and
 //     "public relations" for a PR agency) before it is shown;
 //   - FAQ answers use the business's own homepage description, not a one-line template;
-//   - the FAQ is the Fix Kit's own (shared/faq.js): the same questions and answers in the report and the kit;
+//   - the FAQ is the Fix Kit's own (shared/faq.js), and lives only in the kit: the report says how many
+//     answers need a detail from the owner and links to the kit (Oct 2 2026 owner review), as does the business code;
 //   - website steps say where to click on the owner's own site builder (siteCheck.platform, shared/platforms.js:
 //     "In Wix: …" with Wix's own guide linked), and keep the generic steps when we don't know it.
 
@@ -21,7 +22,7 @@ import { tradeWords, mentionsAny } from '../scanner/owner-checks.js';
 import { businessDetails, napBlock, GBP_DESCRIPTION_MAX, siteSpelling, spellingLine } from '../scanner/extract/fixes.js';
 import { LIST_SITE_RE, NOT_A_LIST_RE, LIST_PATH_RE, CHECK_REASON_TEXT } from '../scanner/extract/sources.js';
 import { isDirectoryName } from './report-v2.js';
-import { faqPlainText, faqJsonLdScript } from './faq.js';
+import { joinFor, JOIN_LABELS } from './directories.js';
 import { reportFaq } from '../src/lib/fix-kit.js';
 import { platformFor, platformJob, platformStep, guideLinks } from './platforms.js';
 
@@ -74,10 +75,27 @@ export function siteType(domain, url = '', { trade = '' } = {}) {
   return 'unsure';
 }
 
+/**
+ * How to join a cited site: shared/directories.js when we checked it on the site's own pages; else, for a
+ * page we read, our best read of it (sources.js joinHints, marked guess); an article is editorial.
+ * → { type, label, url, guess? } | null
+ */
+export function joinInfo(domain, type, guess) {
+  const known = joinFor(domain);
+  if (known) return known;
+  if (type === 'article') return { type: 'editorial — can’t apply', label: JOIN_LABELS['editorial — can’t apply'], url: null };
+  if (guess && typeof guess === 'object') {
+    const label = guess.verdict === 'looks_free' ? 'Looks free to join (our best read)' : guess.verdict === 'has_fee' ? 'Looks like it charges (our best read)' : null;
+    const url = typeof guess.url === 'string' && /^https?:\/\//i.test(guess.url) ? guess.url : null;
+    if (label || url) return { type: 'unknown', label, url, guess: true };
+  }
+  return null;
+}
+
 const squash = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
 
 // A competitor's own website (5wpr.com for 5WPR, berlinrosen.com for BerlinRosen): nothing to get onto.
-function isCompetitorSite(domain, entities) {
+export function isCompetitorSite(domain, entities) {
   if (LIST_SITE_RE.test(domain)) return false;
   const stem = squash(String(domain || '').replace(/\.[a-z.]+$/i, ''));
   if (stem.length < 3) return false;
@@ -110,12 +128,15 @@ export function homepageSaysTrade(meta, trade) {
 }
 
 /**
- * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, kitNote?, time?, cost?, week?, platform?, from }], kitOnly?, platform? }
+ * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, kitNote?, kit?, time?, cost?, week?, platform?, from }], kitOnly?, platform? }
  * `platform` on a step: { name, guides: [{ label, url }] }, the site builder's own help pages for the steps
  * written for it; on the plan: { id, name }, the builder the owner's site is made with (unknown: absent).
  * `kind`: 'professional' (an office: agency, firm), 'trade' (goes to the customer) or 'storefront'.
  * `time`, `cost`: a rough, conservative estimate for the step; `week`: one the owner can finish this
  * week (the page's "Do these 3 this week"). `kitNote`: the Fix Kit already has this step's file.
+ * `kit`: the step's work is a file already written in the Fix Kit, so the report links there instead of
+ * pasting it: { file: 'questions', questions, fromScan, needs } (the Questions page and its code) or
+ * { file: 'code', placeholders } (the business code). Text the owner pastes on other sites stays in copyText.
  * `kitOnly`: stored issue kinds handled only by a Fix Kit file (llms.txt), with no step of their own.
  * `from`: the stored issue kinds this step covers (every stored issue lands in exactly one step,
  * or is dropped on purpose: walk-in advice for an office).
@@ -168,6 +189,7 @@ export function buildActionPlan(report) {
   const lostIds = new Set(lostAnswers.map((a) => a.id));
   const sites = [];
   const httpsUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
+  const searchRan = !!(r.method && r.method.listingSearch);
   for (const s of r.sources || []) {
     if (!s || !s.domain) continue;
     const dom = String(s.domain).toLowerCase().replace(/^www\./, '');
@@ -184,16 +206,26 @@ export function buildActionPlan(report) {
     // to the site itself, not to the rival's page.
     const path = squash(String(s.url || '').replace(/^https?:\/\/[^/]+/i, ''));
     const rivalPage = entities.some((e) => { const n = squash(e.name); return n.length >= 4 && !isDirectoryName(e.name) && path.includes(n); });
-    const status = s.youListed === true ? 'listed' : s.youListed === false ? 'missing' : 'check';
-    const reason = status === 'check' && CHECK_REASON_TEXT[s.checkReason];
+    // listed (we read it, or Google showed their profile there) / missing (we read the page: not on it) /
+    // not_found (we couldn't read it; a Google search found no profile: never "you're not on it") / check.
+    const sc = s.searchCheck && typeof s.searchCheck === 'object' ? s.searchCheck : null;
+    const status = s.youListed === true ? 'listed' : s.youListed === false ? 'missing' : sc && sc.status === 'not_found' ? 'not_found' : 'check';
+    const reason = status === 'check' && (sc && sc.status === 'error' ? 'the Google search for it didn’t answer' : CHECK_REASON_TEXT[s.checkReason]);
+    // Reports made before the search check: a directory we couldn't read is searched on the next scan.
+    const nextScan = status === 'check' && !searchRan && type === 'directory';
+    const join = joinInfo(dom, type, s.joinGuess);
+    const signUp = httpsUrl(s.addUrl) || (join && httpsUrl(join.url));
     sites.push({
       domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, type, status, engines, count: lostIn.length, topListed: s.topListed || null,
       ...(status === 'listed' && httpsUrl(s.profileUrl) ? { profileUrl: s.profileUrl } : {}),
-      ...(status !== 'listed' && httpsUrl(s.addUrl) ? { addUrl: s.addUrl } : {}),
+      ...(status === 'listed' && s.listedBy === 'search' ? { foundBy: 'search' } : {}),
+      ...(status !== 'listed' && signUp ? { addUrl: signUp } : {}),
+      ...(join && join.label ? { join: { label: join.label, type: join.type, ...(join.guess ? { guess: true } : {}) } } : {}),
       ...(reason ? { reason } : {}),
+      ...(nextScan ? { nextScan: true } : {}),
     });
   }
-  const order = { missing: 0, check: 1, listed: 2 };
+  const order = { missing: 0, not_found: 1, check: 2, listed: 3 };
   sites.sort((x, y) => order[x.status] - order[y.status] || y.count - x.count);
   // Directories (a free profile, this week) and industry lists/awards (entries, often yearly, fees,
   // size rules) are different jobs: two steps.
@@ -204,7 +236,20 @@ export function buildActionPlan(report) {
     const missing = shown.filter((s) => s.status === 'missing').length;
     const listed = shown.filter((s) => s.status === 'listed').length;
     const todo = shown.length - listed;
-    const unread = shown.some((s) => s.status === 'check');
+    const unread = shown.filter((s) => s.status === 'check').length;
+    const waiting = shown.filter((s) => s.status === 'check' && s.nextScan).length;
+    const notFound = shown.filter((s) => s.status === 'not_found').length;
+    // What joining costs, from shared/directories.js: only the sentences that apply to these sites.
+    const dirs = shown.filter((x) => x.type === 'directory' && x.status !== 'listed');
+    const jt = (x) => (x.join && !x.join.guess ? x.join.type : 'unknown');
+    const freeOnes = dirs.filter((x) => ['free profile', 'free basic, paid upgrades'].includes(jt(x)));
+    const paidOnes = dirs.filter((x) => jt(x) === 'paid only');
+    const unknownOnes = dirs.filter((x) => jt(x) === 'unknown');
+    const costLine = [
+      freeOnes.length ? ` ${freeOnes.length === dirs.length ? (dirs.length === 1 ? 'It has' : 'Each of these has') : `${listJoin(freeOnes.map((x) => x.domain))} ${freeOnes.length === 1 ? 'has' : 'have'}`} a free basic profile; you don’t need the paid upgrades.` : '',
+      paidOnes.length ? ` ${listJoin(paidOnes.map((x) => x.domain))} ${paidOnes.length === 1 ? 'charges' : 'charge'} to be listed at all: decide whether it’s worth it for you.` : '',
+      unknownOnes.length ? ` We couldn’t confirm what ${listJoin(unknownOnes.map((x) => x.domain))} ${unknownOnes.length === 1 ? 'charges' : 'charge'}: check before you sign up.` : '',
+    ].join('');
     // Both spellings when the website and the request differ: a list may use either.
     const lookFor = spelling ? `“${spelling.site}” or “${spelling.typed}”` : name;
     const listWord = (n) => (shown.some((x) => x.type === 'directory' || x.type === 'unsure') ? plural(n, 'list', 'lists') : plural(n, 'page', 'pages'));
@@ -218,10 +263,12 @@ export function buildActionPlan(report) {
       who: 'you',
       steps: [
         ...(missing ? [`Pages marked “You’re not on it”: we read the page and didn’t find ${lookFor} or a link to your website.${shown.some((s) => s.status === 'missing' && s.addUrl) ? ` Use the “Add your ${office ? 'company' : 'business'}” link next to it.` : ''}`] : []),
-        ...(unread ? [`Pages marked “Not checked yet”: we couldn’t check ${shown.filter((s) => s.status === 'check').length === 1 ? 'it' : 'them'} ourselves${shown.some((s) => s.reason) ? ' (the reason is next to each)' : ''}, so open each one and search it for ${lookFor}.`] : []),
-        ...(listed ? [`Pages marked “You’re listed”: open your profile and make every detail match the block below.`] : []),
-        ...(shown.some((x) => x.type === 'directory')
-          ? [`Directories: if you’re listed, claim the profile (look for “claim this profile” or similar) and make every detail match the block below; if you’re not, use “add your ${office ? 'company' : 'business'}” or “get listed”. A basic profile costs nothing; you don’t need the paid upgrades. Then ask two or three happy ${office ? 'clients' : 'customers'} to leave a review there.`]
+        ...(notFound ? [`Sites marked “No profile found”: the site turns automated reads away, so we searched Google for ${lookFor} on ${notFound === 1 ? 'it' : 'each one'} and found no profile. Google may have missed it: search the site once yourself, and if you’re not there, ${shown.some((s) => s.status === 'not_found' && s.addUrl) ? `use the “Add your ${office ? 'company' : 'business'}” link next to it` : 'look for “add your company” or “get listed”'}.`] : []),
+        ...(waiting ? [`Sites marked “We’ll check this on your next scan”: ${shown.some((s) => s.nextScan && s.reason) ? `we couldn’t read ${waiting === 1 ? 'it' : 'them'} (the reason is next to ${waiting === 1 ? 'it' : 'each'})` : `we haven’t checked ${waiting === 1 ? 'it' : 'them'} for your name yet`}. Your next scan searches Google for your profile there for you; until then, open each one and search it for ${lookFor}.`] : []),
+        ...(unread > waiting ? [`Sites marked “Couldn’t check”: we couldn’t check ${unread - waiting === 1 ? 'it' : 'them'} ourselves${shown.some((s) => s.status === 'check' && !s.nextScan && s.reason) ? ' (the reason is next to each)' : ''}, so open each one and search it for ${lookFor}.`] : []),
+        ...(listed ? [`Sites marked “You’re listed”: open your profile${shown.some((s) => s.foundBy === 'search') ? ' (the link next to it is the one Google showed us)' : ''} and make every detail match the block below.`] : []),
+        ...(dirs.length
+          ? [`Directories: if you’re listed, claim the profile (look for “claim this profile” or similar) and make every detail match the block below; if you’re not, use “add your ${office ? 'company' : 'business'}” or “get listed”.${costLine} Then ask two or three happy ${office ? 'clients' : 'customers'} to leave a review there.`]
           : []),
         ...(shown.some((x) => x.type === 'unsure')
           ? [`Pages marked “Other”: if it lists ${office ? 'firms' : 'businesses'} you can join, add yours; if it’s an article, contact the writer as below.`]
@@ -234,7 +281,7 @@ export function buildActionPlan(report) {
       copyText: listingCopy(d, noun, where, words),
       sites: shown,
       ...(shown.some((x) => x.type === 'directory')
-        ? { time: 'Under half an hour per site', cost: 'No cost for a basic profile', week: true }
+        ? { time: 'Under half an hour per site', cost: paidOnes.length || unknownOnes.length ? (freeOnes.length ? 'No cost for the free ones; some may charge' : 'Some may charge') : 'No cost for a basic profile', week: true }
         : { time: 'Under half an hour per site', cost: 'No cost', week: true }),
       from: notListed.length ? ['not_listed'] : [],
     });
@@ -247,8 +294,11 @@ export function buildActionPlan(report) {
       why: `AI also read ${listJoin(awards.map((s) => s.domain))} when it named ${rivalsText} instead of you. Industry lists and awards like ${plural(awards.length, 'this', 'these')} take entries, often once a year and sometimes with a fee or a size rule, so this is for the next round, not a job for this week.`,
       who: 'you',
       steps: [
-        'Open each page below and find how to enter: look for “submit”, “enter”, “nominate” or “methodology”.',
-        'Check that you qualify (some need a minimum size or fee income) and what it costs to enter.',
+        ...(awards.some((s) => s.addUrl) ? [`Use the “How to enter” link next to ${awards.length === 1 ? 'it' : 'each'}: it’s the list’s own entry page.`] : []),
+        ...(awards.some((s) => !s.addUrl) ? [`Open ${awards.some((s) => s.addUrl) ? 'the others' : awards.length === 1 ? 'the page below' : 'each page below'} and find how to enter: look for “submit”, “enter”, “nominate” or “methodology”.`] : []),
+        awards.every((s) => s.join && s.join.type === 'submission/award with fee')
+          ? `Check that you qualify (some need a minimum size or audited fee income). ${awards.length === 1 ? 'It charges' : 'Each of these charges'} to enter.`
+          : 'Check that you qualify (some need a minimum size or fee income) and what it costs to enter.',
         'Put the next deadline in your calendar, with a reminder two weeks before.',
         `When you enter, use the same name, website and description as everywhere else.`,
       ],
@@ -291,14 +341,9 @@ export function buildActionPlan(report) {
     const rivalText = !rivals.length ? 'other businesses' : hits.size > rivals.length ? `${rivals.join(', ')} and others` : listJoin(rivals);
     const fq = job('faq');
     const hc = job('headCode');
-    // The FAQ code: skipped when the builder's FAQ block writes it; else where it goes on this builder.
-    const codeSteps = fq && fq.schema === true
-      ? []
-      : [
-        'Ask whoever runs your website to add the FAQ code below to the same page. The code must say exactly what the page says, so it holds only the finished answers: add each of the others to it once it’s filled in.',
-        ...(hc ? [hc.can === false ? told(hc) : `For the code, ${told(hc, { page: true }).replace(/^In /, 'in ')}`] : []),
-        'Check the page at validator.schema.org: it should read each question and answer.',
-      ];
+    // The Questions page and its code are written in the Fix Kit (the same questions and answers,
+    // shared/faq.js): the report says so and links there instead of pasting the page and the code here.
+    const where = [fq && told(fq), fq && fq.schema === true ? null : hc && (hc.can === false ? told(hc) : `For the code, ${told(hc, { page: true }).replace(/^In /, 'in ')}`)].filter(Boolean);
     items.push({
       id: 'faq',
       impact: lostQs.length ? 'high' : 'medium',
@@ -310,18 +355,15 @@ export function buildActionPlan(report) {
         : 'A page that answers the questions customers ask, in your words, gives AI something to quote.',
       who: 'both',
       steps: [
-        'Add a “Questions” section to your website: a new page, or the bottom of your homepage.',
-        ...(fq ? [told(fq)] : []),
         ...(faq.needs
-          ? [`Paste the questions and answers below. ${faq.needs === 1 ? 'One answer has' : `${faq.needs} answers have`} a part in [brackets] that only you know (a specialty, a client, a result): write one true sentence in its place, then delete the brackets.`]
-          : ['Paste the questions and answers below.']),
-        ...codeSteps,
+          ? [`Open your Fix Kit and fill in the ${faq.needs === 1 ? 'one detail' : `${faq.needs} details`} it asks for, one true sentence each. The kit puts each one into the page and its code.`]
+          : ['Open your Fix Kit and read the page through: every answer is already complete.']),
+        'Send the Questions page and its code to whoever runs your website: a new page, or the bottom of your homepage. The kit’s guide says where each part goes.',
+        ...where,
+        'Check the page at validator.schema.org once it’s live: it should read each question and answer.',
       ],
-      copyText: [
-        { label: faq.needs ? 'Questions and answers for your website (fill in the brackets)' : 'Questions and answers for your website', text: faqPlainText(faq.items) },
-        { label: 'FAQ code: the finished answers only (JSON-LD)', text: faqJsonLdScript(faq.items), format: 'code' },
-      ],
-      kitNote: 'Done for you: your Questions page and its code are ready in your Fix Kit. The kit asks you for each [bracket] detail and puts it into the page and the code for you.',
+      copyText: [],
+      kit: { file: 'questions', questions: faq.items.length, fromScan: faq.items.filter((x) => x && x.fromScan).length, needs: faq.needs || 0 },
       time: 'About an hour for you, then 1–2 hours for your web person',
       cost: 'No cost',
       week: true,
@@ -431,7 +473,8 @@ export function buildActionPlan(report) {
     const code = (schema[0] && (schema[0].copyText || []).find((c) => c && c.format === 'code')) || null;
     // The stored code leaves out what we don't know; show where the phone (and street) go instead of
     // asking for them to be "filled in" to a block that has no place for them.
-    const codeText = code ? withPlaceholders(String(code.text), { phone: d.phone, street: d.street, wantStreet: !office }) : '';
+    // The kit's code leaves out what we don't know until the owner adds it on the kit page (src/lib/fix-kit.js).
+    const codeMissing = code ? [!d.phone && 'phone number', !office && !d.street && 'street address'].filter(Boolean) : [];
     const ft = nap.length ? job('footer') : null;
     const hc = code ? job('headCode') : null;
     items.push({
@@ -446,12 +489,13 @@ export function buildActionPlan(report) {
         nap.length && `Put your phone number${office ? '' : ' and street address'} as plain text in the footer of every page${office ? ' (add your office address if clients can visit)' : ''}, written the same as on Google.`,
         nap.length && 'Make the phone number a tap-to-call link.',
         ft && told(ft),
-        code && !(hc && hc.can === false) && `Ask whoever runs your website to add the code below to your homepage’s <head> section${/\[your /.test(codeText) ? ', after replacing each part in [brackets] with your real details' : ''}.`,
+        code && !(hc && hc.can === false) && `Send the business code in your Fix Kit to whoever runs your website, to add to your homepage’s <head> section${codeMissing.length ? `. Add your ${listJoin(codeMissing)} on the Fix Kit page first: the kit puts ${codeMissing.length === 1 ? 'it' : 'them'} into the code` : ''}.`,
         hc && told(hc),
         code && !(hc && hc.can === false) && 'Check it at validator.schema.org: it should read your name and contact details.',
       ].filter(Boolean),
-      copyText: code ? [{ ...code, text: codeText, label: 'Business code for your web person (JSON-LD)' }] : [],
-      ...(code ? { kitNote: 'Done for you: this code is ready in your Fix Kit. Send it to whoever runs your website.' } : {}),
+      // The code itself is in the Fix Kit (the report points there instead of pasting it).
+      copyText: [],
+      ...(code ? { kit: { file: 'code', missing: codeMissing } } : {}),
       ...withGuides([ft && 'footer', hc && 'headCode'].filter(Boolean)),
       time: 'About half an hour for your web person',
       cost: 'No cost',
@@ -525,22 +569,3 @@ function listingCopy(d, noun, where, words) {
   return out;
 }
 
-// LocalBusiness JSON-LD with a [placeholder] for the phone (and street) we don't know, so the web
-// person sees where they go. Code we can't parse is returned as is.
-function withPlaceholders(text, { phone = '', street = '', wantStreet = true } = {}) {
-  const m = text.match(/^(\s*<script[^>]*>)([\s\S]*?)(<\/script>\s*)$/i);
-  let o;
-  try { o = JSON.parse(m ? m[2] : text); } catch { return text; }
-  if (!o || typeof o !== 'object') return text;
-  const out = {};
-  for (const [k, v] of Object.entries(o)) {
-    out[k] = v;
-    if (k === 'name' && !o.telephone) out.telephone = phone || '[your phone number]';
-  }
-  if (wantStreet && out.address && typeof out.address === 'object' && !out.address.streetAddress) {
-    const { '@type': type, ...rest } = out.address;
-    out.address = { '@type': type, streetAddress: street || '[your street address]', ...rest };
-  }
-  const json = JSON.stringify(out, null, 2).replace(/</g, '\\u003c');
-  return m ? `${m[1].trim()}\n${json}\n</script>` : json;
-}

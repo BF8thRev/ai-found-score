@@ -152,7 +152,7 @@ const at = (html, s) => { const i = html.indexOf(s); assert.ok(i >= 0, `missing:
 
 test('order (free report with the offer): result, who got the call, offer strip, search card ... offer band, then the reference sections', () => {
   const html = render(load(), locked());
-  const order = ['class="r2-verdict', 'id="who"', 'class="r2-strip"', 'class="r2-hero"', '<h2>What to fix</h2>', 'class="r2-fixwhere"', 'id="offer"', '<h2>Every question, every answer</h2>', 'class="r2-method"'].map((s) => at(html, s));
+  const order = ['class="r2-verdict', 'id="who"', 'class="r2-strip"', 'class="r2-hero"', '<h2>What to fix</h2>', 'class="r2-fixwhere"', 'id="offer"', '<h2>The proof: what AI answered</h2>', 'class="r2-method"'].map((s) => at(html, s));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
 
@@ -180,7 +180,7 @@ test('order without the offer (tier off): findings first, then who got the call;
   const html = render(load({ tier: false }), locked());
   assert.doesNotMatch(html, /r2-strip|r2-grid|<h2>The short version<\/h2>/);
   assert.ok(at(html, 'class="r2-hero"') < at(html, 'id="who"'));
-  assert.ok(at(html, '<h2>Every question, every answer</h2>') > at(html, '<h2>What to fix</h2>'));
+  assert.ok(at(html, '<h2>The proof: what AI answered</h2>') > at(html, '<h2>What to fix</h2>'));
 });
 
 test('score card: number, pill, three-zone meter with the marker at the score, at 0 / 55 / 92', () => {
@@ -426,7 +426,7 @@ test('every question, every answer: the Won/Lost line stays visible, the answers
   const r = load();
   const rep = locked();
   const html = render(r, rep);
-  const sec = html.slice(html.indexOf('<h2>Every question, every answer</h2>'));
+  const sec = html.slice(html.indexOf('<h2>The proof: what AI answered</h2>'));
   const qs = rep.questions.filter((q) => rep.answers.some((a) => a.questionId === q.id));
   assert.equal((sec.match(/<details class="r2-qans">/g) || []).length, qs.length);
   assert.doesNotMatch(sec, /<details class="r2-qans" open/);
@@ -513,7 +513,7 @@ test('every button that means "see the fixes" says the same thing (header, strip
 
 test('every question, every answer: one line until opened; opening a link to an answer opens it', () => {
   const html = render(load(), locked());
-  assert.match(html, /<details class="report-section r2-allans">\s*<summary><h2>Every question, every answer<\/h2><span class="r2-allans-n">\d+ answers?<\/span><\/summary>/);
+  assert.match(html, /<details class="report-section r2-allans">\s*<summary><h2>The proof: what AI answered<\/h2><span class="r2-allans-n">\d+ answers?<\/span><\/summary>/);
   assert.doesNotMatch(html, /<details class="report-section r2-allans" open/);
   const css = readFileSync(new URL('../../../public/css/report-extra.css', import.meta.url), 'utf8');
   assert.match(css, /details\.r2-allans > summary \{ cursor: pointer; display: flex;/);

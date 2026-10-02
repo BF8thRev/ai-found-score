@@ -108,3 +108,23 @@ details > summary::after { content: none !important; display: none !important; }
 /* A copy block can be a page long (the FAQ answers): let it run on rather than leave a blank page. */
 .r2-copy { break-inside: auto !important; }
 .r2-copy-head { break-after: avoid; break-inside: avoid; }
+
+/* "Why AI picked them": outlines instead of washes. A firm's card may run onto the next page (no half-empty
+   pages), but its name stays with its first lines, and a quote or a page row is never split. */
+.r2-why-take, .r2-why-you, .r2-why-card, .r2-why-size, .ap-kitdone { background: none !important; border: 1px solid #bbb !important; }
+.r2-why-take, .r2-why-you, .r2-why-q, .r2-why-pages li, .r2-why-line, .ap-kitdone, .r2-small-q { break-inside: avoid; }
+.r2-why-card, .r2-why-size { break-inside: auto; }
+.r2-why-card h3, .r2-why-meta, .r2-why-k { break-after: avoid; }
+.r2-why-q { background: none !important; border-left: 3pt solid #000 !important; }
+.r2-why-k, .r2-why-q cite, .r2-why-meta { color: #000 !important; }
+/* The Fix Kit button prints as its address. */
+.ap-kitdone .btn-secondary { background: none !important; color: #000 !important; border: 0 !important; padding: 0 !important; font-weight: 700; }
+.ap-kitdone .btn-secondary::after { content: ": aifoundscore.com" attr(href); font-weight: 400; }
+
+/* The answers: plain text, tables wrap on the page, the owner's name underlined (highlights don't print). */
+.r2-md, .r2-md .md-h, .r2-md b, .r2-md a, .r2-ans-sum, .r2-ans-sum .yes, .r2-ans-sum .no { color: #000 !important; }
+.r2-md mark { background: none !important; text-decoration: underline; font-weight: 800; }
+.md-table-wrap { overflow: visible !important; }
+.md-table { width: 100%; table-layout: fixed; }
+.md-table th, .md-table td { border: 1px solid #999 !important; overflow-wrap: anywhere; }
+.r2-ans:has(.r2-md li:nth-child(6)) { break-inside: auto; }

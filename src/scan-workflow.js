@@ -37,8 +37,9 @@ import {
   ENGINE_BATCH, EXTRACT_BATCH, ENGINE_RETRIES, EXTRACT_RETRIES, answerRef, rawIdSeed, extractIdSeed,
   adapterThrew, callFromStoredRaw, extractionResult, proposalsFromExtractions, publishGate,
   shouldConfirmHeadline, headlineTarget, confirmHeadline, confirmationForBuild, confirmRef, CONFIRM_RUN,
-  cleanQuestionList,
+  cleanQuestionList, listingIdSeed, listingUsageRow,
 } from './admin/scan-core.js';
+import { listingSearchFor } from '../scanner/extract/listing-search.js';
 import { dryRunEnabled, dryRunEnv, dryRunFetch } from './admin/dry-run.js';
 import { redact } from './admin/redact.js';
 import { isBillingError, noteBillingError, sendPaidScanAlert } from './lib/alerts.js';
@@ -245,9 +246,21 @@ export class ScanWorkflow extends WorkflowEntrypoint {
             await saveUsage(env, [usageRow({ id, scanId, kind: 'extract', provider: 'anthropic', model: x.model, usage: x.usage, costUsd: x.costUsd, ok: x.ok, error: x.error && safe(x.error), answerRef: x.key })], { fetchImpl });
           }
         };
+        // Paid tiers only: the cited directories we couldn't read, looked up through Google (Gemini).
+        // Each lookup is a scan_usage row (kind 'listing'), so its cost lands in the scan total.
+        const listingSearch = dry ? null : listingSearchFor({ trigger: p.trigger, env, fetchImpl });
+        let listingCostUsd = 0;
+        const onListingSearch = async (x) => {
+          listingCostUsd += x.costUsd || 0;
+          if (store) {
+            const id = await stableUuid(listingIdSeed(scanId, x.domain, ctx?.attempt || 1));
+            const saved = await saveUsage(env, [listingUsageRow({ id, scanId, call: x, error: x.error && safe(x.error) })], { fetchImpl });
+            if (!saved.ok) console.error('[scan-workflow] scan_usage write failed', scanId, x.domain, safe(saved.error));
+          }
+        };
         const { report, rejected } = await buildReport({
           scan, business, baseline, env, fetchImpl, id: p.reportToken, proposalsByAnswer, onExtract,
-          headlineConfirmation: confirmationForBuild(confirmation),
+          headlineConfirmation: confirmationForBuild(confirmation), listingSearch, onListingSearch,
         });
         // The publish gate: re-check regardless of what the builder says.
         const validation = publishGate(report, validateReport(report));
@@ -275,6 +288,7 @@ export class ScanWorkflow extends WorkflowEntrypoint {
           saved,
           storeError,
           extraExtractCostUsd: round6(extraExtractCostUsd),
+          listingCostUsd: round6(listingCostUsd),
           headlineConfirmed: report.method?.headlineConfirmed ?? null,
         };
       });

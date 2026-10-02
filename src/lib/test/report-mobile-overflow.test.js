@@ -28,3 +28,15 @@ test('copy blocks and code stay inside their box and scroll on their own', () =>
   has('.r2-copytext', /overflow-wrap:\s*anywhere/);
   has('.r2 code', /overflow-wrap:\s*anywhere/);
 });
+
+test('"Why AI picked them" and the rendered answers stay inside the page on a phone', () => {
+  for (const sel of ['.r2-why-card', '.r2-why-pages li', '.r2-md', '.r2-ans-sum', '.ap-kitdone']) {
+    has(sel, /min-width:\s*0/);
+    has(sel, /overflow-wrap:\s*anywhere/);
+  }
+  has('.r2-why-take', /overflow-wrap:\s*anywhere/);
+  has('.r2-why-you', /overflow-wrap:\s*anywhere/);
+  // A table in an answer scrolls inside its own box.
+  has('.md-table-wrap', /max-width:\s*100%/);
+  has('.md-table-wrap', /overflow-x:\s*auto/);
+});

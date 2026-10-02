@@ -4,7 +4,7 @@
 import { BILLING_ERROR_RE } from '../../scanner/engines/_common.js';
 import { ENGINE_IDS, DEFAULT_RUNS, round6 } from '../../scanner/config.js';
 import { normalizeTrade } from '../../scanner/questions.js';
-import { scrubKeyFragments } from '../../scanner/store.js';
+import { scrubKeyFragments, usageRow } from '../../scanner/store.js';
 import { verifyAnswer } from '../../scanner/extract/verify.js';
 
 export const TRIGGERS = ['admin', 'request', 'recheck', 'paid', 'monthly'];
@@ -183,7 +183,7 @@ export function callWindow(calls) {
 export function scanTotals({ calls = [], extractions = [], build = null, confirmation = null, usageCostUsd = null }) {
   const conf = confirmation && confirmation.attempted ? confirmation : null;
   const engineCost = round6(calls.reduce((s, c) => s + (Number(c.costUsd) || 0), 0) + (Number(conf?.costUsd) || 0));
-  const runExtract = extractions.reduce((s, x) => s + (Number(x.costUsd) || 0), 0) + (Number(build?.extraExtractCostUsd) || 0) + (Number(conf?.extractCostUsd) || 0);
+  const runExtract = extractions.reduce((s, x) => s + (Number(x.costUsd) || 0), 0) + (Number(build?.extraExtractCostUsd) || 0) + (Number(build?.listingCostUsd) || 0) + (Number(conf?.extractCostUsd) || 0);
   const extractCost = round6(usageCostUsd != null && Number.isFinite(Number(usageCostUsd)) ? Number(usageCostUsd) : runExtract);
   const errors = [
     ...calls.filter((c) => !c.ok).map((c) => ({ kind: 'engine', engine: c.engine, questionId: c.questionId, run: c.run, error: c.error || 'no answer' })),
@@ -230,6 +230,22 @@ export const rawIdSeed = (scanId, key) => `${scanId}:${key}`;
  * stored, so a retry after a landed write is a second billed call and must be recorded too.
  */
 export const extractIdSeed = (scanId, key, attempt = 1) => `${scanId}:extract:${key}${attempt > 1 ? `:a${attempt}` : ''}`;
+
+/**
+ * Seed of a directory lookup's scan_usage id (paid tiers: scanner/extract/listing-search.js). A retried
+ * build step gets its own id per attempt: the lookup was billed again.
+ */
+export const listingIdSeed = (scanId, domain, attempt = 1) => `${scanId}:listing:${domain}${attempt > 1 ? `:a${attempt}` : ''}`;
+
+/** One directory lookup as a scan_usage row: kind 'listing', Gemini with Google Search, its searches and list-price cost. */
+export function listingUsageRow({ id, scanId, call, error = call && call.error }) {
+  const u = (call && call.usage) || {};
+  return usageRow({
+    id, scanId, kind: 'listing', provider: 'google', model: (call && call.model) || null,
+    usage: { input_tokens: u.inputTokens || 0, output_tokens: u.outputTokens || 0 }, searches: (call && call.searches) || 0,
+    costUsd: (call && call.costUsd) || 0, ok: !!(call && call.ok), error: error || null, answerRef: `listing:${(call && call.domain) || ''}`,
+  });
+}
 
 /** What an adapter "returned" when it threw (adapters shouldn't; one bug can't sink the scan). */
 export function adapterThrew(engine, e) {

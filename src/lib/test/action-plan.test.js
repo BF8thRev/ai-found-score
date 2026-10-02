@@ -15,6 +15,8 @@ import { reportBody, lockReport } from '../lock.js';
 import { recheckDueAt } from '../auto-scan.js';
 import { MOCK_REPORTS } from '../../mock/sample-reports.js';
 import { officeReport } from './fixtures/office-report.js';
+import { faqPlainText, faqJsonLdScript } from '../../../shared/faq.js';
+import { reportFaq } from '../fix-kit.js';
 
 const allText = (plan) => JSON.stringify(plan.items);
 const byId = (plan, id) => plan.items.find((i) => i.id === id);
@@ -91,15 +93,17 @@ test('homepage step: "PR & Media Relations" says what a PR agency does; only the
 
 test('FAQ drafts: their own homepage words, "a PR agency", and [brackets] for what only they know', () => {
   const faq = byId(buildActionPlan(officeReport()), 'faq');
-  const qa = faq.copyText[0].text;
+  // The page itself is the Fix Kit's (shared/faq.js); the plan step only points to it.
+  const qa = faqPlainText(reportFaq(officeReport()).items);
   assert.match(qa, /^What's the best PR agency in New York City, NY\?\nHarbor Lane PR is a PR agency in New York City, NY\. Harbor Lane's integrated communications team/);
   assert.match(qa, /\[[^\]]+\]/);
   assert.doesNotMatch(qa, /\ban PR\b|\bpr agency\b/);
   // The 2 scan questions AI didn't name them for (no "open now" for an office), then 4 more.
   assert.equal(qa.split('\n\n').length, 6);
   assert.doesNotMatch(qa, /open now/i, 'the "open now" question is left out for an office');
-  assert.match(faq.copyText[1].text, /"@type": "FAQPage"/);
-  assert.doesNotMatch(faq.copyText[1].text, /\[[A-Z]/, 'no [bracket] placeholder can go live in the FAQ code');
+  const code = faqJsonLdScript(reportFaq(officeReport()).items);
+  assert.match(code, /"@type": "FAQPage"/);
+  assert.doesNotMatch(code, /\[[A-Z]/, 'no [bracket] placeholder can go live in the FAQ code');
   // The homepage words appear once, not in every answer.
   assert.equal(qa.split("Harbor Lane's integrated communications team").length - 1, 1);
   // Names, not an inflated count; never a directory.
@@ -164,11 +168,12 @@ test('edge cases: no town, no questions, duplicate titles, positional facts', ()
   assert.equal(buildActionPlan(f).items.find((i) => i.title === 'AI states your phone differently').id, id1);
 });
 
-test('contact step: says where the phone goes in the code; office title doesn’t promise an address', () => {
+test('contact step: the code is in the Fix Kit, which asks for the phone; office title doesn’t promise an address', () => {
   const c = byId(buildActionPlan(officeReport()), 'contact');
   assert.equal(c.title, 'Put your phone number and business code on your website');
-  assert.match(c.copyText[0].text, /"telephone": "\[your phone number\]"/);
-  assert.match(c.steps.join(' '), /replacing each part in \[brackets\]/);
+  assert.deepEqual(c.copyText, [], 'the code is not pasted into the report');
+  assert.deepEqual(c.kit, { file: 'code', missing: ['phone number'] }, 'an office is not asked for a street');
+  assert.match(c.steps.join(' '), /Send the business code in your Fix Kit .*Add your phone number on the Fix Kit page first/);
 });
 
 test('lists step: a paid membership association is not a list to "get on"; awards get an entry step', () => {
@@ -244,21 +249,23 @@ const at = (html, s) => { const i = html.indexOf(s); assert.ok(i >= 0, `page has
 test('paid page: the action plan comes first, with the Fix Kit; evidence after; anything for sale last', () => {
   const html = render(loadPage(), reportBody(officeReport(), true));
   const plan = at(html, '<h2>Your action plan</h2>');
-  assert.ok(plan < at(html, 'told a customer who asked'), 'before the AI quote');
-  assert.ok(plan < at(html, 'Who AI recommended instead'), 'before who AI recommended');
+  assert.ok(plan < at(html, '<h2>Why AI picked them</h2>'), 'before the evidence');
+  // One evidence section replaces the search card, the "who instead" bars and the sources list.
+  assert.doesNotMatch(html, /told a customer who asked|Who AI recommended instead|Why they got named instead/);
   const n = buildActionPlan(officeReport()).items.length;
   assert.ok(at(html, 'Hand the website work to your web person') > at(html, `id="step-${n}"`), 'Fix Kit card after the last step');
-  assert.ok(at(html, 'Every question, every answer') < at(html, 'Want us to keep watching?'), 'Be the Answer after the evidence');
+  assert.ok(at(html, 'The proof: every answer, word for word') < at(html, 'Want us to keep watching?'), 'Be the Answer after the evidence');
   assert.ok(at(html, 'Want us to keep watching?') < at(html, 'Get my Competitor Breakdown'), '$25 offer last of all');
   // The plan replaces the old fix list, the checklist and the Fix Kit band.
   assert.doesNotMatch(html, /What to fix, in order|Your fix checklist|Your Fix Kit is included\.|Get my Fix Kit/);
   // No gap sheet made of "found nothing" cards.
   assert.doesNotMatch(html, /Competitor gap sheet|We found no sites AI cited that list them/);
-  // Sites we couldn't read are folded, not a wall of "Not checked".
-  assert.match(html, /<details class="r2-fold"><summary>\d+ (more )?sites? AI read for these answers<\/summary>/);
-  // Clutch is a directory, never in "Who AI recommended".
-  const who = html.slice(at(html, 'Who AI recommended instead'), at(html, 'Who AI recommended instead') + 3000);
-  assert.doesNotMatch(who, />Clutch</);
+  // Sites we couldn't read are not a wall of "Not checked": the plan's lists step handles them.
+  const why = html.slice(at(html, 'id="why-picked"'), html.indexOf('</section>', at(html, 'id="why-picked"')));
+  assert.doesNotMatch(why, /Not checked|Couldn’t check/);
+  // Clutch is a directory, never one of the firms AI picked.
+  assert.doesNotMatch(why, /<h3>Clutch/);
+  assert.match(why, /<h3>Brightline Communications<\/h3>/);
   // One tick per step, the first step's "How to do it" open, why + who on every step.
   assert.equal((html.match(/data-ap="/g) || []).length, n);
   assert.equal((html.match(/<details class="ap-row" open>/g) || []).length, 1);
@@ -275,19 +282,22 @@ test('paid page: saved ticks come back (done steps struck, the first undone step
   assert.match(html, /id="step-2">[\s\S]*?<details class="ap-row" open>/);
 });
 
-test('sample report shows the plan as a buyer would see it, with nothing to buy and no Fix Kit link', () => {
+test('sample report shows the plan as a buyer would see it, with nothing to buy and only the sample Fix Kit', () => {
   const html = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
   assert.match(html, /<h2>Your action plan<\/h2>/);
-  assert.ok(html.indexOf('<h2>Your action plan</h2>') < html.indexOf('Who got the call instead'));
+  assert.ok(html.indexOf('<h2>Your action plan</h2>') < html.indexOf('<h2>Why AI picked them</h2>'));
   assert.doesNotMatch(html, /Open my Fix Kit|Get my Competitor Breakdown|Want us to keep watching\?|Your fix checklist|What to fix, in order/);
+  assert.match(html, /<a class="btn-secondary" href="\/fix-kit\/sample-001">See the sample Fix Kit<\/a>/);
   // The sample's gap sheet found gaps, so it stays, without its own checklist.
   assert.match(html, /<h2>Competitor gap sheet<\/h2>/);
 });
 
-test('paid page never says "free" in the plan', () => {
+// Our own service is never "free" in the paid plan; a directory's join terms ("Free basic profile") are its data.
+test('paid page never says "free" in the plan, except a directory’s own join terms', () => {
   const html = render(loadPage(), reportBody(officeReport(), true));
   const plan = html.slice(html.indexOf('id="action-plan"'), html.indexOf('</section>', html.indexOf('id="action-plan"')));
-  assert.doesNotMatch(plan, /\bfree\b/i);
+  assert.match(plan, /Free basic profile/);
+  assert.doesNotMatch(plan.replace(/(Looks )?free to join|(a )?free basic profile|No cost for the free ones/gi, ''), /\bfree\b/i);
 });
 
 test('Be the Answer report: plan panel and action plan together; Fix Kit link uses the plan token; no $499 pitch', () => {
@@ -322,36 +332,31 @@ test('site types: directories are claimed, industry lists are entered, articles 
   assert.match(lists.steps.join(' '), /Articles and “best of” posts: find the writer/);
 });
 
-test('contact code uses the real phone and street when known; placeholders only when missing', () => {
+test('contact code: nothing to add when the phone is known', () => {
   const rep = officeReport();
   rep.business = { ...rep.business, phone: '(212) 555-0100' };
   const c = byId(buildActionPlan(rep), 'contact');
-  assert.match(c.copyText[0].text, /"telephone": "\(212\) 555-0100"/);
-  assert.doesNotMatch(c.copyText[0].text, /\[your/);
-  assert.doesNotMatch(c.steps.join(' '), /brackets/);
+  assert.deepEqual(c.kit, { file: 'code', missing: [] });
+  assert.doesNotMatch(c.steps.join(' '), /brackets|first/);
 });
 
-test('FAQ code is added only once the answers are final, and matches the page', () => {
+test('FAQ step: the page and its code live in the Fix Kit; the step says how many answers need a detail', () => {
   const faq = byId(buildActionPlan(officeReport()), 'faq');
-  assert.match(faq.copyText[1].label, /finished answers only/);
-  assert.match(faq.steps.join(' '), /The code must say exactly what the page says/);
-  // Every finished answer on the page is in the code, word for word; one still waiting for a detail is not.
-  const blocks = faq.copyText[0].text.split(/\n\n/).map((b) => b.split(/\n/));
-  assert.equal(blocks.length, 6);
-  const code = JSON.parse(faq.copyText[1].text.replace(/^<script[^>]*>|<\/script>$/g, ''));
-  for (const [q, a] of blocks) {
-    const inCode = code.mainEntity.find((m) => m.name === q);
-    if (/\[/.test(a)) assert.equal(inCode, undefined, q);
-    else assert.equal(inCode.acceptedAnswer.text, a, q);
-  }
-  assert.ok(code.mainEntity.length >= 1);
+  const kitFaq = reportFaq(officeReport());
+  assert.deepEqual(faq.copyText, [], 'no Q&A dump and no FAQ code in the report');
+  assert.deepEqual(faq.kit, { file: 'questions', questions: kitFaq.items.length, fromScan: kitFaq.items.filter((i) => i.fromScan).length, needs: kitFaq.needs });
+  assert.ok(kitFaq.needs >= 1);
+  assert.match(faq.steps[0], new RegExp(`fill in the ${kitFaq.needs} details it asks for`));
+  assert.match(faq.why, /gives AI something to quote/, 'the why stays');
 });
 
-test('Fix Kit notes show on a paid report and never on a sample', () => {
+test('Fix Kit notes show on a paid report; a sample only links to the sample kit', () => {
   const paid = render(loadPage(), reportBody(officeReport(), true));
   assert.match(paid, /class="ap-kitnote"/);
+  assert.match(paid, /class="ap-kitdone"/);
   const sample = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
-  assert.doesNotMatch(sample, /ap-kitnote|Fix Kit/);
+  assert.doesNotMatch(sample, /ap-kitnote|Open my Fix Kit|\/fix-kit\/sample-001-/);
+  assert.ok((sample.match(/href="\/fix-kit\/([^"]+)"/g) || []).every((h) => h === 'href="/fix-kit/sample-001"'), 'only the sample kit');
 });
 
 test('the plumber sample: its town directory is a directory, and the row shows who does the step', () => {
@@ -376,10 +381,17 @@ test('Fix Kit: no box above step 1; "Done for you" on the steps it covers; one h
   assert.ok(plan.indexOf('Open my Fix Kit') > plan.indexOf('id="step-1"'), 'no Fix Kit link above step 1');
   assert.doesNotMatch(plan, /not both/);
   const items = reportBody(officeReport(), true).xray.actionPlan.items;
-  for (const id of ['faq', 'contact', 'google']) {
+  for (const id of ['google']) {
     const n = items.findIndex((i) => i.id === id) + 1;
     const step = plan.slice(plan.indexOf(`id="step-${n}"`), plan.indexOf('</li>', plan.indexOf('class="ap-kitnote"', plan.indexOf(`id="step-${n}"`))));
     assert.match(step, /<p class="ap-kitnote">Done for you: [^<]*Fix Kit[^<]* <a href="\/fix-kit\/office-test-token">Open my Fix Kit<\/a><\/p>/, id);
+  }
+  // The Questions page and the business code: written in the kit, never pasted here.
+  for (const id of ['faq', 'contact']) {
+    const n = items.findIndex((i) => i.id === id) + 1;
+    const step = plan.slice(plan.indexOf(`id="step-${n}"`), plan.indexOf('</li>', plan.indexOf(`id="step-${n}"`)));
+    assert.match(step, /<div class="ap-kitdone">\s*<p><b>Already written for you\.<\/b>[^]*?<a class="btn-secondary" href="\/fix-kit\/office-test-token">Open my Fix Kit<\/a>/, id);
+    assert.doesNotMatch(step, /class="r2-copy"|application\/ld\+json|FAQPage/, id);
   }
   // The card, after the last step.
   const card = plan.slice(at(plan, 'class="ap-kitcard"'));
@@ -437,7 +449,7 @@ test('lists split: directories this week; rankings and awards a later "put the d
   assert.match(awards.cost, /charge to enter/);
   assert.ok(plan.items.indexOf(lists) < plan.items.indexOf(awards));
   const html = paidOffice();
-  assert.match(html, /<span class="badge low">Not checked yet<\/span>/);
+  assert.match(html, /<span class="badge low">We’ll check this on your next scan<\/span>/);
   assert.doesNotMatch(html, /<span class="badge low">Check<\/span>|marked “Check”/);
 });
 
@@ -470,14 +482,16 @@ test('the website checklist and the plan agree: "PR & Media Relations" says what
 test('office report: no van or storefront wording, and a missing Google profile isn’t "listings disagree"', () => {
   const html = paidOffice();
   assert.doesNotMatch(html, /towns you serve|got the call|licenses|say where you work|Google Maps listing/i);
-  assert.match(html, /<h2>Who AI recommended instead<\/h2>/);
+  assert.match(html, /<h2>Why AI picked them<\/h2>/);
+  assert.match(html, /The other firms AI named in 2 or more answers/);
   const listings = html.slice(at(html, '<h2>Your listings</h2>'), html.indexOf('</section>', at(html, '<h2>Your listings</h2>')));
   assert.match(listings, /We couldn’t find a Google Business Profile for Harbor Lane PR\./);
   assert.match(listings, /✗ Not found/);
   assert.doesNotMatch(listings, /disagree|1 of 1/);
   // A plumber keeps their own words.
   const trade = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
-  assert.match(trade, /Who got the call instead/);
+  assert.match(trade, /<h3>Businesses your size<\/h3>/);
+  assert.match(render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], false)), /Who got the call instead/, 'the free page keeps its words');
 });
 
 test('paid report with a plan: the website checklist is a closed box for the web person, with one line on top', () => {
@@ -494,10 +508,13 @@ test('paid report with a plan: the website checklist is a closed box for the web
   assert.doesNotMatch(render(loadPage(), reportBody(officeReport(), false)), /r2-site-more/);
 });
 
-test('sites we couldn’t read: a calm line, pointed at the plan', () => {
+test('sites we couldn’t read: no badge in the evidence, pointed at the plan step', () => {
   const html = paidOffice();
-  assert.match(html, /<summary>8 sites AI read for these answers<\/summary><p class="r2-muted r2-fold-note">We haven’t checked these pages for your name yet\. Nothing here needs doing now/);
-  assert.doesNotMatch(html, /couldn’t read for listings/);
+  const why = html.slice(at(html, 'id="why-picked"'), html.indexOf('</section>', at(html, 'id="why-picked"')));
+  const n = reportBody(officeReport(), true).xray.actionPlan.items.findIndex((i) => i.id === 'lists') + 1;
+  assert.match(why, />Clutch<\/a> <span class="r2-muted">clutch\.co<\/span> <span class="ap-type">List<\/span><\/li>/);
+  assert.match(why, new RegExp(`when it named them; you can get on [^<]*\\(<a href="#step-${n}" data-step="${n}">step ${n}</a>\\)`));
+  assert.doesNotMatch(html, /couldn’t read for listings|Not checked/);
 });
 
 test('the free 30-day re-check: right after the plan, with its date; never on a sample, a plan or a re-check', () => {
@@ -505,7 +522,7 @@ test('the free 30-day re-check: right after the plan, with its date; never on a 
   rep.recheckOn = '2099-11-01T18:00:00.000Z';
   const html = render(loadPage(), rep);
   const card = at(html, '<h3>Your free re-check</h3>');
-  assert.ok(card > at(html, 'class="ap-kitcard"') && card < at(html, 'told a customer who asked'), 'after the plan, before the evidence');
+  assert.ok(card > at(html, 'class="ap-kitcard"') && card < at(html, '<h2>Why AI picked them</h2>'), 'after the plan, before the evidence');
   assert.match(html, /On Nov 1, 2099, we’ll ask AI the same questions again and email you what changed\./);
   // No date known: says when without one.
   assert.match(render(loadPage(), reportBody(officeReport(), true)), /About 30 days after you bought your audit, we’ll ask AI the same questions again/);

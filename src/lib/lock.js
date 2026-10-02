@@ -11,6 +11,7 @@
 // Any recorded payment for the token unlocks all of it.
 import { xraySections, computeVisibilityScore, isGenericFix, buildCompetitorBreakdown } from '../../shared/report-v2.js';
 import { buildActionPlan, homepageSaysTrade } from '../../shared/action-plan.js';
+import { buildWhyPicked } from '../../shared/why-picked.js';
 
 /** The fields of an issue that survive locking. Everything else (description, steps, copyText, …) is dropped. */
 export const LOCKED_ISSUE_FIELDS = ['kind', 'severity', 'title'];
@@ -132,8 +133,11 @@ export function reportBody(report, unlocked, { breakdown = false } = {}) {
   if (report.version === 2) report = withTradeRecheck(report);
   if (!unlocked) return withScore(lockReport(report));
   if (report.version !== 2) return report;
+  // The action plan, and "Why AI picked them" (the firms named instead, what AI said about each, the
+  // pages it read for them: shared/why-picked.js), with each list page's status from the plan.
+  const actionPlan = buildActionPlan(report);
   return withScore({
-    ...report, locked: false, xray: { ...xraySections(report), actionPlan: buildActionPlan(report) }, ...(breakdown ? { breakdown: buildCompetitorBreakdown(report) } : {}),
+    ...report, locked: false, xray: { ...xraySections(report), actionPlan, whyPicked: buildWhyPicked(report, actionPlan) }, ...(breakdown ? { breakdown: buildCompetitorBreakdown(report) } : {}),
   });
 }
 

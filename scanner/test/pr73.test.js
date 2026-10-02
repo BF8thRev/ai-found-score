@@ -122,7 +122,9 @@ test('which cited pages are read: lists and directories, never social sites or w
   assert.equal(looksLikeList('prnewswire.com', 'https://prnewswire.com/top-news'), false);
   assert.equal(looksLikeList('kestrelpr.example.com', 'https://kestrelpr.example.com/about'), false);
   assert.equal(addUrlFor('www.goodfirms.co'), 'https://www.goodfirms.co/get-listed');
-  assert.equal(addUrlFor('clutch.co'), null, 'not confirmed: no link');
+  // Clutch turns our crawler away; its sign-up page comes from shared/directories.js (checked on clutch.co).
+  assert.equal(addUrlFor('clutch.co'), 'https://vendor.clutch.co/profile/create/basic');
+  assert.equal(addUrlFor('publicrelationsdatabase.com'), null, 'not confirmed: no link');
 });
 
 test('buildSources: robots.txt obeyed, 403 and bot walls are "couldn’t check", read pages say listed or not', async () => {
