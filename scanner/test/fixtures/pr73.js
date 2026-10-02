@@ -113,9 +113,32 @@ export function fakeWeb({ places = (q) => (/^PR73\b/.test(q) ? [PR73_PLACE] : /^
   return f;
 }
 
-/** The PR 73 report as the scan builds it (scanner/extract/build.js), fully offline. */
-export async function buildPr73Report() {
+/**
+ * A fake Google (Gemini) directory lookup, as listing-search.js search() returns it. Per directory:
+ *   clutch.co       a grounding citation on Clutch whose path is PR73's profile → listed;
+ *   themanifest.com "NONE", the search read only Manifest list pages → no profile found;
+ *   designrush.com  the reply makes up a DesignRush URL but the search never cited DesignRush → not accepted.
+ * Each lookup costs $0.0151 (1 search at list price + tokens). `asked` logs every directory looked up.
+ */
+export function fakeListingSearch() {
+  const asked = [];
+  const replies = {
+    'clutch.co': { text: 'https://clutch.co/profile/pr73', citations: [{ url: 'https://clutch.co/profile/pr73', title: 'clutch.co' }] },
+    'themanifest.com': { text: 'NONE', citations: [{ url: 'https://themanifest.com/pr/agencies/new-york', title: 'themanifest.com' }] },
+    'designrush.com': { text: 'https://www.designrush.com/agency/profile/pr73', citations: [{ url: 'https://www.pr73.com/', title: 'pr73.com' }] },
+  };
+  const search = async ({ directory, prompt }) => {
+    asked.push({ directory, prompt });
+    const r = replies[directory] || { text: 'NONE', citations: [] };
+    return { ok: true, engine: 'gemini', model: 'gemini-test', costUsd: 0.0151, usage: { inputTokens: 120, outputTokens: 40 }, searches: 1, ...r };
+  };
+  search.asked = asked;
+  return search;
+}
+
+/** The PR 73 report as the scan builds it (scanner/extract/build.js), fully offline. opts.listingSearch: a paid-tier lookup. */
+export async function buildPr73Report({ listingSearch = null, onListingSearch } = {}) {
   const web = fakeWeb();
-  const { report, validation } = await buildReport({ scan: SCAN, business: BUSINESS, proposalsByAnswer: PROPOSALS, env: { GOOGLE_PLACES_API_KEY: 'test-key' }, fetchImpl: web, id: 'pr73-test-token' });
-  return { report, validation, web };
+  const built = await buildReport({ scan: SCAN, business: BUSINESS, proposalsByAnswer: PROPOSALS, env: { GOOGLE_PLACES_API_KEY: 'test-key' }, fetchImpl: web, id: 'pr73-test-token', listingSearch, onListingSearch });
+  return { report: built.report, validation: built.validation, web, listingSearch: built.listingSearch };
 }

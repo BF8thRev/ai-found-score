@@ -22,6 +22,7 @@ import { businessDetails, napBlock, GBP_DESCRIPTION_MAX, siteSpelling, spellingL
 import { LIST_SITE_RE, NOT_A_LIST_RE, LIST_PATH_RE, CHECK_REASON_TEXT } from '../scanner/extract/sources.js';
 import { isDirectoryName } from './report-v2.js';
 import { faqPlainText, faqJsonLdScript } from './faq.js';
+import { joinFor, JOIN_LABELS } from './directories.js';
 import { reportFaq } from '../src/lib/fix-kit.js';
 import { platformFor, platformJob, platformStep, guideLinks } from './platforms.js';
 
@@ -72,6 +73,23 @@ export function siteType(domain, url = '', { trade = '' } = {}) {
   if (/(^|[/-])(director(y|ies)|listings?|find|near|businesses|companies|agencies|firms|pros|contractors|services)([/-]|$)/.test(path)
     || (tradeWord.length >= 3 && squash(path).includes(tradeWord))) return 'directory';
   return 'unsure';
+}
+
+/**
+ * How to join a cited site: shared/directories.js when we checked it on the site's own pages; else, for a
+ * page we read, our best read of it (sources.js joinHints, marked guess); an article is editorial.
+ * → { type, label, url, guess? } | null
+ */
+export function joinInfo(domain, type, guess) {
+  const known = joinFor(domain);
+  if (known) return known;
+  if (type === 'article') return { type: 'editorial — can’t apply', label: JOIN_LABELS['editorial — can’t apply'], url: null };
+  if (guess && typeof guess === 'object') {
+    const label = guess.verdict === 'looks_free' ? 'Looks free to join (our best read)' : guess.verdict === 'has_fee' ? 'Looks like it charges (our best read)' : null;
+    const url = typeof guess.url === 'string' && /^https?:\/\//i.test(guess.url) ? guess.url : null;
+    if (label || url) return { type: 'unknown', label, url, guess: true };
+  }
+  return null;
 }
 
 const squash = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
@@ -168,6 +186,7 @@ export function buildActionPlan(report) {
   const lostIds = new Set(lostAnswers.map((a) => a.id));
   const sites = [];
   const httpsUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
+  const searchRan = !!(r.method && r.method.listingSearch);
   for (const s of r.sources || []) {
     if (!s || !s.domain) continue;
     const dom = String(s.domain).toLowerCase().replace(/^www\./, '');
@@ -184,16 +203,26 @@ export function buildActionPlan(report) {
     // to the site itself, not to the rival's page.
     const path = squash(String(s.url || '').replace(/^https?:\/\/[^/]+/i, ''));
     const rivalPage = entities.some((e) => { const n = squash(e.name); return n.length >= 4 && !isDirectoryName(e.name) && path.includes(n); });
-    const status = s.youListed === true ? 'listed' : s.youListed === false ? 'missing' : 'check';
-    const reason = status === 'check' && CHECK_REASON_TEXT[s.checkReason];
+    // listed (we read it, or Google showed their profile there) / missing (we read the page: not on it) /
+    // not_found (we couldn't read it; a Google search found no profile: never "you're not on it") / check.
+    const sc = s.searchCheck && typeof s.searchCheck === 'object' ? s.searchCheck : null;
+    const status = s.youListed === true ? 'listed' : s.youListed === false ? 'missing' : sc && sc.status === 'not_found' ? 'not_found' : 'check';
+    const reason = status === 'check' && (sc && sc.status === 'error' ? 'the Google search for it didn’t answer' : CHECK_REASON_TEXT[s.checkReason]);
+    // Reports made before the search check: a directory we couldn't read is searched on the next scan.
+    const nextScan = status === 'check' && !searchRan && type === 'directory';
+    const join = joinInfo(dom, type, s.joinGuess);
+    const signUp = httpsUrl(s.addUrl) || (join && httpsUrl(join.url));
     sites.push({
       domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, type, status, engines, count: lostIn.length, topListed: s.topListed || null,
       ...(status === 'listed' && httpsUrl(s.profileUrl) ? { profileUrl: s.profileUrl } : {}),
-      ...(status !== 'listed' && httpsUrl(s.addUrl) ? { addUrl: s.addUrl } : {}),
+      ...(status === 'listed' && s.listedBy === 'search' ? { foundBy: 'search' } : {}),
+      ...(status !== 'listed' && signUp ? { addUrl: signUp } : {}),
+      ...(join && join.label ? { join: { label: join.label, type: join.type, ...(join.guess ? { guess: true } : {}) } } : {}),
       ...(reason ? { reason } : {}),
+      ...(nextScan ? { nextScan: true } : {}),
     });
   }
-  const order = { missing: 0, check: 1, listed: 2 };
+  const order = { missing: 0, not_found: 1, check: 2, listed: 3 };
   sites.sort((x, y) => order[x.status] - order[y.status] || y.count - x.count);
   // Directories (a free profile, this week) and industry lists/awards (entries, often yearly, fees,
   // size rules) are different jobs: two steps.
@@ -204,7 +233,20 @@ export function buildActionPlan(report) {
     const missing = shown.filter((s) => s.status === 'missing').length;
     const listed = shown.filter((s) => s.status === 'listed').length;
     const todo = shown.length - listed;
-    const unread = shown.some((s) => s.status === 'check');
+    const unread = shown.filter((s) => s.status === 'check').length;
+    const waiting = shown.filter((s) => s.status === 'check' && s.nextScan).length;
+    const notFound = shown.filter((s) => s.status === 'not_found').length;
+    // What joining costs, from shared/directories.js: only the sentences that apply to these sites.
+    const dirs = shown.filter((x) => x.type === 'directory' && x.status !== 'listed');
+    const jt = (x) => (x.join && !x.join.guess ? x.join.type : 'unknown');
+    const freeOnes = dirs.filter((x) => ['free profile', 'free basic, paid upgrades'].includes(jt(x)));
+    const paidOnes = dirs.filter((x) => jt(x) === 'paid only');
+    const unknownOnes = dirs.filter((x) => jt(x) === 'unknown');
+    const costLine = [
+      freeOnes.length ? ` ${freeOnes.length === dirs.length ? (dirs.length === 1 ? 'It has' : 'Each of these has') : `${listJoin(freeOnes.map((x) => x.domain))} ${freeOnes.length === 1 ? 'has' : 'have'}`} a free basic profile; you don’t need the paid upgrades.` : '',
+      paidOnes.length ? ` ${listJoin(paidOnes.map((x) => x.domain))} ${paidOnes.length === 1 ? 'charges' : 'charge'} to be listed at all: decide whether it’s worth it for you.` : '',
+      unknownOnes.length ? ` We couldn’t confirm what ${listJoin(unknownOnes.map((x) => x.domain))} ${unknownOnes.length === 1 ? 'charges' : 'charge'}: check before you sign up.` : '',
+    ].join('');
     // Both spellings when the website and the request differ: a list may use either.
     const lookFor = spelling ? `“${spelling.site}” or “${spelling.typed}”` : name;
     const listWord = (n) => (shown.some((x) => x.type === 'directory' || x.type === 'unsure') ? plural(n, 'list', 'lists') : plural(n, 'page', 'pages'));
@@ -218,10 +260,12 @@ export function buildActionPlan(report) {
       who: 'you',
       steps: [
         ...(missing ? [`Pages marked “You’re not on it”: we read the page and didn’t find ${lookFor} or a link to your website.${shown.some((s) => s.status === 'missing' && s.addUrl) ? ` Use the “Add your ${office ? 'company' : 'business'}” link next to it.` : ''}`] : []),
-        ...(unread ? [`Pages marked “Not checked yet”: we couldn’t check ${shown.filter((s) => s.status === 'check').length === 1 ? 'it' : 'them'} ourselves${shown.some((s) => s.reason) ? ' (the reason is next to each)' : ''}, so open each one and search it for ${lookFor}.`] : []),
-        ...(listed ? [`Pages marked “You’re listed”: open your profile and make every detail match the block below.`] : []),
-        ...(shown.some((x) => x.type === 'directory')
-          ? [`Directories: if you’re listed, claim the profile (look for “claim this profile” or similar) and make every detail match the block below; if you’re not, use “add your ${office ? 'company' : 'business'}” or “get listed”. A basic profile costs nothing; you don’t need the paid upgrades. Then ask two or three happy ${office ? 'clients' : 'customers'} to leave a review there.`]
+        ...(notFound ? [`Sites marked “No profile found”: the site turns automated reads away, so we searched Google for ${lookFor} on ${notFound === 1 ? 'it' : 'each one'} and found no profile. Google may have missed it: search the site once yourself, and if you’re not there, ${shown.some((s) => s.status === 'not_found' && s.addUrl) ? `use the “Add your ${office ? 'company' : 'business'}” link next to it` : 'look for “add your company” or “get listed”'}.`] : []),
+        ...(waiting ? [`Sites marked “We’ll check this on your next scan”: ${shown.some((s) => s.nextScan && s.reason) ? `we couldn’t read ${waiting === 1 ? 'it' : 'them'} (the reason is next to ${waiting === 1 ? 'it' : 'each'})` : `we haven’t checked ${waiting === 1 ? 'it' : 'them'} for your name yet`}. Your next scan searches Google for your profile there for you; until then, open each one and search it for ${lookFor}.`] : []),
+        ...(unread > waiting ? [`Sites marked “Couldn’t check”: we couldn’t check ${unread - waiting === 1 ? 'it' : 'them'} ourselves${shown.some((s) => s.status === 'check' && !s.nextScan && s.reason) ? ' (the reason is next to each)' : ''}, so open each one and search it for ${lookFor}.`] : []),
+        ...(listed ? [`Sites marked “You’re listed”: open your profile${shown.some((s) => s.foundBy === 'search') ? ' (the link next to it is the one Google showed us)' : ''} and make every detail match the block below.`] : []),
+        ...(dirs.length
+          ? [`Directories: if you’re listed, claim the profile (look for “claim this profile” or similar) and make every detail match the block below; if you’re not, use “add your ${office ? 'company' : 'business'}” or “get listed”.${costLine} Then ask two or three happy ${office ? 'clients' : 'customers'} to leave a review there.`]
           : []),
         ...(shown.some((x) => x.type === 'unsure')
           ? [`Pages marked “Other”: if it lists ${office ? 'firms' : 'businesses'} you can join, add yours; if it’s an article, contact the writer as below.`]
@@ -234,7 +278,7 @@ export function buildActionPlan(report) {
       copyText: listingCopy(d, noun, where, words),
       sites: shown,
       ...(shown.some((x) => x.type === 'directory')
-        ? { time: 'Under half an hour per site', cost: 'No cost for a basic profile', week: true }
+        ? { time: 'Under half an hour per site', cost: paidOnes.length || unknownOnes.length ? (freeOnes.length ? 'No cost for the free ones; some may charge' : 'Some may charge') : 'No cost for a basic profile', week: true }
         : { time: 'Under half an hour per site', cost: 'No cost', week: true }),
       from: notListed.length ? ['not_listed'] : [],
     });
@@ -247,8 +291,11 @@ export function buildActionPlan(report) {
       why: `AI also read ${listJoin(awards.map((s) => s.domain))} when it named ${rivalsText} instead of you. Industry lists and awards like ${plural(awards.length, 'this', 'these')} take entries, often once a year and sometimes with a fee or a size rule, so this is for the next round, not a job for this week.`,
       who: 'you',
       steps: [
-        'Open each page below and find how to enter: look for “submit”, “enter”, “nominate” or “methodology”.',
-        'Check that you qualify (some need a minimum size or fee income) and what it costs to enter.',
+        ...(awards.some((s) => s.addUrl) ? [`Use the “How to enter” link next to ${awards.length === 1 ? 'it' : 'each'}: it’s the list’s own entry page.`] : []),
+        ...(awards.some((s) => !s.addUrl) ? [`Open ${awards.some((s) => s.addUrl) ? 'the others' : awards.length === 1 ? 'the page below' : 'each page below'} and find how to enter: look for “submit”, “enter”, “nominate” or “methodology”.`] : []),
+        awards.every((s) => s.join && s.join.type === 'submission/award with fee')
+          ? `Check that you qualify (some need a minimum size or audited fee income). ${awards.length === 1 ? 'It charges' : 'Each of these charges'} to enter.`
+          : 'Check that you qualify (some need a minimum size or fee income) and what it costs to enter.',
         'Put the next deadline in your calendar, with a reminder two weeks before.',
         `When you enter, use the same name, website and description as everywhere else.`,
       ],

@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { register } from 'node:module';
-import { buildPr73Report } from '../../../scanner/test/fixtures/pr73.js';
+import { buildPr73Report, fakeListingSearch } from '../../../scanner/test/fixtures/pr73.js';
 import { officeReport } from './fixtures/office-report.js';
 import { lintText } from '../../../shared/report-v2.js';
 
@@ -85,8 +85,8 @@ test('GET /api/report/<token>, a new scan: each list says listed, not on it, or 
     assert.match(cm, /<span class="badge match">You’re listed — check the details<\/span>/);
     assert.match(cm, /href="https:\/\/www\.communicationsmatch\.com\/company\/pr73"/);
     // Couldn't check: the reason, never "not on it".
-    assert.match(siteRow(plan, 'clutch.co'), /Not checked yet<\/span>.*\(the site blocks automated checks\)/s);
-    assert.match(siteRow(plan, 'designrush.com'), /Not checked yet<\/span>.*\(the site asks crawlers not to read this page\)/s);
+    assert.match(siteRow(plan, 'clutch.co'), /We’ll check this on your next scan<\/span>.*\(the site blocks automated checks\)/s);
+    assert.match(siteRow(plan, 'designrush.com'), /We’ll check this on your next scan<\/span>.*\(the site asks crawlers not to read this page\)/s);
     // One name in the plan, and the plain ask to pick one.
     assert.match(plan, /Your website writes “PR73” and your report request said “PR 73” — pick one and use it everywhere\./);
     assert.match(plan, /Business name: PR73/);
@@ -117,7 +117,7 @@ test('GET /api/report/<token>, a report stored before: the spelling is fixed fro
     for (const s of lists.sites) assert.equal(s.status, 'check', 'never read: never "not on it"');
     assert.ok(lists.sites.every((s) => !s.reason), 'no reason we don’t have');
     const plan = planOf(render(body));
-    assert.match(plan, /<span class="badge low">Not checked yet<\/span>/);
+    assert.match(plan, /<span class="badge low">We’ll check this on your next scan<\/span>/);
     assert.doesNotMatch(plan, /You’re not on it|You’re listed/);
     assert.match(plan, /Your website writes “PR73” and your report request said “PR 73” — pick one and use it everywhere\./);
     assert.match(plan, /Business name: PR73/);
@@ -268,5 +268,68 @@ test('GET /api/report/sample-001?preview=locked: no small-firm section (a locked
     const body = await (await call('/api/report/sample-001?preview=locked')).json();
     assert.equal(body.locked, true);
     assert.doesNotMatch(render(body), /id="your-size"/);
+  });
+});
+
+// ---- Listed or not through Google, and free to join (Oct 2 2026) ----
+const rowText = (row) => row.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+
+test('GET /api/report/<token>, a paid scan with the Google lookup: listed via search, no profile found, join terms and sign-up links', async () => {
+  const { report, validation } = await buildPr73Report({ listingSearch: fakeListingSearch() });
+  assert.deepEqual(validation.errors, []);
+  await withWorker(report, async (call, seen) => {
+    const body = await (await call(`/api/report/${TOKEN}`)).json();
+    const lists = body.xray.actionPlan.items.find((i) => i.id === 'lists');
+    const by = (d) => lists.sites.find((s) => s.domain === d);
+    assert.deepEqual(['clutch.co', 'themanifest.com', 'designrush.com'].map((d) => by(d).status), ['listed', 'not_found', 'not_found']);
+    const plan = planOf(render(body));
+    // Clutch: Google showed the profile; the domain links to it.
+    const clutch = siteRow(plan, 'clutch.co');
+    assert.match(clutch, /<span class="badge match">You’re listed — check the details<\/span>/);
+    assert.match(clutch, /href="https:\/\/clutch\.co\/profile\/pr73"/);
+    assert.match(rowText(clutch), /found through Google/);
+    // The Manifest: searched, nothing found. Said as a search result, never "you're not on it".
+    const tm = siteRow(plan, 'themanifest.com');
+    assert.match(tm, /<span class="badge low">No profile found<\/span>/);
+    assert.match(rowText(tm), /we searched Google for you on themanifest\.com and found no profile/);
+    assert.match(tm, /<span class="ap-join">Free to join<\/span>/);
+    assert.match(tm, /<a class="ap-add" href="https:\/\/clutch\.co\/get-listed"[^>]*>Add your company<\/a>/);
+    assert.doesNotMatch(tm, /You’re not on it/);
+    // DesignRush: the model's made-up URL was not accepted.
+    const dr = siteRow(plan, 'designrush.com');
+    assert.match(dr, /No profile found/);
+    assert.match(dr, /Free basic profile<\/span>/);
+    assert.match(dr, /href="https:\/\/www\.designrush\.com\/submit\/agency"/);
+    // CommunicationsMatch (read, listed) and GoodFirms (read, not on it) keep their own reads.
+    assert.match(siteRow(plan, 'goodfirms.co'), /You’re not on it<\/span>.*Free basic profile/s);
+    // The how: only the sub-steps that apply; nothing waits for a next scan.
+    assert.match(plan, /Sites marked “No profile found”: the site turns automated reads away, so we searched Google for “PR73” or “PR 73” on each one and found no profile\./);
+    assert.doesNotMatch(plan, /next scan|Couldn’t check|Not checked yet/);
+    assert.deepEqual(lintText(plan.replace(/href="[^"]*"/g, '').replace(/<[^>]+>/g, ' ')).map((h) => h.word), []);
+    assert.ok(seen.every((u) => u.startsWith('https://sb.example/')), 'serving never searches');
+  });
+});
+
+test('GET /api/report/<token>, the live PR 73 report as stored: join terms and sign-up links now, the search on the next scan', async () => {
+  await withWorker(storedBeforeOct2(), async (call, seen) => {
+    const body = await (await call(`/api/report/${TOKEN}`)).json();
+    const plan = planOf(render(body));
+    const clutch = siteRow(plan, 'clutch.co');
+    assert.match(clutch, /<span class="badge low">We’ll check this on your next scan<\/span>/);
+    assert.match(clutch, /<span class="ap-join">Free basic profile<\/span>/);
+    assert.match(clutch, /<a class="ap-add" href="https:\/\/vendor\.clutch\.co\/profile\/create\/basic"[^>]*>Add your company<\/a>/);
+    assert.match(siteRow(plan, 'themanifest.com'), /Free to join<\/span>.*href="https:\/\/clutch\.co\/get-listed"/s);
+    assert.match(siteRow(plan, 'communicationsmatch.com'), /Paid listing<\/span>.*href="https:\/\/www\.communicationsmatch\.com\/account\/registration"/s);
+    // The industry list: an entry fee, and the list's own entry page.
+    const od = siteRow(plan, 'odwyerpr.com');
+    assert.match(od, /<span class="ap-join">Entry fee<\/span>/);
+    assert.match(od, /<a class="ap-add" href="https:\/\/www\.odwyerpr\.com\/pr_firm_[a-z]+\/Rank-Your-Firm-With-ODwyers-2026\.pdf"[^>]*>How to enter<\/a>/);
+    // The how adapts: the next scan does the search; costs only as known.
+    assert.match(plan, /Sites marked “We’ll check this on your next scan”: we haven’t checked them for your name yet\. Your next scan searches Google for your profile there for you/);
+    assert.match(plan, /clutch\.co and themanifest\.com have a free basic profile; you don’t need the paid upgrades\. communicationsmatch\.com charges to be listed at all/);
+    assert.match(plan, /Use the “How to enter” link next to it/);
+    assert.doesNotMatch(plan, /Not checked yet|No profile found|A basic profile costs nothing/);
+    assert.deepEqual(lintText(plan.replace(/href="[^"]*"/g, '').replace(/<[^>]+>/g, ' ')).map((h) => h.word), []);
+    assert.ok(seen.every((u) => u.startsWith('https://sb.example/')), 'a pure lookup: nothing fetched at serve time');
   });
 });

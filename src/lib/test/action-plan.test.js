@@ -284,10 +284,12 @@ test('sample report shows the plan as a buyer would see it, with nothing to buy 
   assert.match(html, /<h2>Competitor gap sheet<\/h2>/);
 });
 
-test('paid page never says "free" in the plan', () => {
+// Our own service is never "free" in the paid plan; a directory's join terms ("Free basic profile") are its data.
+test('paid page never says "free" in the plan, except a directory’s own join terms', () => {
   const html = render(loadPage(), reportBody(officeReport(), true));
   const plan = html.slice(html.indexOf('id="action-plan"'), html.indexOf('</section>', html.indexOf('id="action-plan"')));
-  assert.doesNotMatch(plan, /\bfree\b/i);
+  assert.match(plan, /Free basic profile/);
+  assert.doesNotMatch(plan.replace(/(Looks )?free to join|(a )?free basic profile|No cost for the free ones/gi, ''), /\bfree\b/i);
 });
 
 test('Be the Answer report: plan panel and action plan together; Fix Kit link uses the plan token; no $499 pitch', () => {
@@ -437,7 +439,7 @@ test('lists split: directories this week; rankings and awards a later "put the d
   assert.match(awards.cost, /charge to enter/);
   assert.ok(plan.items.indexOf(lists) < plan.items.indexOf(awards));
   const html = paidOffice();
-  assert.match(html, /<span class="badge low">Not checked yet<\/span>/);
+  assert.match(html, /<span class="badge low">We’ll check this on your next scan<\/span>/);
   assert.doesNotMatch(html, /<span class="badge low">Check<\/span>|marked “Check”/);
 });
 

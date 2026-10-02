@@ -679,14 +679,27 @@ function actionPlanV2(report) {
   // Each site's status from the scan's own read of the page: not on it (with the directory's "add your
   // company" page when we know it), listed (with the profile we saw), or not checked (with why, when known).
   const office = report.xray && report.xray.actionPlan && report.xray.actionPlan.kind === 'professional';
-  const SITE_BADGE = { missing: ['mismatch', 'You’re not on it'], listed: ['match', 'You’re listed — check the details'], check: ['low', 'Not checked yet'] };
-  const siteExtra = (s) => {
-    if (s.status === 'missing' && s.addUrl) return ` <a class="ap-add" href="${safeHref(s.addUrl)}" rel="nofollow noopener" target="_blank">Add your ${office ? 'company' : 'business'}</a>`;
-    if (s.status === 'check' && s.reason) return ` <span class="r2-muted">(${escapeHtml(s.reason)})</span>`;
-    return '';
+  // One line per site: status, how to join (from our checked table of directories, or our best read of the
+  // page), and the sign-up link. "No profile found" is a Google search that came back empty, never a fact.
+  const SITE_BADGE = {
+    missing: ['mismatch', 'You’re not on it'], listed: ['match', 'You’re listed — check the details'],
+    not_found: ['low', 'No profile found'], check: ['low', 'Couldn’t check'], waiting: ['low', 'We’ll check this on your next scan'],
   };
+  const siteExtra = (s) => {
+    const out = [];
+    if (s.status === 'listed' && s.foundBy === 'search') out.push(' <span class="r2-muted">(found through Google: the link opens your profile)</span>');
+    if (s.status === 'not_found') out.push(` <span class="r2-muted">(we searched Google for you on ${escapeHtml(s.domain)} and found no profile)</span>`);
+    if (s.status === 'check' && s.reason) out.push(` <span class="r2-muted">(${escapeHtml(s.reason)})</span>`);
+    if (s.join && s.join.label) out.push(` <span class="ap-join">${escapeHtml(s.join.label)}</span>`);
+    if (s.status !== 'listed' && s.addUrl) {
+      const text = s.type === 'award' ? 'How to enter' : `Add your ${office ? 'company' : 'business'}`;
+      out.push(` <a class="ap-add" href="${safeHref(s.addUrl)}" rel="nofollow noopener" target="_blank">${text}</a>`);
+    }
+    return out.join('');
+  };
+  const badgeOf = (s) => SITE_BADGE[s.status === 'check' && s.nextScan ? 'waiting' : s.status] || SITE_BADGE.check;
   const sites = (list) => ((list || []).length ? `
-          <ul class="ap-sites">${list.map((s) => { const [cls, label] = SITE_BADGE[s.status] || SITE_BADGE.check; const href = s.status === 'listed' && s.profileUrl ? s.profileUrl : s.url; return `<li><span class="badge ${cls}">${label}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(href)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${siteExtra(s)}${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`; }).join('')}</ul>` : '');
+          <ul class="ap-sites">${list.map((s) => { const [cls, label] = badgeOf(s); const href = s.status === 'listed' && s.profileUrl ? s.profileUrl : s.url; return `<li><span class="badge ${cls}">${label}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(href)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${siteExtra(s)}${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`; }).join('')}</ul>` : '');
   // Wired once the page is in the DOM: save a tick, strike the step through, update the count.
   setTimeout(() => {
     const root = typeof document.getElementById === 'function' ? document.getElementById('action-plan') : null;

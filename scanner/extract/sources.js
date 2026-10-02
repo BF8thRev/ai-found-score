@@ -5,6 +5,7 @@
 
 import { domainOf, normalizeUrl, normalizeName, phoneKey, digits, nameVariants, squashName } from './normalize.js';
 import { getText, parseRobots, robotsAllows, siteUrl } from '../owner-checks.js';
+import { directoryFor } from '../../shared/directories.js';
 
 export const DIRECTORY_DOMAINS = [
   'yellowpages.com', 'superpages.com', 'yelp.com', 'angi.com', 'angieslist.com', 'homeadvisor.com',
@@ -48,7 +49,10 @@ export const ADD_URLS = Object.freeze({
 export function addUrlFor(domain) {
   const d = String(domain || '').toLowerCase().replace(/^www\./, '');
   const k = Object.keys(ADD_URLS).find((x) => d === x || d.endsWith(`.${x}`));
-  return k ? ADD_URLS[k] : null;
+  if (k) return ADD_URLS[k];
+  // Else the sign-up page in shared/directories.js (each checked on the directory's own site).
+  const known = directoryFor(d);
+  return (known && known.signUpUrl) || null;
 }
 
 /** normalizeCitation({url,...}) → { domain, url } | null */
@@ -200,6 +204,39 @@ export function checkListingPage(html, business, { names = [], pageUrl = '' } = 
   };
 }
 
+// "Add your business", "claim your listing", "get listed", "submit your agency", "list your company".
+const JOIN_LINK_RE = /\b(add (your|a) (business|company|agency|firm|practice|listing)|claim (your|this|my) (business|listing|profile|page|company)|get listed|list (your|my) (business|company|agency|firm|practice)|submit (your |a )?(business|company|agency|firm|listing|entry|nomination)|join (us )?(as a|for free)|create (a |your )?(free )?(business |company )?(profile|listing)|for (businesses|agencies|pros|providers|companies))\b/i;
+const FEE_RE = /\b(entry fees?|entry form fee|fees? to enter|submission fees?|listing fees?|paid (listing|membership)|per (entry|submission))\b/i;
+const PRICING_LINK_RE = /\b(pricing|plans and pricing|entry fees?|fees)\b/i;
+const FREE_RE = /\b(free (listing|profile|to join|to list|basic)|(list|join|add)[^.]{0,30}\bfor free|it'?s free|at no cost|free of charge)\b/i;
+
+/**
+ * joinHints(html, pageUrl) → { verdict: 'looks_free' | 'has_fee' | 'unknown', url, feeUrl } | null
+ * Our best read of a page we were allowed to read, for a site that isn't in shared/directories.js:
+ * a "get listed / claim / submit" link, and whether the page talks about it being free or about a fee.
+ * Never a fact: the plan labels it "our best read". null when the page shows neither.
+ */
+export function joinHints(html, pageUrl = '') {
+  const h = String(html || '');
+  let url = null;
+  let feeUrl = null;
+  for (const m of h.matchAll(/<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const label = htmlToText(m[2]);
+    if (!label || label.length > 80) continue;
+    let abs = '';
+    try { abs = new URL(m[1].replace(/&amp;/g, '&'), pageUrl || undefined).href; } catch { continue; }
+    if (!/^https?:/i.test(abs)) continue;
+    if (!url && JOIN_LINK_RE.test(label)) url = abs;
+    if (!feeUrl && PRICING_LINK_RE.test(label)) feeUrl = abs;
+  }
+  const text = htmlToText(h);
+  const fee = FEE_RE.test(text);
+  const free = FREE_RE.test(text);
+  if (!url && !feeUrl && !fee) return null;
+  const verdict = fee || (feeUrl && !free) ? 'has_fee' : free && url ? 'looks_free' : 'unknown';
+  return { verdict, url, feeUrl };
+}
+
 /** Most cited pages read for the owner per report (plain GETs, a few at a time, each with a timeout). */
 export const MAX_LIST_READS = 12;
 const READ_TIMEOUT_MS = 8000;
@@ -253,6 +290,8 @@ export async function buildSources({ answers, business, fetchImpl, maxFetch = MA
         return;
       }
       if (r.contentType && !/html|text\/plain|xml/i.test(r.contentType)) { s.checkReason = 'not_html'; return; }
+      // Not in our table of directories: our best read of how to join, from the page itself.
+      if (!directoryFor(s.domain)) { const j = joinHints(r.text, r.url || s.url); if (j) s.joinGuess = j; }
       const c = checkListingPage(r.text, business, { names, pageUrl: r.url || s.url });
       if (c.checkReason) { s.checkReason = c.checkReason; return; }
       const { checkReason, ...found } = c;

@@ -22,6 +22,7 @@ import { verifyAnswer, factStatus, ownerFact, descriptorKey } from './verify.js'
 import { groupEntities } from './entities.js';
 import { normalizeName } from './normalize.js';
 import { buildSources, MAX_LIST_READS } from './sources.js';
+import { searchListings, MAX_LISTING_SEARCHES } from './listing-search.js';
 import { buildIssues } from './issues.js';
 import { runOwnerChecks, lookupCompetitorReviews, reviewsIssue, MAX_REVIEW_LOOKUPS } from '../owner-checks.js';
 
@@ -171,10 +172,14 @@ export function applyHeadlineConfirmation(report, c) {
  * { answerId, key, engine, questionId, run, ok, error, model, usage, costUsd } so the caller
  * can record per-call usage (scan_usage). Recorded proposals (source 'recorded') cost nothing
  * and are not reported.
+ * `listingSearch` (paid tiers only; listing-search.js listingSearchFor) looks up, through Google, the cited
+ * directories we couldn't read; `onListingSearch(call)` gets each lookup ({ domain, costUsd, model, usage,
+ * searches, ok, error }) for scan_usage. The result's `listingSearch` = { calls, costUsd }.
  */
 export async function buildReport({
   scan, business, listings = [], issues = [], baseline = null, proposalsByAnswer = {},
   env = {}, fetchImpl, id, now, maxFetch = MAX_LIST_READS, onExtract, headlineConfirmation = null,
+  listingSearch = null, onListingSearch,
 }) {
   // The owner's website (robots.txt, schema, phone and address) and Google listing (scanner/owner-checks.js).
   // Skipped on a pre-build (maxFetch 0) and when the caller already supplies listings.
@@ -324,7 +329,15 @@ export async function buildReport({
   // Sources (citations from the APIs only) + directory page checks.
   // The website's own spelling of the name ("PR73" for "PR 73") is looked for too.
   const brand = siteCheck && siteCheck.brand;
-  const sources = await buildSources({ answers, business, fetchImpl, maxFetch, names: brand && brand.related && brand.name ? [brand.name] : [] });
+  const otherNames = brand && brand.related && brand.name ? [brand.name] : [];
+  const sources = await buildSources({ answers, business, fetchImpl, maxFetch, names: otherNames });
+  // Paid tiers only (the caller passes listingSearch: scanner/extract/listing-search.js listingSearchFor):
+  // the directories we couldn't read, looked up through a search engine that has already read them.
+  let listingRun = null;
+  if (typeof listingSearch === 'function' && maxFetch !== 0) {
+    const lostIds = new Set(answers.filter((a) => !a.namedYou).map((a) => a.id));
+    listingRun = await searchListings({ sources, business, names: otherNames, search: listingSearch, lostIds, onCall: onListingSearch });
+  }
 
   // AI facts vs the owner's own website/listings.
   const engineOf = new Map(answers.map((a) => [a.id, a.engine]));
@@ -376,6 +389,8 @@ export async function buildReport({
       window: (scan.method && scan.method.window) || formatWindow(results.map((r) => r.askedAt).filter(Boolean)),
       runs,
       ...(failedCalls.length ? { failedCalls } : {}),
+      // The directory lookups ran (even when none was needed): the plan says "we searched" only then.
+      ...(listingRun ? { listingSearch: { engine: 'gemini', lookups: listingRun.lookups, max: MAX_LISTING_SEARCHES } } : {}),
       // Present only on a scan that must not publish; validateReport rejects any entry here,
       // so the Worker's own re-validation catches it too.
       ...(extraction.failures.length ? { extractionFailed: extraction.failures.map((f) => ({ answerId: f.answerId, error: f.error })) } : {}),
@@ -390,6 +405,6 @@ export async function buildReport({
   report.issues = buildIssues({ report, extra: issues, business });
 
   const validation = validateReport(report);
-  return { report, validation, rejected, extraction };
+  return { report, validation, rejected, extraction, listingSearch: listingRun ? { calls: listingRun.lookups, costUsd: listingRun.costUsd } : { calls: 0, costUsd: 0 } };
 }
 
