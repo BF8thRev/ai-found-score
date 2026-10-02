@@ -623,8 +623,9 @@ function actionPlanV2(report) {
         <p><strong>Your Fix Kit is ready, and it’s included.</strong> Confirm your details once and we build the files several steps below ask for (FAQ code, business code, llms.txt, your Google text), with a one-page guide for whoever runs your website.</p>
         <a class="btn" href="${kitUrl}">Open my Fix Kit</a>
       </div>`;
+  const TYPE_LABEL = { award: 'Industry list', article: 'Article' };
   const sites = (list) => ((list || []).length ? `
-          <ul class="ap-sites">${list.map((s) => `<li><span class="badge ${s.status === 'missing' ? 'mismatch' : 'low'}">${s.status === 'missing' ? 'Not on it' : 'Check'}</span>${s.type === 'award' ? ' <span class="ap-type">Industry list</span>' : ''} <a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`).join('')}</ul>` : '');
+          <ul class="ap-sites">${list.map((s) => `<li><span class="badge ${s.status === 'missing' ? 'mismatch' : 'low'}">${s.status === 'missing' ? 'Not on it' : 'Check'}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`).join('')}</ul>` : '');
   // Wired once the page is in the DOM: save a tick, strike the step through, update the count.
   setTimeout(() => {
     const root = typeof document.getElementById === 'function' ? document.getElementById('action-plan') : null;
@@ -636,6 +637,14 @@ function actionPlanV2(report) {
       try { localStorage.setItem(key, JSON.stringify(cur)); } catch { /* storage blocked: ticks just don't persist */ }
       const li = box.closest('li');
       if (li) li.classList.toggle('done', box.checked);
+      // Done: close this step and open the next one not yet done.
+      if (box.checked && li) {
+        const row = li.querySelector('details');
+        if (row) row.open = false;
+        const nextLi = [...root.querySelectorAll('.ap-item')].find((x) => !x.classList.contains('done'));
+        const nextRow = nextLi && nextLi.querySelector('details');
+        if (nextRow) nextRow.open = true;
+      }
       const n = root.querySelectorAll('input[data-ap]:checked').length;
       const out = root.querySelector('[data-ap-count]');
       if (out) out.textContent = String(n);
@@ -646,24 +655,26 @@ function actionPlanV2(report) {
   return `
     <section class="report-section ap" id="action-plan" aria-label="Your action plan">
       <h2>Your action plan</h2>
-      <p class="sub">${items.length} ${plural(items.length, 'step', 'steps')} to get ${escapeHtml(name)} named by AI, biggest impact first. Do them in order and tick each one off.</p>
+      <p class="sub">${items.length} ${plural(items.length, 'step', 'steps')} to get ${escapeHtml(name)} named by AI, biggest impact first. Tap a step to see why and how; tick it when it’s done.</p>
       <div class="ap-progress"><span><b data-ap-count>${done}</b> of ${items.length} done</span><div class="ap-bar" aria-hidden="true"><i style="width:${pct(done)}%"></i></div></div>
       ${kit}
       <ol class="ap-list">${items.map((i, n) => `
         <li class="ap-item${ticked[i.id] ? ' done' : ''}" id="step-${n + 1}">
-          <div class="ap-head">
-            <label class="ap-tick"><input type="checkbox" data-ap="${escapeHtml(i.id)}"${ticked[i.id] ? ' checked' : ''} aria-label="Step ${n + 1} done"></label>
-            <div class="ap-main">
-              <div class="ap-meta"><span class="ap-num">Step ${n + 1}</span><span class="badge ${escapeHtml(i.impact)}">${escapeHtml(AP_IMPACT[i.impact] || AP_IMPACT.medium)}</span><span class="ap-who">${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}</span></div>
-              <h3>${escapeHtml(i.title)}</h3>
+          <label class="ap-tick"><input type="checkbox" data-ap="${escapeHtml(i.id)}"${ticked[i.id] ? ' checked' : ''} aria-label="Step ${n + 1} done"></label>
+          <details class="ap-row"${n === firstOpen ? ' open' : ''}>
+            <summary>
+              <span class="ap-num">${n + 1}</span>
+              <span class="ap-title">${escapeHtml(i.title)}</span>
+              <span class="badge ${escapeHtml(i.impact)}">${escapeHtml(AP_IMPACT[i.impact] || AP_IMPACT.medium)}</span>
+            </summary>
+            <div class="ap-body">
+              <p class="ap-who">${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}</p>
               ${i.why ? `<p class="ap-why"><b>Why it matters:</b> ${escapeHtml(i.why)}</p>` : ''}
+              ${sites(i.sites)}
+              ${(i.steps || []).length ? `<p class="ap-how-k">How to do it</p><ol class="r2-steps">${i.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}
+              ${copyBlocksV2(i.copyText)}
+              ${i.kitNote && !isDemoReport(report) ? `<p class="ap-kitnote">${escapeHtml(i.kitNote)} <a href="${kitUrl}">Open my Fix Kit</a></p>` : ''}
             </div>
-          </div>
-          ${sites(i.sites)}
-          <details class="ap-how"${n === firstOpen ? ' open' : ''}>
-            <summary>How to do it</summary>
-            ${(i.steps || []).length ? `<ol class="r2-steps">${i.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}
-            ${copyBlocksV2(i.copyText)}
           </details>
         </li>`).join('')}
       </ol>

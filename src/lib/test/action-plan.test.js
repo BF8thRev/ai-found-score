@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { register } from 'node:module';
-import { buildActionPlan, homepageSaysTrade, fixCase } from '../../../shared/action-plan.js';
+import { buildActionPlan, homepageSaysTrade, fixCase, siteType } from '../../../shared/action-plan.js';
 import { buildGapSheet } from '../../../shared/report-v2.js';
 import { tradeWords, metaCheck } from '../../../scanner/owner-checks.js';
 import { reportBody } from '../lock.js';
@@ -94,7 +94,7 @@ test('FAQ drafts: their own homepage words, "a PR agency", and [brackets] for wh
   // The homepage words appear once, not in every answer.
   assert.equal(qa.split("Harbor Lane's integrated communications team").length - 1, 1);
   // Names, not an inflated count; never a directory.
-  assert.match(faq.why, /named Brightline Communications, Kestrel PR, Monarch Media Group and others, not you/);
+  assert.match(faq.why, /named Brightline Communications, Kestrel PR and Monarch Media Group, not you/);
   assert.doesNotMatch(faq.why, /\d+ other businesses|Clutch/);
   assert.equal(fixCase('Pr agency open now'), 'PR agency open now');
 });
@@ -248,7 +248,7 @@ test('paid page: the action plan comes first, with the Fix Kit; evidence after; 
   // One tick per step, the first step's "How to do it" open, why + who on every step.
   const n = buildActionPlan(officeReport()).items.length;
   assert.equal((html.match(/data-ap="/g) || []).length, n);
-  assert.equal((html.match(/<details class="ap-how" open>/g) || []).length, 1);
+  assert.equal((html.match(/<details class="ap-row" open>/g) || []).length, 1);
   assert.equal((html.match(/class="ap-why"/g) || []).length, n);
   assert.match(html, /<b data-ap-count>0<\/b> of \d+ done/);
 });
@@ -259,7 +259,7 @@ test('paid page: saved ticks come back (done steps struck, the first undone step
   const html = render(loadPage({ ['afs_plan_' + rep.id]: JSON.stringify({ [first]: true }) }), rep);
   assert.match(html, /<b data-ap-count>1<\/b>/);
   assert.match(html, /<li class="ap-item done" id="step-1">/);
-  assert.match(html, /id="step-2">[\s\S]*?<details class="ap-how" open>/);
+  assert.match(html, /id="step-2">[\s\S]*?<details class="ap-row" open>/);
 });
 
 test('sample report shows the plan as a buyer would see it, with nothing to buy and no Fix Kit link', () => {
@@ -289,4 +289,42 @@ test('Be the Answer report: plan panel and action plan together; Fix Kit link us
 test('free (locked) page is unchanged: no action plan', () => {
   const html = render(loadPage(), reportBody(officeReport(), false));
   assert.doesNotMatch(html, /Your action plan/);
+});
+
+test('site types: directories are claimed, industry lists are entered, articles are pitched', () => {
+  assert.equal(siteType('yelp.com', 'https://www.yelp.com/search?find_desc=best-plumbers'), 'directory');
+  assert.equal(siteType('clutch.co', 'https://clutch.co/pr-firms/new-york'), 'directory');
+  assert.equal(siteType('odwyerpr.com', 'https://www.odwyerpr.com/pr_firm_rankings/newyork.htm'), 'award');
+  assert.equal(siteType('example.org', 'https://example.org/awards/2026'), 'award');
+  assert.equal(siteType('franklinpatch.com', 'https://franklinpatch.com/best-plumbers-in-franklin'), 'article');
+  const rep = officeReport();
+  rep.sources.push({ url: 'https://citymag.example.com/best-pr-agencies-nyc', domain: 'citymag.example.com', citedIn: ['a1'], youListed: null });
+  const lists = byId(buildActionPlan(rep), 'lists');
+  assert.match(lists.steps.join(' '), /Articles and “best of” posts: find the writer/);
+});
+
+test('contact code uses the real phone and street when known; placeholders only when missing', () => {
+  const rep = officeReport();
+  rep.business = { ...rep.business, phone: '(212) 555-0100' };
+  const c = byId(buildActionPlan(rep), 'contact');
+  assert.match(c.copyText[0].text, /"telephone": "\(212\) 555-0100"/);
+  assert.doesNotMatch(c.copyText[0].text, /\[your/);
+  assert.doesNotMatch(c.steps.join(' '), /brackets/);
+});
+
+test('FAQ code is added only once the answers are final, and matches the page', () => {
+  const faq = byId(buildActionPlan(officeReport()), 'faq');
+  assert.match(faq.copyText[1].label, /once your answers are final/);
+  assert.match(faq.steps.join(' '), /The code must say exactly what the page says/);
+  // Every question on the page is in the code.
+  const questions = faq.copyText[0].text.split(/\n\n/).map((b) => b.split(/\n/)[0]);
+  assert.equal(questions.length, 2);
+  for (const q of questions) assert.ok(faq.copyText[1].text.includes(JSON.stringify(q)), q);
+});
+
+test('Fix Kit notes show on a paid report and never on a sample', () => {
+  const paid = render(loadPage(), reportBody(officeReport(), true));
+  assert.match(paid, /class="ap-kitnote"/);
+  const sample = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
+  assert.doesNotMatch(sample, /ap-kitnote|Fix Kit/);
 });

@@ -514,8 +514,9 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .r2-pending-qs h2 { font-size: 18px; margin: 0 0 10px; color: var(--navy); }
 .r2-pending-qs .rq-list li { border: 1px solid var(--line); }
 
-/* Paid report: the action plan (report.js actionPlanV2). One card per step, a tick on the left,
-   "How to do it" folded; a ticked step fades and is struck through. */
+/* Paid report: the action plan as a checklist (report.js actionPlanV2). One row per step: a tick box,
+   then the step's number, title and impact; tapping the row opens why, who, how and the copy blocks.
+   A ticked step fades and is struck through. */
 .ap .sub { margin-bottom: 12px; }
 .ap-progress { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 15px; color: var(--muted); }
 .ap-progress b { color: var(--navy); }
@@ -523,35 +524,38 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-bar i { display: block; height: 100%; background: var(--green); border-radius: 999px; transition: width .2s; }
 .ap-kit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; background: var(--wash-2); }
 .ap-kit p { margin: 0; flex: 1 1 280px; font-size: 15px; }
-.ap-list { list-style: none; margin: 0; padding: 0; counter-reset: none; }
-.ap-item { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 14px 16px; margin: 0 0 12px; }
-.ap-head { display: flex; gap: 12px; align-items: flex-start; }
-.ap-tick { flex: none; padding-top: 2px; cursor: pointer; }
-.ap-tick input { width: 22px; height: 22px; accent-color: var(--green); cursor: pointer; }
-.ap-main { min-width: 0; flex: 1; }
-.ap-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 6px; font-size: 13px; }
-.ap-num { font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .04em; }
-.ap-who { color: var(--muted); }
-.ap-meta .badge, .ap-sites .badge { margin: 0; }
-.ap-type { font-size: 13px; color: var(--muted); }
-.ap-tick { min-width: 32px; min-height: 32px; }
-.ap-item h3 { font-size: 18px; margin: 0 0 6px; overflow-wrap: anywhere; }
-.ap-why { margin: 0; font-size: 15px; line-height: 1.5; }
-.ap-sites { list-style: none; margin: 10px 0 0 34px; padding: 0; }
+.ap-list { list-style: none; margin: 0; padding: 0; }
+.ap-item { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 0 0 0 12px; margin: 0 0 8px; }
+.ap-tick { flex: none; display: flex; align-items: center; justify-content: center; min-width: 32px; min-height: 52px; cursor: pointer; }
+.ap-tick input { width: 22px; height: 22px; margin: 0; accent-color: var(--green); cursor: pointer; }
+.ap-row { flex: 1; min-width: 0; }
+.ap-row summary { list-style: none; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 40px 10px 0; cursor: pointer; position: relative; }
+.ap-row summary::-webkit-details-marker { display: none; }
+.ap-row summary::after { content: "▸"; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); transition: transform .15s; }
+.ap-row[open] summary::after { transform: translateY(-50%) rotate(90deg); }
+.ap-num { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--wash-2); color: var(--navy); font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.ap-title { flex: 1; min-width: 0; font-weight: 700; color: var(--navy); font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
+.ap-row summary .badge { flex: none; margin: 0; }
+.ap-body { padding: 0 16px 16px 36px; }
+.ap-who { margin: 0 0 6px; font-size: 14px; color: var(--muted); font-weight: 600; }
+.ap-why { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
+.ap-how-k { margin: 12px 0 0; font-weight: 700; color: var(--navy); font-size: 15px; }
+.ap-body .r2-steps { margin-top: 6px; }
+.ap-sites { list-style: none; margin: 8px 0 0; padding: 0; }
 .ap-sites li { margin: 0 0 6px; font-size: 15px; overflow-wrap: anywhere; }
-.ap-how { margin: 10px 0 0 34px; }
-.ap-how summary { cursor: pointer; font-weight: 700; color: var(--navy); font-size: 15px; list-style: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
-.ap-how summary::-webkit-details-marker { display: none; }
-.ap-how summary::before { content: "▸"; font-size: 12px; transition: transform .15s; }
-.ap-how[open] summary::before { transform: rotate(90deg); }
-.ap-how .r2-steps { margin-top: 8px; }
+.ap-sites .badge { margin: 0; }
+.ap-type { font-size: 13px; color: var(--muted); }
+.ap-kitnote { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
 .ap-item.done { background: var(--wash); }
-.ap-item.done h3 { text-decoration: line-through; color: var(--muted); }
-.ap-item.done .ap-why, .ap-item.done .ap-sites { opacity: .6; }
+.ap-item.done .ap-title { text-decoration: line-through; color: var(--muted); }
+.ap-item.done .ap-num { background: var(--green); color: #fff; }
 .ap-foot { margin-top: 4px; }
 .r2-fold { margin-top: 8px; }
 .r2-fold summary { cursor: pointer; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
 @media (max-width: 520px) {
-  .ap-item { padding: 12px; }
-  .ap-sites, .ap-how { margin-left: 0; }
+  .ap-item { padding-left: 8px; gap: 6px; }
+  .ap-row summary { flex-wrap: wrap; gap: 6px 8px; padding-right: 32px; }
+  .ap-title { flex-basis: calc(100% - 40px); font-size: 16px; }
+  .ap-row summary .badge { margin-left: 34px; }
+  .ap-body { padding: 0 12px 14px 0; }
 }
