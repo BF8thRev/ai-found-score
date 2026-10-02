@@ -40,7 +40,7 @@
 
 import {
   recordPayment, recordUnsubscribe, recordVisit, recordLead,
-  getReport, getReportLink, isReportUnlocked, getPaidTiers,
+  getReport, getReportLink, isReportUnlocked, getPayments, paidTiersFrom,
   getRequestInfo, requestHasEmail, attachRequestEmailByToken,
 } from './lib/db.js';
 import { handleQuestions } from './lib/questions-route.js';
@@ -54,7 +54,7 @@ import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
 import { reportBody, BREAKDOWN_TIERS } from './lib/lock.js';
 import {
-  pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent,
+  pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent, recheckDueAt,
   retryFailedScans, startAbandonedCheckout, REQUEST_TOKEN_RE,
 } from './lib/auto-scan.js';
 import { sendCreditAlerts, sendPaidScanAlert } from './lib/alerts.js';
@@ -367,10 +367,12 @@ async function handleGetReport(id, url, env, dryRun = false) {
   }
   // Paid plans on this report. A Be the Answer town report (plan_towns) takes its plan's.
   let tiers = [];
+  let payments = [];
   let planToken = null;
   if (unlocked && !isSample && !dryRun) {
     planToken = await readPlanParent(env, id).catch(() => null);
-    tiers = await getPaidTiers(env, planToken || id).catch((e) => { console.error('[report] tiers read failed', e); return []; });
+    payments = await getPayments(env, planToken || id).catch((e) => { console.error('[report] tiers read failed', e); return []; });
+    tiers = paidTiersFrom(payments);
   }
   const onPlan = tiers.includes('be_the_answer');
   // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
@@ -378,6 +380,8 @@ async function handleGetReport(id, url, env, dryRun = false) {
   const body = reportBody(report, unlocked, { breakdown: isSample || SHOWCASE_TOKENS.includes(id) || tiers.some((t) => BREAKDOWN_TIERS.includes(t)) });
   // Be the Answer: the page links to the plan (and its Fix Kit) instead of offering the plan again.
   if (onPlan) body.plan = { token: planToken || id, town: !!planToken };
+  // The free 30-day re-check that comes with the audit: the page says when (a date only, never more).
+  else if (unlocked && report.version === 2) { const due = recheckDueAt(payments); if (due) body.recheckOn = due; }
   // Paid, and the full scan (every question, every assistant) is still running: the page says so.
   if (unlocked && !isSample && !dryRun && (await paidScanRunning(env, id))) body.fullScanPending = true;
   // A free report whose request already has an email: the page shows no email box (never the address).

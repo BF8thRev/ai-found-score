@@ -10,7 +10,7 @@
 // titles, descriptions, steps and copyText, and the X-Ray sections (gap sheet, checklist, reviews).
 // Any recorded payment for the token unlocks all of it.
 import { xraySections, computeVisibilityScore, isGenericFix, buildCompetitorBreakdown } from '../../shared/report-v2.js';
-import { buildActionPlan } from '../../shared/action-plan.js';
+import { buildActionPlan, homepageSaysTrade } from '../../shared/action-plan.js';
 
 /** The fields of an issue that survive locking. Everything else (description, steps, copyText, …) is dropped. */
 export const LOCKED_ISSUE_FIELDS = ['kind', 'severity', 'title'];
@@ -129,9 +129,20 @@ export function reportBody(report, unlocked, { breakdown = false } = {}) {
   // v2: the AI Found Score is computed from the report's own data every time it is served, so it
   // always matches what the page shows (shared/report-v2.js computeVisibilityScore). Free, never locked.
   const withScore = (r) => (r.version === 2 ? { ...r, score: computeVisibilityScore(report) } : r);
+  if (report.version === 2) report = withTradeRecheck(report);
   if (!unlocked) return withScore(lockReport(report));
   if (report.version !== 2) return report;
   return withScore({
     ...report, locked: false, xray: { ...xraySections(report), actionPlan: buildActionPlan(report) }, ...(breakdown ? { breakdown: buildCompetitorBreakdown(report) } : {}),
   });
+}
+
+// "Your title doesn't say what you do", re-checked with the trade's other names ("PR", "public
+// relations") the same way the action plan does, so the website checklist and the plan agree.
+// Stored reports scanned with the owner's exact words only are corrected here, never the other way.
+function withTradeRecheck(r) {
+  const m = r.siteCheck && r.siteCheck.meta;
+  if (!m || typeof m !== 'object' || m.mentionsTrade !== false) return r;
+  if (homepageSaysTrade(m, r.business && r.business.trade) !== true) return r;
+  return { ...r, siteCheck: { ...r.siteCheck, meta: { ...m, mentionsTrade: true } } };
 }

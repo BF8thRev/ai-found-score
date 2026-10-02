@@ -522,8 +522,30 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-progress b { color: var(--navy); }
 .ap-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--wash-2); overflow: hidden; }
 .ap-bar i { display: block; height: 100%; background: var(--green); border-radius: 999px; transition: width .2s; }
-.ap-kit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; background: var(--wash-2); }
-.ap-kit p { margin: 0; flex: 1 1 280px; font-size: 15px; }
+/* Do these 3 this week: above the full list. */
+.ap-week { margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; background: var(--wash-2); }
+.ap-week h3 { margin: 0 0 8px; font-size: 17px; color: var(--navy); }
+.ap-week ol { margin: 0; padding-left: 22px; }
+.ap-week li { margin: 0 0 8px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.ap-week li:last-child { margin-bottom: 0; }
+.ap-week li a { display: block; font-weight: 700; color: var(--navy); }
+.ap-week li span { display: block; font-size: 14px; color: var(--muted); }
+.ap-effort { font-weight: 400; }
+/* After the last step: hand the website files to the web person. */
+.ap-kitcard { margin: 14px 0 8px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+.ap-kitcard h3 { margin: 0 0 6px; font-size: 17px; color: var(--navy); }
+.ap-kitcard p { margin: 0 0 10px; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.ap-kitcard-btns { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 !important; }
+/* The free 30-day re-check, right after the plan. */
+.r2-recheck { margin: 0 0 24px; padding: 14px 16px; border-radius: 12px; background: var(--wash); border: 1px solid var(--line); }
+.r2-recheck h3 { margin: 0 0 4px; font-size: 16px; color: var(--navy); }
+.r2-recheck p { margin: 0; font-size: 15px; line-height: 1.5; }
+/* The website checklist on a paid report: a closed box for the web person. */
+.r2-site-more summary { cursor: pointer; font-weight: 700; color: var(--navy); }
+.r2-site-more .r2-site-list { margin-top: 10px; }
+.r2-site-list li { overflow-wrap: anywhere; }
+.r2-sc-target { margin: 4px 0 0; font-size: 13px; color: #3D4858; }
+.r2-fold-note { margin: 0 0 10px; font-size: 14px; }
 .ap-list { list-style: none; margin: 0; padding: 0; }
 .ap-item { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 0 0 0 12px; margin: 0 0 8px; }
 .ap-tick { flex: none; display: flex; align-items: center; justify-content: center; min-width: 32px; min-height: 52px; cursor: pointer; }

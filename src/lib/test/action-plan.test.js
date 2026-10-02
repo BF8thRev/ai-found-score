@@ -9,9 +9,10 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { register } from 'node:module';
 import { buildActionPlan, homepageSaysTrade, fixCase, siteType } from '../../../shared/action-plan.js';
-import { buildGapSheet } from '../../../shared/report-v2.js';
+import { buildGapSheet, lintText } from '../../../shared/report-v2.js';
 import { tradeWords, metaCheck } from '../../../scanner/owner-checks.js';
-import { reportBody } from '../lock.js';
+import { reportBody, lockReport } from '../lock.js';
+import { recheckDueAt } from '../auto-scan.js';
 import { MOCK_REPORTS } from '../../mock/sample-reports.js';
 import { officeReport } from './fixtures/office-report.js';
 
@@ -32,9 +33,11 @@ test('office business: one step per job, every stored fix accounted for', () => 
   assert.deepEqual(byId(plan, 'contact').from.sort(), ['baseline_schema', 'site_missing_nap']);
   // Exactly one FAQ step, not one per question.
   assert.equal(plan.items.filter((i) => /question/i.test(i.title)).length, 1);
-  // Every stored kind lands in some step.
-  const covered = new Set(plan.items.flatMap((i) => i.from));
+  // Every stored kind lands in some step, or in the Fix Kit (llms.txt is a kit file, not a step).
+  const covered = new Set([...plan.items.flatMap((i) => i.from), ...(plan.kitOnly || [])]);
   for (const i of rep.issues) assert.ok(covered.has(i.kind), `${i.kind} is in the plan`);
+  assert.deepEqual(plan.kitOnly, ['site_no_llms_txt']);
+  assert.ok(!plan.items.some((i) => i.from.includes('site_no_llms_txt') || /llms\.txt/i.test(i.title)), 'no llms.txt step');
 });
 
 test('office business: no storefront, walk-in or "open now" advice', () => {
@@ -58,9 +61,12 @@ test('office business: biggest impact first, and the lists AI read come first', 
 });
 
 test('lists step: the directories and rankings AI cited, never rivals’ own sites, job boards or wires', () => {
-  const lists = byId(buildActionPlan(officeReport()), 'lists');
+  const plan = buildActionPlan(officeReport());
+  const lists = byId(plan, 'lists');
   const domains = lists.sites.map((s) => s.domain);
-  assert.deepEqual(domains.sort(), ['clutch.co', 'communicationsmatch.com', 'odwyerpr.com', 'themanifest.com']);
+  assert.deepEqual(domains.sort(), ['clutch.co', 'communicationsmatch.com', 'themanifest.com']);
+  // Rankings are their own, later step.
+  assert.deepEqual(byId(plan, 'awards').sites.map((s) => s.domain), ['odwyerpr.com']);
   // A rival's own profile page on a directory links to the directory, not to the rival.
   assert.equal(lists.sites.find((s) => s.domain === 'communicationsmatch.com').url, 'https://communicationsmatch.com/');
   assert.equal(lists.sites.find((s) => s.domain === 'clutch.co').url, 'https://clutch.co/pr-firms/new-york');
@@ -73,7 +79,8 @@ test('homepage step: "PR & Media Relations" says what a PR agency does; only the
   const rep = officeReport();
   assert.equal(homepageSaysTrade(rep.siteCheck.meta, 'pr agency'), true);
   const home = byId(buildActionPlan(rep), 'homepage');
-  assert.equal(home.title, 'Make your homepage say where you work');
+  // An office says where it's based, not "where you work".
+  assert.equal(home.title, 'Make your homepage say that you’re in New York City');
   assert.doesNotMatch(home.why, /what you do/);
   // The scanner itself now gets this right too.
   assert.ok(tradeWords('pr agency').includes('pr') && tradeWords('pr agency').includes('public relations'));
@@ -112,9 +119,9 @@ test('trade business (a plumber): service-area Google advice, hours kept, no sto
   const at = (pred) => plan.items.findIndex(pred);
   const reviews = at((i) => i.from.includes('few_reviews'));
   const code = at((i) => i.id === 'contact');
-  const llms = at((i) => i.from.includes('site_no_llms_txt'));
-  assert.ok(at((i) => i.id === 'google') < code && at((i) => i.id === 'google') < llms, 'Google above schema code and llms.txt');
-  assert.ok(reviews < llms, 'reviews above llms.txt');
+  assert.ok(at((i) => i.id === 'google') < code, 'Google above schema code');
+  assert.ok(reviews < code, 'reviews above schema code');
+  assert.equal(at((i) => i.from.includes('site_no_llms_txt')), -1, 'llms.txt is in the Fix Kit, not a step');
   // Wrong facts and listing mismatches stay first.
   assert.ok(/^fact-/.test(plan.items[0].id), plan.items[0].id);
 });
@@ -165,11 +172,14 @@ test('contact step: says where the phone goes in the code; office title doesn’
 test('lists step: a paid membership association is not a list to "get on"; awards get an entry step', () => {
   const rep = officeReport();
   rep.sources.push({ url: 'https://www.aaaa.org/agency-profile/x/brightline-new-york', domain: 'aaaa.org', citedIn: ['a2'], topListed: null, youListed: null });
-  const lists = byId(buildActionPlan(rep), 'lists');
-  assert.ok(!lists.sites.some((s) => s.domain === 'aaaa.org'));
-  assert.equal(lists.sites.find((s) => s.domain === 'odwyerpr.com').type, 'award');
+  const plan = buildActionPlan(rep);
+  const lists = byId(plan, 'lists');
+  const awards = byId(plan, 'awards');
+  assert.ok(![...lists.sites, ...awards.sites].some((s) => s.domain === 'aaaa.org'));
+  assert.equal(awards.sites.find((s) => s.domain === 'odwyerpr.com').type, 'award');
   assert.equal(lists.sites.find((s) => s.domain === 'clutch.co').type, 'directory');
-  assert.match(lists.steps.join(' '), /Industry lists and awards: these take entries/);
+  assert.match(awards.steps.join(' '), /deadline in your calendar/);
+  assert.doesNotMatch(lists.steps.join(' '), /take entries|deadline/);
   assert.doesNotMatch(lists.why, /most direct way/);
 });
 
@@ -209,11 +219,12 @@ test('GET /api/report/sample-001 (the real route) carries the action plan; ?prev
 });
 
 // ---- the page ----
-function loadPage(stored = {}) {
+// `tiers`: the tiers on sale (public/js/config.js OFFERED_TIERS); every tier unless given.
+function loadPage(stored = {}, { tiers = null } = {}) {
   const src = readFileSync(new URL('../../../public/js/report.js', import.meta.url), 'utf8');
   const ctx = vm.createContext({
     document: { addEventListener() {}, querySelector: () => null, getElementById: () => null, body: { classList: { toggle() {} } } },
-    window: { location: { search: '', hash: '' }, tierOffered: () => true, scrollY: 0, addEventListener() {} },
+    window: { location: { search: '', hash: '' }, tierOffered: (t) => !tiers || tiers.includes(t), scrollY: 0, addEventListener() {} },
     location: { search: '', hash: '' }, URLSearchParams, console,
     localStorage: { getItem: (k) => stored[k] ?? null, setItem() {} },
     setTimeout: () => 0,
@@ -232,21 +243,21 @@ test('paid page: the action plan comes first, with the Fix Kit; evidence after; 
   const html = render(loadPage(), reportBody(officeReport(), true));
   const plan = at(html, '<h2>Your action plan</h2>');
   assert.ok(plan < at(html, 'told a customer who asked'), 'before the AI quote');
-  assert.ok(plan < at(html, 'Who got the call instead'), 'before who got the call');
-  assert.ok(at(html, 'Open my Fix Kit') < at(html, 'Step 1'), 'Fix Kit link at the top of the plan');
-  assert.ok(at(html, 'Every question, every answer') < at(html, 'Get my Competitor Breakdown'), '$25 offer after the evidence');
+  assert.ok(plan < at(html, 'Who AI recommended instead'), 'before who AI recommended');
+  const n = buildActionPlan(officeReport()).items.length;
+  assert.ok(at(html, 'Hand the website work to your web person') > at(html, `id="step-${n}"`), 'Fix Kit card after the last step');
   assert.ok(at(html, 'Every question, every answer') < at(html, 'Want us to keep watching?'), 'Be the Answer after the evidence');
+  assert.ok(at(html, 'Want us to keep watching?') < at(html, 'Get my Competitor Breakdown'), '$25 offer last of all');
   // The plan replaces the old fix list, the checklist and the Fix Kit band.
   assert.doesNotMatch(html, /What to fix, in order|Your fix checklist|Your Fix Kit is included\.|Get my Fix Kit/);
   // No gap sheet made of "found nothing" cards.
   assert.doesNotMatch(html, /Competitor gap sheet|We found no sites AI cited that list them/);
   // Sites we couldn't read are folded, not a wall of "Not checked".
-  assert.match(html, /<details class="r2-fold"><summary>\d+ sites? AI cited that we couldn’t read for listings<\/summary>/);
-  // Clutch is a directory, never in "Who got the call".
-  const who = html.slice(at(html, 'Who got the call instead'), at(html, 'Who got the call instead') + 3000);
+  assert.match(html, /<details class="r2-fold"><summary>\d+ (more )?sites? AI read for these answers<\/summary>/);
+  // Clutch is a directory, never in "Who AI recommended".
+  const who = html.slice(at(html, 'Who AI recommended instead'), at(html, 'Who AI recommended instead') + 3000);
   assert.doesNotMatch(who, />Clutch</);
   // One tick per step, the first step's "How to do it" open, why + who on every step.
-  const n = buildActionPlan(officeReport()).items.length;
   assert.equal((html.match(/data-ap="/g) || []).length, n);
   assert.equal((html.match(/<details class="ap-row" open>/g) || []).length, 1);
   assert.equal((html.match(/class="ap-why"/g) || []).length, n);
@@ -342,4 +353,207 @@ test('the plumber sample: its town directory is a directory, and the row shows w
   assert.match(lists.title, /lists AI read/);
   const html = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
   assert.match(html, /<span class="ap-whotag">Web person<\/span>/);
+});
+
+// ---- Oct 2 2026 buyer review of the paid PR agency page ----
+// The tiers on sale today (public/js/config.js OFFERED_TIERS): Be the Answer is not.
+const LIVE_TIERS = ['xray', 'competitor_breakdown'];
+const paidOffice = (tiers = LIVE_TIERS) => render(loadPage({}, { tiers }), reportBody(officeReport(), true));
+const planOf = (html) => html.slice(at(html, 'id="action-plan"'), html.indexOf('</section>', at(html, 'id="action-plan"')));
+
+test('Fix Kit: no box above step 1; "Done for you" on the steps it covers; one hand-off card after the last step', () => {
+  const html = paidOffice();
+  const plan = planOf(html);
+  assert.doesNotMatch(plan, /class="ap-kit"|Your Fix Kit is ready, and it’s included/);
+  assert.ok(plan.indexOf('Open my Fix Kit') > plan.indexOf('id="step-1"'), 'no Fix Kit link above step 1');
+  assert.doesNotMatch(plan, /not both/);
+  const items = reportBody(officeReport(), true).xray.actionPlan.items;
+  for (const id of ['faq', 'contact', 'google']) {
+    const n = items.findIndex((i) => i.id === id) + 1;
+    const step = plan.slice(plan.indexOf(`id="step-${n}"`), plan.indexOf('</li>', plan.indexOf('class="ap-kitnote"', plan.indexOf(`id="step-${n}"`))));
+    assert.match(step, /<p class="ap-kitnote">Done for you: [^<]*Fix Kit[^<]* <a href="\/fix-kit\/office-test-token">Open my Fix Kit<\/a><\/p>/, id);
+  }
+  // The card, after the last step.
+  const card = plan.slice(at(plan, 'class="ap-kitcard"'));
+  assert.ok(plan.indexOf('class="ap-kitcard"') > plan.indexOf(`id="step-${items.length}"`));
+  assert.match(card, /<h3>Hand the website work to your web person<\/h3>/);
+  assert.match(card, /<a class="btn" href="\/fix-kit\/office-test-token">Open my Fix Kit<\/a>/);
+  assert.match(card, /llms\.txt/, 'llms.txt is named in the kit card');
+  assert.doesNotMatch(card.match(/<h3>[^<]*<\/h3>/)[0], /JSON|llms|schema/i);
+  // "Email it to my web person": the owner's own mail app, the kit link inside, no address of theirs.
+  const href = card.match(/<a class="btn-secondary" href="([^"]+)">Email it to my web person<\/a>/)[1].replace(/&amp;/g, '&');
+  assert.match(href, /^mailto:\?subject=/);
+  const body = decodeURIComponent(href.split('&body=')[1]);
+  assert.match(body, /https:\/\/aifoundscore\.com\/fix-kit\/office-test-token/);
+  assert.doesNotMatch(href, /@|%40/);
+  // A sample has no kit to open.
+  const sample = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
+  assert.doesNotMatch(sample, /ap-kitcard|Email it to my web person/);
+});
+
+test('Do these 3 this week: above the full plan, each with who, time and cost; the plan shows them too', () => {
+  const rep = reportBody(officeReport(), true);
+  for (const i of rep.xray.actionPlan.items) assert.ok(i.time && i.cost, `${i.id} has time and cost`);
+  const html = render(loadPage(), rep);
+  const plan = planOf(html);
+  const week = plan.slice(at(plan, 'class="ap-week"'), plan.indexOf('</div>', at(plan, 'class="ap-week"')));
+  assert.ok(plan.indexOf('class="ap-week"') < plan.indexOf('class="ap-list"'), 'above the full plan');
+  assert.match(week, /<h3>Do these 3 this week<\/h3>/);
+  const links = [...week.matchAll(/<a href="#step-(\d+)">([^<]+)<\/a><span>([^<]+)<\/span>/g)];
+  assert.equal(links.length, 3);
+  for (const [, , , meta] of links) assert.match(meta, /(You can do this|For whoever runs your website|You, with your web person) · (About|Under) .+ · .+/);
+  assert.match(week, /Get on the 3 lists AI read/);
+  assert.doesNotMatch(week, /industry list|entry dates/i, 'industry lists and awards are not a this-week job');
+  // Our own copy: no banned words (shared/report-v2.js BANNED_WORDS, e.g. "minutes", "rank").
+  const words = plan.replace(/href="[^"]*"/g, '').replace(/<[^>]+>/g, ' ');
+  assert.deepEqual(lintText(words).map((h) => h.word), []);
+  // Each step's time and cost in the plan itself.
+  assert.equal((plan.match(/class="ap-effort"/g) || []).length, rep.xray.actionPlan.items.length);
+  // A step already ticked makes room for the next one.
+  const first = rep.xray.actionPlan.items[0].id;
+  const ticked = render(loadPage({ ['afs_plan_' + rep.id]: JSON.stringify({ [first]: true }) }), rep);
+  assert.doesNotMatch(planOf(ticked).slice(0, planOf(ticked).indexOf('class="ap-list"')), /href="#step-1"/);
+});
+
+test('lists split: directories this week; rankings and awards a later "put the dates in your calendar" step', () => {
+  const plan = buildActionPlan(officeReport());
+  const lists = byId(plan, 'lists');
+  const awards = byId(plan, 'awards');
+  assert.equal(lists.impact, 'high');
+  assert.equal(lists.who, 'you');
+  assert.equal(lists.week, true);
+  assert.match(lists.time, /half an hour per site/);
+  assert.equal(awards.week, false);
+  assert.notEqual(awards.impact, 'high');
+  assert.match(awards.title, /in your calendar/);
+  assert.match(awards.cost, /charge to enter/);
+  assert.ok(plan.items.indexOf(lists) < plan.items.indexOf(awards));
+  const html = paidOffice();
+  assert.match(html, /<span class="badge low">Not checked yet<\/span>/);
+  assert.doesNotMatch(html, /<span class="badge low">Check<\/span>|marked “Check”/);
+});
+
+test('score at zero says so plainly, with what "good" looks like', () => {
+  const html = paidOffice();
+  assert.match(html, /<p class="r2-sc-verdict">AI didn’t recommend you in any of the 6 answers\.<\/p>/);
+  assert.doesNotMatch(html, /almost never recommends you/);
+  assert.match(html, /<p class="r2-sc-target">Fair starts at 40\. Strong is 70 and up\.<\/p>/);
+  // Named sometimes: the old wording, still with the target.
+  const some = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
+  assert.doesNotMatch(some, /didn’t recommend you in any/);
+});
+
+test('acronyms stay upper case: "PR agencies near New York City"', () => {
+  const html = paidOffice();
+  assert.match(html, /for PR agencies near New York City\./);
+  assert.doesNotMatch(html, /pr agencies/);
+});
+
+test('the website checklist and the plan agree: "PR & Media Relations" says what a PR agency does', () => {
+  const body = reportBody(officeReport(), true);
+  assert.equal(body.siteCheck.meta.mentionsTrade, true);
+  const html = render(loadPage(), body);
+  assert.match(html, /Your title and main heading say what you do\./);
+  assert.doesNotMatch(html, /don’t say what you do/);
+  // The free tally counts it as passed too.
+  assert.equal(reportBody(officeReport(), false).siteCheck.passed, lockReport(officeReport()).siteCheck.passed + 1);
+});
+
+test('office report: no van or storefront wording, and a missing Google profile isn’t "listings disagree"', () => {
+  const html = paidOffice();
+  assert.doesNotMatch(html, /towns you serve|got the call|licenses|say where you work|Google Maps listing/i);
+  assert.match(html, /<h2>Who AI recommended instead<\/h2>/);
+  const listings = html.slice(at(html, '<h2>Your listings</h2>'), html.indexOf('</section>', at(html, '<h2>Your listings</h2>')));
+  assert.match(listings, /We couldn’t find a Google Business Profile for Harbor Lane PR\./);
+  assert.match(listings, /✗ Not found/);
+  assert.doesNotMatch(listings, /disagree|1 of 1/);
+  // A plumber keeps their own words.
+  const trade = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
+  assert.match(trade, /Who got the call instead/);
+});
+
+test('paid report with a plan: the website checklist is a closed box for the web person, with one line on top', () => {
+  const html = paidOffice();
+  const site = html.slice(at(html, '<h2>Can AI read your website?</h2>'), html.indexOf('</section>', at(html, '<h2>Can AI read your website?</h2>')));
+  assert.match(site, /<b>\d+ of \d+ checks passed\.<\/b>/);
+  assert.match(site, /<details class="r2-site-more">\s*<summary>Technical details for your web person<\/summary>/);
+  assert.doesNotMatch(site, /<details class="r2-site-more" open/);
+  assert.doesNotMatch(site, /Page title:|A sitemap helps|has a meta description/, 'passes that say nothing are left out');
+  // Failed checks come first inside the box.
+  const list = site.slice(site.indexOf('<ul class="r2-site-list">'));
+  assert.ok(list.indexOf('class="bad"') < list.indexOf('class="ok"'));
+  // The free page is unchanged: no box.
+  assert.doesNotMatch(render(loadPage(), reportBody(officeReport(), false)), /r2-site-more/);
+});
+
+test('sites we couldn’t read: a calm line, pointed at the plan', () => {
+  const html = paidOffice();
+  assert.match(html, /<summary>8 sites AI read for these answers<\/summary><p class="r2-muted r2-fold-note">We haven’t checked these pages for your name yet\. Nothing here needs doing now/);
+  assert.doesNotMatch(html, /couldn’t read for listings/);
+});
+
+test('the free 30-day re-check: right after the plan, with its date; never on a sample, a plan or a re-check', () => {
+  const rep = reportBody(officeReport(), true);
+  rep.recheckOn = '2099-11-01T18:00:00.000Z';
+  const html = render(loadPage(), rep);
+  const card = at(html, '<h3>Your free re-check</h3>');
+  assert.ok(card > at(html, 'class="ap-kitcard"') && card < at(html, 'told a customer who asked'), 'after the plan, before the evidence');
+  assert.match(html, /On Nov 1, 2099, we’ll ask AI the same questions again and email you what changed\./);
+  // No date known: says when without one.
+  assert.match(render(loadPage(), reportBody(officeReport(), true)), /About 30 days after you bought your audit, we’ll ask AI the same questions again/);
+  assert.doesNotMatch(render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true)), /Your free re-check/);
+  const onPlan = { ...rep, plan: { token: 'plan-tok', town: '' } };
+  assert.doesNotMatch(render(loadPage(), onPlan), /Your free re-check/);
+  const recheck = { ...rep, baseline: { generatedAt: '2026-09-01T00:00:00Z', totals: { answers: 6, namedYou: 0, firstYou: 0 } } };
+  assert.doesNotMatch(render(loadPage(), recheck), /Your free re-check/);
+});
+
+test('recheckDueAt: the first live audit payment + 30 days; test payments and Be the Answer have none', () => {
+  assert.equal(recheckDueAt([{ tier: 'xray', livemode: true, paid_at: '2026-10-01T18:00:00Z' }, { tier: 'xray', livemode: true, paid_at: '2026-10-05T18:00:00Z' }]), '2026-10-31T18:00:00.000Z');
+  assert.equal(recheckDueAt([{ tier: 'xray', livemode: false, paid_at: '2026-10-01T18:00:00Z' }]), null);
+  assert.equal(recheckDueAt([{ tier: 'be_the_answer', livemode: true, paid_at: '2026-10-01T18:00:00Z' }]), null);
+  assert.equal(recheckDueAt([{ tier: 'competitor_breakdown', livemode: true, paid_at: '2026-10-01T18:00:00Z' }]), null);
+  assert.equal(recheckDueAt([]), null);
+});
+
+test('GET /api/report/<token> (the real route) on a paid report carries recheckOn from the payment', async () => {
+  const TOKEN = 'zDLK7Xwl4vsA3SaJ-FQr4w';
+  const json = (b) => new Response(JSON.stringify(b), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const seen = [];
+  // The fixture, made to pass the serve gate (validateReport): first-place counts, headline, window.
+  const stored = officeReport();
+  for (const e of stored.entities) e.first = stored.answers.filter((a) => a.businessesNamed[0] && a.businessesNamed[0].entityId === e.id).length;
+  stored.headline = { ...stored.headline, answerId: 'a1' };
+  stored.method.window = '5:49 PM to 5:51 PM ET';
+  const real = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const u = new URL(String(input));
+    seen.push(u.pathname + u.search);
+    if (u.pathname === '/rest/v1/rpc/report_unlocked') return json(true);
+    if (u.pathname === '/rest/v1/scan_results') return json([{ version: 2, report: stored, scanned_at: '2026-10-01T17:51:00Z' }]);
+    if (u.pathname === '/rest/v1/payments') return json([{ tier: 'xray', amount_cents: 4900, addons: [], livemode: true, paid_at: '2026-10-01T18:00:00Z' }]);
+    return json([]);
+  };
+  try {
+    globalThis.HTMLRewriter ||= class { on() { return this; } onDocument() { return this; } transform(res) { return res; } };
+    const { default: worker } = await import('../../worker.js');
+    const env = { SUPABASE_URL: 'https://sb.example', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_KEY: 'service', ASSETS: { fetch: async () => new Response('nf', { status: 404 }) } };
+    const res = await worker.fetch(new Request(`https://aifoundscore.com/api/report/${TOKEN}`), env, { waitUntil() {} });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.locked, false);
+    assert.equal(body.recheckOn, '2026-10-31T18:00:00.000Z');
+    assert.ok(seen.some((x) => x.includes('/payments?') && x.includes('paid_at')), 'payments read with paid_at');
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('upsells on a paid page: no Be the Answer box when it isn’t on sale; the $25 offer is last, short and optional', () => {
+  const html = paidOffice(['xray', 'competitor_breakdown']);
+  assert.doesNotMatch(html, /Want us to keep watching\?|Tell me when it opens|Be the Answer/);
+  const bd = at(html, 'Get my Competitor Breakdown');
+  assert.ok(bd > at(html, 'How we searched'), 'after everything else');
+  assert.match(html, /<strong>Optional extra:<\/strong> the Competitor Breakdown \(\$25\)/);
+  assert.ok(at(html, 'class="r2-verdict') < at(html, 'id="action-plan"') && at(html, 'id="action-plan"') < bd, 'never right after the verdict');
 });

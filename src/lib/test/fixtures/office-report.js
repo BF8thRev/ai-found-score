@@ -9,7 +9,7 @@ const NAMES = { e1: 'Brightline Communications', e2: 'Kestrel PR', e3: 'Clutch',
 function answer(id, questionId, intent, engine, ids, citations = []) {
   let text = 'Here are some options. ';
   const businessesNamed = ids.map((eid) => {
-    const pos = text.length;
+    const pos = text.length + 2; // after the "**"
     text += `**${NAMES[eid]}** is well known. `;
     return { pos, name: NAMES[eid], entityId: eid };
   });

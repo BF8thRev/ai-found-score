@@ -108,8 +108,11 @@ export function homepageSaysTrade(meta, trade) {
 }
 
 /**
- * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, from }] }
+ * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, kitNote?, time?, cost?, week?, from }], kitOnly? }
  * `kind`: 'professional' (an office: agency, firm), 'trade' (goes to the customer) or 'storefront'.
+ * `time`, `cost`: a rough, conservative estimate for the step; `week`: one the owner can finish this
+ * week (the page's "Do these 3 this week"). `kitNote`: the Fix Kit already has this step's file.
+ * `kitOnly`: stored issue kinds handled only by a Fix Kit file (llms.txt), with no step of their own.
  * `from`: the stored issue kinds this step covers (every stored issue lands in exactly one step,
  * or is dropped on purpose: walk-in advice for an office).
  */
@@ -138,10 +141,10 @@ export function buildActionPlan(report) {
 
   // 1. What AI gets wrong, and AI being blocked: always first, each its own step.
   for (const i of take((x) => x.kind === 'fact_differs' || x.kind === 'listing_differs' || x.kind === 'listing_mismatch')) {
-    items.push({ id: hashId('fact', i.title), impact: 'high', title: i.title, why: `${i.description ? `${i.description} ` : ''}AI repeats what it reads, so customers get the wrong details until every source matches.`, who: 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind] });
+    items.push({ id: hashId('fact', i.title), impact: 'high', title: i.title, why: `${i.description ? `${i.description} ` : ''}AI repeats what it reads, so customers get the wrong details until every source matches.`, who: 'you', steps: i.steps || [], copyText: i.copyText || [], time: 'About half an hour', cost: 'No cost', week: true, from: [i.kind] });
   }
   for (const i of take((x) => x.kind === 'site_blocks_ai')) {
-    items.push({ id: 'unblock', impact: 'high', title: i.title, why: `${i.description || ''} AI can’t recommend what it isn’t allowed to read.`.trim(), who: 'web', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind] });
+    items.push({ id: 'unblock', impact: 'high', title: i.title, why: `${i.description || ''} AI can’t recommend what it isn’t allowed to read.`.trim(), who: 'web', steps: i.steps || [], copyText: i.copyText || [], time: 'Under half an hour for your web person', cost: 'No cost', week: true, from: [i.kind] });
   }
 
   // 2. The lists AI read when it named someone else. Checked "not listed" first, then cited lists we
@@ -166,22 +169,23 @@ export function buildActionPlan(report) {
     sites.push({ domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, type, status: s.youListed === false ? 'missing' : 'check', engines, count: lostIn.length, topListed: s.topListed || null });
   }
   sites.sort((x, y) => (x.status === 'missing' ? 0 : 1) - (y.status === 'missing' ? 0 : 1) || y.count - x.count);
-  if (sites.length) {
-    const shown = sites.slice(0, 8);
+  // Directories (a free profile, this week) and industry lists/awards (entries, often yearly, fees,
+  // size rules) are different jobs: two steps.
+  const shown = sites.filter((x) => x.type !== 'award').slice(0, 8);
+  const awards = sites.filter((x) => x.type === 'award').slice(0, 4);
+  const rivalsText = topRivals.length ? listJoin(topRivals) : `other ${office ? 'firms' : 'businesses'}`;
+  if (shown.length) {
     const missing = shown.filter((s) => s.status === 'missing').length;
     items.push({
       id: 'lists',
       impact: 'high',
-      title: `Get on the ${shown.length} ${shown.some((x) => x.type === 'directory' || x.type === 'award' || x.type === 'unsure') ? plural(shown.length, 'list', 'lists') : plural(shown.length, 'page', 'pages')} AI read when it picked other ${office ? 'firms' : 'businesses'}`,
-      why: `When AI named ${topRivals.length ? listJoin(topRivals) : 'other businesses'} instead of you, it read ${plural(shown.length, 'this page', 'these pages')}. ${missing ? `You’re not on ${missing === shown.length ? (missing === 1 ? 'it' : 'any of them') : `${missing} of them`}. ` : ''}Being on the pages AI reads gives it a reason to include you.`,
+      title: `Get on the ${shown.length} ${shown.some((x) => x.type === 'directory' || x.type === 'unsure') ? plural(shown.length, 'list', 'lists') : plural(shown.length, 'page', 'pages')} AI read when it picked other ${office ? 'firms' : 'businesses'}`,
+      why: `When AI named ${rivalsText} instead of you, it read ${plural(shown.length, 'this page', 'these pages')}. ${missing ? `You’re not on ${missing === shown.length ? (missing === 1 ? 'it' : 'any of them') : `${missing} of them`}. ` : ''}Being on the pages AI reads gives it a reason to include you.`,
       who: 'you',
       steps: [
-        `Open each page below and search it for ${name}.${shown.some((s) => s.status === 'check') ? ' Pages marked “Check” we couldn’t read, so look for yourself.' : ''}`,
+        `Open each page below and search it for ${name}.${shown.some((s) => s.status === 'check') ? ' Pages marked “Not checked yet” we couldn’t read, so look for yourself.' : ''}`,
         ...(shown.some((x) => x.type === 'directory')
-          ? [`Directories: if you’re listed, claim the profile (look for “claim this profile” or similar) and make every detail match the block below; if you’re not, use “add your ${office ? 'company' : 'business'}” or “get listed”. Then ask two or three happy ${office ? 'clients' : 'customers'} to leave a review there.`]
-          : []),
-        ...(shown.some((x) => x.type === 'award')
-          ? ['Industry lists and awards: these take entries, often once a year and sometimes with a fee or a size rule. Find the entry page, check you qualify, and put the deadline in your calendar.']
+          ? [`Directories: if you’re listed, claim the profile (look for “claim this profile” or similar) and make every detail match the block below; if you’re not, use “add your ${office ? 'company' : 'business'}” or “get listed”. A basic profile costs nothing; you don’t need the paid upgrades. Then ask two or three happy ${office ? 'clients' : 'customers'} to leave a review there.`]
           : []),
         ...(shown.some((x) => x.type === 'unsure')
           ? [`Pages marked “Other”: if it lists ${office ? 'firms' : 'businesses'} you can join, add yours; if it’s an article, contact the writer as below.`]
@@ -193,10 +197,35 @@ export function buildActionPlan(report) {
       ],
       copyText: listingCopy(d, noun, where, words),
       sites: shown,
+      ...(shown.some((x) => x.type === 'directory')
+        ? { time: 'Under half an hour per site', cost: 'No cost for a basic profile', week: true }
+        : { time: 'Under half an hour per site', cost: 'No cost', week: true }),
       from: notListed.length ? ['not_listed'] : [],
     });
-  } else if (notListed.length) {
-    for (const i of notListed) items.push({ id: hashId('list', i.title), impact: 'high', title: i.title, why: `${i.description || ''} AI read this page when it named someone else.`.trim(), who: 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind] });
+  }
+  if (awards.length) {
+    items.push({
+      id: 'awards',
+      impact: 'medium',
+      title: `Put the entry dates for ${awards.length === 1 ? 'the industry list' : `the ${awards.length} industry lists`} AI read in your calendar`,
+      why: `AI also read ${listJoin(awards.map((s) => s.domain))} when it named ${rivalsText} instead of you. Industry lists and awards like ${plural(awards.length, 'this', 'these')} take entries, often once a year and sometimes with a fee or a size rule, so this is for the next round, not a job for this week.`,
+      who: 'you',
+      steps: [
+        'Open each page below and find how to enter: look for “submit”, “enter”, “nominate” or “methodology”.',
+        'Check that you qualify (some need a minimum size or fee income) and what it costs to enter.',
+        'Put the next deadline in your calendar, with a reminder two weeks before.',
+        `When you enter, use the same name, website and description as everywhere else.`,
+      ],
+      copyText: [],
+      sites: awards,
+      time: 'About half an hour to find the dates',
+      cost: 'Some charge to enter',
+      week: false,
+      from: !shown.length && notListed.length ? ['not_listed'] : [],
+    });
+  }
+  if (!shown.length && !awards.length && notListed.length) {
+    for (const i of notListed) items.push({ id: hashId('list', i.title), impact: 'high', title: i.title, why: `${i.description || ''} AI read this page when it named someone else.`.trim(), who: 'you', steps: i.steps || [], copyText: i.copyText || [], time: 'Under half an hour', cost: 'No cost for a basic profile', week: true, from: [i.kind] });
   }
 
   // 3. One FAQ step for every question AI didn't name them for (+ the baseline FAQ and FAQ schema).
@@ -244,7 +273,10 @@ export function buildActionPlan(report) {
         { label: 'Questions and answers for your website (fill in the brackets)', text: pairs.map((p) => `${p.q}\n${p.a}`).join('\n\n') },
         { label: 'FAQ code: add once your answers are final (JSON-LD)', text: faqJsonLd(pairs.map((p) => ({ q: p.q, a: p.a.replace(/\s*\[[^\]]*\]/g, '').trim() }))), format: 'code' },
       ],
-      kitNote: 'Your Fix Kit builds this FAQ as a ready file from the details you confirm. Use the Kit’s file or this code, not both.',
+      kitNote: 'Done for you: your FAQ page is ready in your Fix Kit. Check it, then send it to whoever runs your website in place of the FAQ code above.',
+      time: 'About an hour for you, then 1–2 hours for your web person',
+      cost: 'No cost',
+      week: true,
       from: [...new Set([...lostQ, ...faqBase, ...faqSchema].map((i) => i.kind))],
     });
   } else {
@@ -260,7 +292,9 @@ export function buildActionPlan(report) {
   const missWhat = meta.length && saysTrade === false;
   const missWhere = meta.length && saysTown !== true;
   if (missWhat || missWhere || thin.length) {
-    const gaps = [missWhat && 'what you do', missWhere && 'where you work'].filter(Boolean);
+    // An office says where it's based; "where you work" reads like a van's service area.
+    const whereText = office ? (d.town ? `that you’re in ${d.town}` : 'where you’re based') : 'where you work';
+    const gaps = [missWhat && 'what you do', missWhere && whereText].filter(Boolean);
     const steps = [];
     const copy = [];
     if (gaps.length) {
@@ -281,13 +315,16 @@ export function buildActionPlan(report) {
     items.push({
       id: 'homepage',
       impact: missWhat ? 'high' : 'medium',
-      title: gaps.length ? `Make your homepage say ${listJoin(gaps)}` : `Add a page for ${d.town || 'the towns you serve'}`,
+      title: gaps.length ? `Make your homepage say ${listJoin(gaps)}` : office ? 'Add a page about the clients and places you serve' : `Add a page for ${d.town || 'the towns you serve'}`,
       why: gaps.length
         ? `AI matches a business to a search like “${kindText(noun)} in ${d.town || 'your town'}” by reading the top of its homepage. Yours doesn’t say ${listJoin(gaps)}.${m && typeof m.title === 'string' && m.title ? ` Your page title now: “${m.title}”.` : ''}`
         : `A page about one place gives AI a page that answers “${kindText(noun)} in ${d.town || 'your town'}” directly.`,
       who: 'web',
       steps,
       copyText: copy,
+      time: 'About half an hour for your web person',
+      cost: 'No cost',
+      week: true,
       from: [...new Set([...meta, ...thin].map((i) => i.kind))],
     });
   }
@@ -326,6 +363,10 @@ export function buildActionPlan(report) {
         desc && { label: 'Google profile description (fill in the brackets)', text: desc },
         napBlock(d) && { label: 'Your details, written the same everywhere', text: napBlock(d) },
       ].filter(Boolean),
+      kitNote: 'Done for you: your Google profile text is ready in your Fix Kit. Check it and paste it in.',
+      time: missingG ? 'About half an hour, then a few days for Google to verify you' : 'About half an hour',
+      cost: 'No cost',
+      week: true,
       from: [...new Set([...gMissing, ...gBase].map((i) => i.kind))],
     });
   }
@@ -353,12 +394,18 @@ export function buildActionPlan(report) {
         code && 'Check it at validator.schema.org: it should read your name and contact details.',
       ].filter(Boolean),
       copyText: code ? [{ ...code, text: codeText, label: 'Business code for your web person (JSON-LD)' }] : [],
-      ...(code ? { kitNote: 'Your Fix Kit builds this code as a ready file from the details you confirm. Use the Kit’s file or this code, not both.' } : {}),
+      ...(code ? { kitNote: 'Done for you: this code is ready in your Fix Kit. Send it to whoever runs your website.' } : {}),
+      time: 'About half an hour for your web person',
+      cost: 'No cost',
+      week: true,
       from: [...new Set([...nap, ...schema].map((i) => i.kind))],
     });
   }
 
-  // 7. Everything else, as stored (reviews, https, speed, llms.txt, anything new).
+  // 7. llms.txt is a file in the Fix Kit, not a step of its own: the kit card names it.
+  const kitOnly = take((x) => x.kind === 'site_no_llms_txt').map((i) => i.kind);
+
+  // 8. Everything else, as stored (reviews, https, speed, anything new).
   for (const i of take(() => true)) items.push(passThrough(i, rawNoun, d.tradeNoun));
   // An office never gets the "open now" question back through the fallback either.
   if (office) for (let n = items.length - 1; n >= 0; n--) if (items[n].from.includes('lost_question') && /\bopen now\b/i.test(items[n].title)) items.splice(n, 1);
@@ -368,14 +415,14 @@ export function buildActionPlan(report) {
 
   // Order: impact, then the order that matters most for this kind of business.
   const rank = office
-    ? ['fact', 'unblock', 'lists', 'list', 'homepage', 'faq', 'google', 'contact']
-    : ['fact', 'unblock', 'google', 'few_reviews', 'lists', 'list', 'faq', 'homepage', 'contact'];
+    ? ['fact', 'unblock', 'lists', 'list', 'homepage', 'faq', 'awards', 'google', 'contact']
+    : ['fact', 'unblock', 'google', 'few_reviews', 'lists', 'list', 'faq', 'homepage', 'awards', 'contact'];
   const pos = (it) => { const k = rank.findIndex((p) => it.id === p || it.id.startsWith(`${p}-`)); return k < 0 ? rank.length : k; };
   const imp = { high: 0, medium: 1, low: 2 };
   const ordered = items.map((it, n) => ({ it, n }))
     .sort((x, y) => imp[x.it.impact] - imp[y.it.impact] || pos(x.it) - pos(y.it) || x.n - y.n)
     .map((x) => x.it);
-  return { kind, items: ordered };
+  return { kind, items: ordered, ...(kitOnly.length ? { kitOnly } : {}) };
 }
 
 // A stored fix as one step. Stored text wrote the trade in lower case ("a pr agency"): fixed here.
@@ -384,8 +431,20 @@ function passThrough(i, rawNoun = '', noun = '') {
   i = { ...i, title: fix(i.title), description: i.description && fix(i.description), steps: (i.steps || []).map(fix), copyText: (i.copyText || []).map((c) => (c && typeof c.text === 'string' ? { ...c, text: fix(c.text) } : c)) };
   const impact = i.severity === 'high' ? 'high' : i.severity === 'medium' ? 'medium' : 'low';
   const web = /^site_/.test(String(i.kind || ''));
-  return { id: hashId(i.kind || 'fix', i.title), impact, title: i.title, why: i.description || '', who: web ? 'web' : 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind || null] };
+  return { id: hashId(i.kind || 'fix', i.title), impact, title: i.title, why: i.description || '', who: web ? 'web' : 'you', steps: i.steps || [], copyText: i.copyText || [], ...(EFFORT[i.kind] || {}), from: [i.kind || null] };
 }
+
+// Rough time and cost for the stored fixes that pass through as they are. Conservative; a kind not
+// listed shows none rather than a guess.
+const EFFORT = {
+  few_reviews: { time: 'Under half an hour to ask', cost: 'No cost', week: true },
+  site_http_no_redirect: { time: 'Under half an hour for your web person', cost: 'No cost', week: true },
+  site_no_https: { time: 'About an hour for your web person', cost: 'Often no cost; some hosts charge', week: false },
+  site_slow: { time: 'A few hours for your web person, depending on the site', cost: 'Varies', week: false },
+  lost_question: { time: 'About an hour for you, then 1–2 hours for your web person', cost: 'No cost', week: true },
+  baseline_faq: { time: 'About an hour for you, then 1–2 hours for your web person', cost: 'No cost', week: true },
+  site_no_faq_schema: { time: 'About half an hour for your web person', cost: 'No cost', week: true },
+};
 
 // A draft answer: the real details we have, the owner's own homepage words, and [brackets] for the
 // specifics only they know. Never presented as finished.
