@@ -83,8 +83,15 @@ const HARBORVIEW_SPEC = {
     { id: 'e4', name: 'Carrow Drain Service' },
     { id: 'e5', name: 'Blue Point Flow Plumbing' },
     { id: 'e6', name: 'Seaford Valve Works' },
+    { id: 'e7', name: 'Gallo & Sons Plumbing' },
   ],
-  questions: Q('Massapequa', '11758'),
+  // The paid audit asks 7: the 5, then the 2 small-firm questions (scanner/questions.js smallFirmQuestions;
+  // the homepage title names boiler repair).
+  questions: [
+    ...Q('Massapequa', '11758'),
+    { id: 'q6', intent: 'small', text: 'Can you recommend a local, family-owned plumber in Massapequa, NY?' },
+    { id: 'q7', intent: 'niche', text: 'Who does boiler repair in Massapequa NY?' },
+  ],
   answers: [
     // q1 best
     ['q1', 'chatgpt', 1, 'Here are some well-reviewed plumbers in Massapequa, NY:\n\n1. Tidewater Plumbing Co. – Long-running local company with strong reviews for repairs and remodels.\n2. Kessler Bros. Plumbing – Family-owned, known for clear pricing.\n3. Sunrise Pipe & Heat – Handles plumbing plus boiler and heating work.\n4. Blue Point Flow Plumbing – Smaller shop that customers describe as responsive.\n\nCheck recent reviews and confirm licensing in Nassau County before you hire.', [LP, BO]],
@@ -116,6 +123,18 @@ const HARBORVIEW_SPEC = {
     ['q5', 'google_ai_mode', 1, 'Tidewater Plumbing Co. offers free estimates and is often called the best value near Massapequa. Kessler Bros. Plumbing posts flat rates. Harborview Plumbing & Heating charges a $89 service call.', [LP, OWN]],
     ['q5', 'perplexity', 1, "Most plumbers near Massapequa don't publish prices online. Tidewater Plumbing Co. and Kessler Bros. Plumbing advertise free estimates, according to the LocalPages listing.", [LP]],
     ['q5', 'claude', 1, 'Kessler Bros. Plumbing posts flat-rate pricing, and Carrow Drain Service runs drain cleaning specials near Massapequa.', [LP, BO]],
+    // q6 small (the paid audit's small-firm questions, scanner/questions.js smallFirmQuestions)
+    ['q6', 'chatgpt', 1, 'Family-owned plumbers serving Massapequa include Kessler Bros. Plumbing, run by two brothers, and Gallo & Sons Plumbing, a second-generation shop. Both handle repairs and small jobs.', [BO]],
+    ['q6', 'gemini', 1, 'Kessler Bros. Plumbing is a family business in Massapequa. Harborview Plumbing & Heating is a local, independent shop on Merrick Road.', [BO, OWN]],
+    ['q6', 'google_ai_mode', 1, 'Local, family-owned plumbers near Massapequa, NY:\n• Gallo & Sons Plumbing\n• Harborview Plumbing & Heating: independent, on Merrick Road\n• Kessler Bros. Plumbing', [LP, OWN]],
+    ['q6', 'perplexity', 1, 'Kessler Bros. Plumbing describes itself as family-owned and serves Massapequa. Gallo & Sons Plumbing is another family shop nearby.', [BO]],
+    ['q6', 'claude', 1, 'Gallo & Sons Plumbing and Kessler Bros. Plumbing are both family-run plumbers that serve Massapequa, NY.', [LP]],
+    // q7 niche (the service the owner's homepage names: boiler repair)
+    ['q7', 'chatgpt', 1, 'For boiler repair in Massapequa, Harborview Plumbing & Heating and Sunrise Pipe & Heat both service gas and oil boilers. Seaford Valve Works also handles heating calls.', [OWN, HF]],
+    ['q7', 'gemini', 1, 'Sunrise Pipe & Heat is often recommended for boiler repair near Massapequa. Harborview Plumbing & Heating also lists boiler and heating service.', [HF, OWN]],
+    ['q7', 'google_ai_mode', 1, 'Boiler repair in Massapequa, NY:\n• Harborview Plumbing & Heating: boiler and heating service\n• Sunrise Pipe & Heat\n• Seaford Valve Works', [OWN, HF]],
+    ['q7', 'perplexity', 1, 'Sunrise Pipe & Heat and Seaford Valve Works both advertise boiler repair near Massapequa, NY.', [HF]],
+    ['q7', 'claude', 1, 'Harborview Plumbing & Heating lists boiler and heating service in Massapequa. Sunrise Pipe & Heat does boiler repair too.', [OWN]],
   ],
   sourceChecks: {
     'localpages.example.com': { youListed: false, youPosition: null, topListed: 'Tidewater Plumbing Co.' },
@@ -328,7 +347,8 @@ export const SAMPLE_V2 = buildSample(HARBORVIEW_SPEC);
 export const SAMPLE_EDGE_FAILED = buildSample(CEDAR_SPEC);
 
 // Same scan as sample-001, shown as a 30-day re-check so the before/after
-// strip has something to draw. The baseline totals are fictional too (same number of searches).
+// strip has something to draw. The baseline totals are fictional too (the same 7 searches, so the same
+// number of answers: a before/after only compares scans that asked the same questions).
 export const SAMPLE_RECHECK = {
   ...SAMPLE_V2,
   id: 'sample-recheck',

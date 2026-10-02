@@ -32,9 +32,9 @@
 import { freeEngines, activeEngines, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
 import { canStore, upsertScan, stableUuid, getScan, saveReport } from '../../scanner/store.js';
 import { resolveKeys } from '../../scanner/config.js';
-import { parseScanRequest } from '../admin/scan-core.js';
+import { parseScanRequest, cleanQuestionList } from '../admin/scan-core.js';
 import { normalizeBizName } from '../../shared/report-v2.js';
-import { FREE_QUESTION_COUNT } from '../../scanner/questions.js';
+import { FREE_QUESTION_COUNT, INTENTS, PAID_QUESTION_COUNT, paidQuestions, isSmallFirmIntent } from '../../scanner/questions.js';
 import { rowsBefore, startOfUtcDay, ipCode } from './live-preview.js';
 import { linkRequestToken } from './notify.js';
 
@@ -118,6 +118,17 @@ export function requestKey(business) {
 export function estimateRequestScanUsd(engines) {
   const base = estimateScanCost({ engines, questions: FREE_QUESTION_COUNT, runs: 1 }).total;
   const confirm = Math.max(0, ...engines.map((e) => priceCall(e, TYPICAL_CALL[e]))) + priceCall('extract', TYPICAL_CALL.extract);
+  return Math.round((base + confirm) * 1e6) / 1e6;
+}
+
+/**
+ * What one paid-tier scan (the $49 audit, its re-check, a Be the Answer month) is estimated at:
+ * `questions` (PAID_QUESTION_COUNT: the 5 + the 2 small-firm questions) × engines × 1 run, extraction,
+ * and the headline re-ask. A re-check of an older audit asks its 5: pass questions = 5.
+ */
+export function estimatePaidScanUsd(engines, questions = PAID_QUESTION_COUNT) {
+  const base = estimateScanCost({ engines, questions, runs: 1 }).total;
+  const confirm = engines.length ? Math.max(0, ...engines.map((e) => priceCall(e, TYPICAL_CALL[e]))) + priceCall('extract', TYPICAL_CALL.extract) : 0;
   return Math.round((base + confirm) * 1e6) / 1e6;
 }
 
@@ -577,7 +588,7 @@ export async function startAbandonedCheckout(env, token, { fetchImpl = (...a) =>
 }
 
 // ---------------------------------------------------------------------------
-// The paid audit: a fresh scan with all 5 questions on every engine with a key
+// The paid audit: a fresh scan with every question (the 5 + the 2 small-firm ones) on every engine with a key
 // ---------------------------------------------------------------------------
 
 /** Tiers whose payment starts the full scan (the $49 audit and everything above it). */
@@ -621,37 +632,80 @@ export async function startPaidScan(env, { token, sessionId, tier }, { fetchImpl
   }
 }
 
+/** The token's stored v2 reports, newest first: their questions and website check only. */
+async function readStoredQuestions(env, token, fetchImpl) {
+  const { base, headers } = supa(env);
+  const res = await fetchImpl(`${base}/scan_results?report_token=eq.${encodeURIComponent(token)}&version=eq.2&report=not.is.null&select=scanned_at,questions:report->questions,siteCheck:report->siteCheck&order=scanned_at.desc&limit=10`, { headers, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`scan_results read failed: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * The questions a full (paid-tier) scan asks, and why → { questions: [{ id, intent, text }], basis }.
+ *   'recheck'  the questions of the paid report it is compared with, word for word (basis 'baseline'):
+ *              a report bought before the small-firm questions is re-checked on its own 5, so the
+ *              before/after stays like for like. No earlier full report: the 7 (basis 'new').
+ *   'monthly'  the previous month's questions when they already include the small-firm ones; else the 7.
+ *   'paid'     (and anything else) the 7: buildQuestions + smallFirmQuestions, the specialty read from
+ *              the homepage check of the token's newest stored report (for a plan town: its plan's).
+ * The 7 never depend on a read: a failed read only loses the specialty (the fallback question is asked).
+ * A re-check whose baseline can't be read throws instead (the cron tries again; never unlike for like).
+ */
+export async function fullScanQuestions(env, { token, trigger, business }, { fetchImpl = (...a) => fetch(...a) } = {}) {
+  let rows = [];
+  try {
+    rows = await readStoredQuestions(env, token, fetchImpl);
+  } catch (e) {
+    if (trigger === 'recheck') throw e;
+  }
+  const full = rows.find((r) => Array.isArray(r.questions) && r.questions.length >= INTENTS.length);
+  const reuse = full && cleanQuestionList(full.questions);
+  if (reuse && (trigger === 'recheck' || (trigger === 'monthly' && reuse.some((q) => isSmallFirmIntent(q.intent))))) {
+    return { questions: reuse, basis: 'baseline' };
+  }
+  let siteCheck = (rows.find((r) => r.siteCheck && typeof r.siteCheck === 'object') || {}).siteCheck || null;
+  if (!siteCheck && trigger === 'monthly') {
+    // A plan town's first scan: the plan's own report read the same website.
+    const parent = await readPlanParent(env, token, { fetchImpl }).catch(() => null);
+    if (parent) siteCheck = ((await readStoredQuestions(env, parent, fetchImpl).catch(() => [])).find((r) => r.siteCheck && typeof r.siteCheck === 'object') || {}).siteCheck || null;
+  }
+  return { questions: paidQuestions(business, { siteCheck }), basis: 'new' };
+}
+
 /**
  * A full scan (every question, every engine with a key, 1 run) under an existing report token.
  * `trigger` 'paid' (after payment) or 'recheck' (30 days later); one of each per token. Throws on
  * a store failure; a workflow that won't start marks the row failed and returns { ok: false }.
  */
-export async function startFullScan(env, { token, trigger, scanId, notes, business: given = null }, { fetchImpl = (...a) => fetch(...a) } = {}) {
+export async function startFullScan(env, { token, trigger, scanId, notes, business: given = null, again = false }, { fetchImpl = (...a) => fetch(...a) } = {}) {
   if (!env.SCAN_WORKFLOW) return { ok: false, reason: 'no-workflow' };
   if (!canStore(env)) return { ok: false, reason: 'no-store' };
   // 'paid' and 'recheck' run once per token; a 'monthly' scan once per scan id (one per month).
+  // `again` (/admin "Run the full audit again"): a finished paid scan doesn't block, a running one does.
   if (trigger === 'monthly') {
     if ((await readRows(env, `id=eq.${scanId}&select=id`, fetchImpl)).length) return { ok: false, reason: 'already' };
   } else {
     const rows = await readByToken(env, token, { fetchImpl });
     // A failed attempt (failed, report failed the guardrails, or not stored) may be tried again.
-    if (rows.some((r) => r.trigger === trigger && !attemptFailed(r))) return { ok: false, reason: 'already' };
+    const blocks = (r) => r.trigger === trigger && (again ? r.status === 'running' || r.status === 'queued' : !attemptFailed(r));
+    if (rows.some(blocks)) return { ok: false, reason: 'already' };
   }
   const engines = activeEngines(env);
   if (!engines.length) return { ok: false, reason: 'no-engine' };
   let business = given || await readPlanBusiness(env, token, { fetchImpl });
   const parsed = parseScanRequest({ business: business || {}, engines, runs: 1, trigger, notes });
   if (!parsed.ok) return { ok: false, reason: `business: ${parsed.error}` };
-  const questions = 5;
+  const asked = await fullScanQuestions(env, { token, trigger, business: parsed.params.business }, { fetchImpl });
+  const questions = asked.questions.length;
   await upsertScan(env, {
     id: scanId, business_name: parsed.params.business.name, report_token: token, trigger, status: 'running',
     engines, runs: 1, questions, calls_total: questions * engines.length, notes: parsed.params.notes,
-    business: parsed.params.business, est_cost_usd: estimateScanCost({ engines, questions, runs: 1 }).total,
+    business: parsed.params.business, est_cost_usd: estimatePaidScanUsd(engines, questions),
   }, { fetchImpl });
   try {
     await env.SCAN_WORKFLOW.create({
       id: scanId,
-      params: { ...parsed.params, engines, scanId, reportToken: token, questionLimit: null, dryRun: false },
+      params: { ...parsed.params, engines, scanId, reportToken: token, questionLimit: null, questions: asked.questions, dryRun: false },
     });
   } catch (e) {
     const error = String(e?.message || e).slice(0, 300);

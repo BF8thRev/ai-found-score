@@ -444,7 +444,7 @@ function blurred(text) {
 const XRAY = {
   name: 'AI Visibility Audit',
   price: '$49 one-time',
-  what: 'We ask all 5 customer questions again on every AI assistant we check, and you get every answer word for word, every website AI cited, exactly what’s wrong on your website and Google listing, every fix step by step with copy-paste text, your Fix Kit (ready-to-install files for whoever runs your website), the competitor gap sheet, your fix checklist, and a free re-scan 30 days later to see what changed.',
+  what: 'We ask all 7 customer questions fresh (including 2 for businesses your size) on every AI assistant we check, and you get every answer word for word, every website AI cited, exactly what’s wrong on your website and Google listing, every fix step by step with copy-paste text, your Fix Kit (ready-to-install files for whoever runs your website), the competitor gap sheet, your fix checklist, and a free re-scan 30 days later to see what changed.',
   promise: 'Fewer than 3 problems specific to your business? Your money back.',
   button: 'Get my audit — $49',
 };
@@ -1123,7 +1123,9 @@ const MIN_FIX_ITEMS = 3;
 // Preferred column order only. Columns come from the engines that actually
 // answered (plus method.engines order for anything not listed here).
 const ENGINE_COLUMNS = ['chatgpt', 'claude', 'gemini', 'google_ai_mode', 'perplexity'];
-const INTENT_LABELS = { best: 'best', urgent: 'urgent', job: 'a specific job', trust: 'good reviews', price: 'cheapest' };
+// small / niche: the paid audit's two small-firm questions (scanner/questions.js smallFirmQuestions).
+const INTENT_LABELS = { best: 'best', urgent: 'urgent', job: 'a specific job', trust: 'good reviews', price: 'cheapest', small: 'your size', niche: 'your specialty' };
+const SMALL_FIRM_INTENTS = ['small', 'niche'];
 const FIELD_LABELS = { hours: 'Hours', phone: 'Phone', price: 'Price', address: 'Address', services: 'Services', name: 'Name', website: 'Website' };
 
 function engineName(id) { return ENGINE_NAMES[id] || String(id || 'AI assistant'); }
@@ -1298,6 +1300,8 @@ function renderV2(root, report) {
     recheckCard: paid ? recheckCard(report) : '',
     strip: offerStripV2({ report, severity, xrayOk, count: issues.length }),
     who: nobodyTwice ? '' : whoAiNamesV2({ report, b, t, N, cw, proven }),
+    // A locked page has no names in its answers (src/lib/lock.js): only the sample's ?preview=locked gets here.
+    smallFirm: locked ? '' : smallFirmV2({ report, b, questions, answers }),
     sources: sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     facts: factsV2({ report, b, aById }),
     site: siteV2(report),
@@ -1319,10 +1323,10 @@ function renderV2(root, report) {
   sec.actionPlan = hasPlan ? actionPlanV2(report) : '';
   sec.breakdownUpsell = hasPlan ? breakdownUpsell(report) : '';
   const order = xrayOk
-    ? ['verdict', 'who', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
+    ? ['verdict', 'who', 'smallFirm', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
     : hasPlan
-      ? ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'hero', 'who', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell']
-      : ['verdict', 'topTools', 'hero', 'baseline', 'plan', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'recheckCard', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method', 'recheck'];
+      ? ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'hero', 'who', 'smallFirm', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell']
+      : ['verdict', 'topTools', 'hero', 'baseline', 'plan', 'who', 'smallFirm', 'sources', 'facts', 'site', 'listings', 'issues', 'recheckCard', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method', 'recheck'];
 
   root.innerHTML = [
     printHeadV2(report, b),
@@ -1400,7 +1404,7 @@ function printHeadV2(report, b) {
 function fullScanNote() {
   return `
     <div class="r2-note r2-fullscan" role="status">
-      <strong>Your full audit is on its way.</strong> We’re asking all 5 customer questions on every AI assistant we check.
+      <strong>Your full audit is on its way.</strong> We’re asking all 7 customer questions, including 2 for businesses your size, on every AI assistant we check.
       This page fills in with the new answers as they come back. Everything below is already yours.
     </div>`;
 }
@@ -1593,6 +1597,64 @@ function whoAiNamesV2({ report, b, t, N, cw, proven }) {
         ${proven.map((e) => row(e.name, num(e.named), num(e.first), false)).join('')}
       </div>
       ${once ? `<p class="r2-once">+ ${once} other ${plural(once, 'business', 'businesses')} named once each.</p>` : ''}
+    </section>`;
+}
+
+// 3b. The paid audit's small-firm questions (a boutique firm for a small company, the owner's own
+// specialty; a family-owned plumber, a specific service): who AI named on just those answers, so the
+// owner sees the businesses they really compete with, not only the giants. Every name and count comes
+// from those answers' businessesNamed (directories left out); nothing about any business's size is
+// claimed. Only when the report asked them.
+function smallFirmV2({ report, b, questions, answers }) {
+  const qs = questions.filter((q) => q && SMALL_FIRM_INTENTS.includes(q.intent));
+  const blocks = qs.map((q) => {
+    const as = answers.filter((a) => a && a.questionId === q.id);
+    if (!as.length) return '';
+    const counted = as.filter((a) => a.ownerMatch !== 'unsure');
+    const you = as.filter((a) => a.namedYou);
+    const unsure = as.length - counted.length;
+    const tally = new Map();
+    for (const a of as) {
+      const seen = new Set();
+      for (const n of a.businessesNamed || []) {
+        const name = n && String(n.name || '').trim();
+        if (!name || isYouNamed(n) || DIRECTORY_NAME_RE.test(name.replace(/[.,]+$/, ''))) continue;
+        const key = n.entityId || name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const t = tally.get(key) || { name, count: 0, first: Infinity, ids: [] };
+        t.count += 1;
+        t.first = Math.min(t.first, num(n.pos));
+        t.ids.push(a.id);
+        tally.set(key, t);
+      }
+    }
+    const names = [...tally.values()].sort((x, y) => y.count - x.count || x.first - y.first || x.name.localeCompare(y.name));
+    const engines = listJoin(you.map((a) => engineName(a.engine)).filter((e, i, l) => l.indexOf(e) === i));
+    const youLine = you.length
+      ? `${engines} named you (${you.length} of ${as.length} ${plural(as.length, 'answer', 'answers')}).`
+      : counted.length
+        ? `AI didn’t name you in ${counted.length === 1 ? 'the answer' : `any of the ${counted.length} answers`}${unsure ? `, and we couldn’t tell in ${unsure}` : ''}.`
+        : 'We couldn’t tell whether AI named you.';
+    const list = names.length
+      ? `<ul class="r2-small-names">${names.map((n) => `<li><span class="nm">${escapeHtml(n.name)}</span> <span class="c">${n.count} of ${as.length} ${plural(as.length, 'answer', 'answers')}</span></li>`).join('')}</ul>`
+      : '<p class="r2-muted">AI didn’t name any other business here.</p>';
+    const read = as.map((a) => `<a href="#ans-${escapeHtml(a.id)}" data-open="${escapeHtml(a.id)}">${escapeHtml(engineName(a.engine))}</a>`).join(' · ');
+    return `
+      <div class="r2-small-q" data-intent="${escapeHtml(q.intent)}">
+        <div class="q">“${escapeHtml(q.text)}”</div>
+        <p class="r2-small-you${you.length ? ' yes' : ''}">${youLine}</p>
+        ${list}
+        <p class="r2-muted">Read the answers: ${read}</p>
+      </div>`;
+  }).filter(Boolean);
+  if (!blocks.length) return '';
+  const office = isOffice(report);
+  return `
+    <section class="report-section r2-small" id="your-size">
+      <h2>When customers ask for ${office ? 'a firm' : 'a business'} your size</h2>
+      <p class="sub">We also asked ${blocks.length === 1 ? 'a question' : `${blocks.length} questions`} ${office ? 'a smaller firm' : 'a smaller local business'} can win. These are the businesses AI named in those answers, and whether it named ${escapeHtml(b.name || 'you')}.</p>
+      ${blocks.join('')}
     </section>`;
 }
 

@@ -1,8 +1,8 @@
 // src/admin/page.js — HTML for /admin (server-rendered; every dynamic value goes through esc()).
 
 import { ENGINE_NAMES, ACTIVE_ENGINES, FREE_ENGINES, estimateScanCost, priceCall, TYPICAL_CALL } from '../../scanner/config.js';
-import { isCheckoutRow, estimateRequestScanUsd } from '../lib/auto-scan.js';
-import { TRADES } from '../../scanner/questions.js';
+import { isCheckoutRow, estimateRequestScanUsd, estimatePaidScanUsd } from '../lib/auto-scan.js';
+import { TRADES, PAID_QUESTION_COUNT } from '../../scanner/questions.js';
 import {
   esc, usd, pct, moneySummary, engineVerdicts, activityFeed, shortTime, nyDate, EXPENSE_CATEGORIES,
   FIXED_COSTS, STRIPE_FEE, chargeDates, fixedCosts, unitEconomics,
@@ -150,9 +150,9 @@ function costsSection(d, errors, { now, activeIds = ACTIVE_ENGINES }) {
   const freeIds = activeIds.filter((e) => FREE_ENGINES.includes(e));
   const est = {
     free: estimateRequestScanUsd(freeIds.length ? freeIds : FREE_ENGINES),
-    paid: estimateScanCost({ engines: activeIds, questions: 5, runs: 1 }).total,
+    paid: estimatePaidScanUsd(activeIds),
   };
-  const u = unitEconomics({ scans: d.unitScans || [], est, fixedPerMonth: fixed.perMonth });
+  const u = unitEconomics({ scans: d.unitScans || [], est, fixedPerMonth: fixed.perMonth, paidQuestions: PAID_QUESTION_COUNT });
   const basis = (x) => (x.real ? `average of ${x.n} finished scan${x.n === 1 ? '' : 's'}` : 'estimate from the price table (no finished scans yet)');
   const plans = FIXED_COSTS.map((c) => {
     const charges = chargeDates(c, today);
@@ -174,7 +174,7 @@ function costsSection(d, errors, { now, activeIds = ACTIVE_ENGINES }) {
   <div class="tiles">
     <div class="tile"><b>${usd(fixed.perMonth)}</b><span>Fixed plans per month</span></div>
     <div class="tile"><b>${usd(u.free.usd)}</b><span>Cost of one free report (${esc(basis(u.free))})</span></div>
-    <div class="tile"><b>${usd(u.paid.usd)}</b><span>Cost of one $49 audit scan (${esc(basis(u.paid))})</span></div>
+    <div class="tile"><b>${usd(u.paid.usd)}</b><span>Cost of one $49 audit scan, ${esc(PAID_QUESTION_COUNT)} questions (${esc(basis(u.paid))}${u.paid.real ? `, any older 5-question audits scaled to ${esc(PAID_QUESTION_COUNT)}` : ''})</span></div>
     <div class="tile"><b>${usd(u.keepAudit)}</b><span>Kept per $49 audit, after ${usd(u.feeAudit)} Stripe fee and the scan</span></div>
     <div class="tile"><b>${usd(u.keepWithAddon)}</b><span>Kept per $74 order (audit + Breakdown), after ${usd(u.feeWithAddon)} fee</span></div>
     <div class="tile"><b>${esc(u.auditsForFixed ?? '—')}</b><span>Audits a month to cover the fixed plans</span></div>
@@ -501,7 +501,7 @@ function reportSection(lookup, { flash = '', activeIds = ACTIVE_ENGINES } = {}) 
   else if (L.token) {
     const scans = L.scans || [];
     const pays = L.payments || [];
-    const fullEst = estimateScanCost({ engines: activeIds, questions: 5, runs: 1 }).total;
+    const fullEst = estimatePaidScanUsd(activeIds);
     const fullDone = scans.some((s) => s.trigger === 'paid' && s.status === 'done');
     const fullRunning = scans.some((s) => s.trigger === 'paid' && (s.status === 'running' || s.status === 'queued'));
     const have = scans.filter((s) => s.status === 'done' && s.report_saved);
@@ -523,7 +523,9 @@ function reportSection(lookup, { flash = '', activeIds = ACTIVE_ENGINES } = {}) 
   </form>`;
     const rerun = L.unlocked && !fullDone && !fullRunning ? `<form class="acts" method="post" action="/admin/scan/paid" data-confirm="Run the full audit for this report? About ${esc(usd(fullEst))} in API calls.">
     <input type="hidden" name="token" value="${esc(L.token)}"><button type="submit">Run full audit (about ${usd(fullEst)})</button>
-    <span class="small">Optional: the page already shows the answers we have.</span></form>` : '';
+    <span class="small">Optional: the page already shows the answers we have.</span></form>` : L.unlocked && fullDone && !fullRunning ? `<form class="acts" method="post" action="/admin/scan/paid" data-confirm="Run the full audit again for this report? It asks all ${esc(PAID_QUESTION_COUNT)} questions (with the 2 small-firm ones) on every assistant: about ${esc(usd(fullEst))} in API calls, and the buyer gets the “full audit ready” email again.">
+    <input type="hidden" name="token" value="${esc(L.token)}"><input type="hidden" name="again" value="1"><button type="submit">Run the full audit again (about ${usd(fullEst)})</button>
+    <span class="small">A fresh paid scan on the same link: all ${esc(PAID_QUESTION_COUNT)} questions, including the 2 small-firm ones. The new report replaces the one shown; the old one stays stored.</span></form>` : '';
     const addBreakdown = L.unlocked && !hasBreakdown(pays) ? `<h3>Add the Competitor Breakdown</h3>
   <p class="sub">Built from the answers already collected (no API calls). Shows in the report on the same link.</p>
   <form class="grid" method="post" action="/admin/report/breakdown" data-confirm="Add the Competitor Breakdown to this report?">

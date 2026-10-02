@@ -171,12 +171,12 @@ export function receiptEmail(env, { token, name, tier, addons = [], ready = true
   let note = '';
   if (!ready && (tier === 'xray' || tier === 'be_the_answer')) {
     // Paid before any report existed (straight from the pricing buttons): the audit is being made now.
-    paragraphs.push('We’re asking all 5 customer questions on every AI assistant we check right now. Your full audit is usually ready within the hour, and we’ll email you the moment it is.');
+    paragraphs.push('We’re asking all 7 customer questions (including 2 for businesses your size) on every AI assistant we check right now. Your full audit is usually ready within the hour, and we’ll email you the moment it is.');
     if (tier === 'be_the_answer') paragraphs.push('Once it’s ready, your plan page opens from your report: add up to 2 more towns you serve and confirm your details. We re-scan every month for a year.');
     else paragraphs.push('Your Fix Kit comes with it. In 30 days we re-scan for free and email you what changed.');
     note = tier === 'xray' ? 'Fewer than 3 problems specific to your business? Your $49 back. Just reply.' : 'Not useful in the first 60 days? Full refund. Just reply.';
   } else if (tier === 'xray') {
-    paragraphs.push('Your report is unlocked now. We’re also asking all 5 customer questions again on every AI assistant we check; we’ll email you when those answers are in, usually within the hour.');
+    paragraphs.push('Your report is unlocked now. We’re also asking all 7 customer questions (including 2 for businesses your size) on every AI assistant we check; we’ll email you when those answers are in, usually within the hour.');
     paragraphs.push(`Your Fix Kit is included: check your business details, then download the files and hand them to whoever runs your website. ${kitUrl}`);
     if (addons.includes('competitor_breakdown')) paragraphs.push('Your Competitor Breakdown is in your report too: a scorecard of what the top 3 businesses AI names instead of you have that you don’t, with a “do these first” list.');
     paragraphs.push('In 30 days we re-scan for free and email you what changed.');
@@ -204,7 +204,7 @@ export function fullAuditEmail(env, { token, name, totals }) {
   return layout({
     subject: `Your full AI audit${name ? ` for ${name}` : ''} is ready`,
     paragraphs: [
-      'We asked all 5 customer questions on every AI assistant we check.',
+      'We asked all 7 customer questions, including 2 for businesses your size, on every AI assistant we check.',
       n ? `They named you in ${n} answers. Every answer is in your report word for word, with the websites AI cited and what to fix first.` : 'Every answer is in your report word for word, with the websites AI cited and what to fix first.',
     ],
     button: 'See my full audit',

@@ -274,10 +274,19 @@ export function fixedCosts(plans = FIXED_COSTS, now = new Date()) {
 /**
  * Unit costs and break-even. scans: [{ trigger, total_cost_usd }] of finished scans (real averages
  * win once there are any); est: { free, paid } price-table estimates per scan.
+ * paidQuestions: what a paid scan asks today (7 since the small-firm questions). A finished paid scan
+ * that asked fewer (calls_total / engines, the 5-question audits before Oct 2026) is scaled up to it,
+ * so the average is what the next audit costs, not what the old ones did.
  */
-export function unitEconomics({ scans = [], est = {}, fixedPerMonth = 0, auditUsd = 49, addonUsd = 25 } = {}) {
+export function unitEconomics({ scans = [], est = {}, fixedPerMonth = 0, auditUsd = 49, addonUsd = 25, paidQuestions = null } = {}) {
+  const scaled = (s) => {
+    const cost = num(s.total_cost_usd);
+    const engines = Array.isArray(s.engines) ? s.engines.length : 0;
+    const asked = engines ? Math.round(num(s.calls_total) / engines) : 0;
+    return s.trigger === 'paid' && paidQuestions && asked > 0 && asked < paidQuestions ? cost * (paidQuestions / asked) : cost;
+  };
   const avg = (trigger) => {
-    const xs = scans.filter((s) => s && s.trigger === trigger).map((s) => num(s.total_cost_usd)).filter((v) => v > 0);
+    const xs = scans.filter((s) => s && s.trigger === trigger).map(scaled).filter((v) => v > 0);
     return xs.length ? { usd: xs.reduce((a, b) => a + b, 0) / xs.length, n: xs.length, real: true } : { usd: Number(est[trigger === 'request' ? 'free' : 'paid']) || 0, n: 0, real: false };
   };
   const free = avg('request');

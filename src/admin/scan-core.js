@@ -30,6 +30,25 @@ export function cleanFacts(facts) {
 }
 
 /**
+ * An exact question list for a scan (the paid tiers: scanner/questions.js paidQuestions, or the
+ * stored questions a 30-day re-check asks again word for word): [{ id, intent, text }], ids unique.
+ * → the cleaned list, or null when it is missing or malformed (the scan then builds its own).
+ */
+export function cleanQuestionList(list) {
+  if (!Array.isArray(list) || !list.length || list.length > 10) return null;
+  const out = [];
+  for (const q of list) {
+    if (!q || typeof q !== 'object') return null;
+    const id = String(q.id || '');
+    const intent = String(q.intent || '');
+    const text = clean(q.text, 300);
+    if (!/^q\d{1,2}$/.test(id) || !/^[a-z_]{2,20}$/.test(intent) || text.length < 3 || out.some((x) => x.id === id)) return null;
+    out.push({ id, intent, text });
+  }
+  return out;
+}
+
+/**
  * Validate a scan request (admin API JSON body or the dashboard form, already mapped).
  * body: { business: { id?, name, trade, town, state?, zip?, phone?, website?, address?, facts?, aliases? },
  *         engines?: string[], runs?: number, questions?: number (limit, 1..5), reportToken?,

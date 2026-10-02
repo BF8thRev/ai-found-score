@@ -4,6 +4,7 @@
 // Tables come from supabase/setup.sql + supabase/scan_v2.sql.
 
 import { resolveKeys } from './config.js';
+import { questionKey } from './questions.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (s) => typeof s === 'string' && UUID_RE.test(s);
@@ -179,28 +180,41 @@ export async function updateReport(env, rowId, { report }, { fetchImpl = fetch }
 }
 
 /**
- * The previous v2 scan's { generatedAt, totals } for a business, or null.
- * Pass `excludeScanId` / `beforeIso` to skip the scan being built right now.
+ * Does a stored report asked the same searches? `questions` null → no check (older callers).
+ * A report without a question list never matches a check: it can't be shown to be like for like.
  */
-export async function getBaseline(env, businessId, { excludeScanId, beforeIso, fetchImpl = fetch } = {}) {
+function sameQuestions(stored, questions) {
+  if (questions == null) return true;
+  return Array.isArray(stored) && questionKey(stored) === questionKey(questions);
+}
+
+/**
+ * The previous v2 scan's { generatedAt, totals } for a business, or null.
+ * Pass `excludeScanId` / `beforeIso` to skip the scan being built right now. Pass `questions` (the
+ * scan's own [{ id, text }]) to take only a report that asked exactly those searches: the free
+ * 3-question snapshot is never the baseline of the 7-question audit, a 5-question audit made before the
+ * small-firm questions is never the baseline of a 7-question one, and one town never another's.
+ */
+export async function getBaseline(env, businessId, { excludeScanId, beforeIso, questions = null, fetchImpl = fetch } = {}) {
   if (!isUuid(businessId)) return null;
   const { base, headers } = supa(env);
-  let q = `business_id=eq.${businessId}&version=eq.2&report=not.is.null&select=scan_id,scanned_at,report->generatedAt,report->totals&order=scanned_at.desc&limit=5`;
+  let q = `business_id=eq.${businessId}&version=eq.2&report=not.is.null&select=scan_id,scanned_at,report->generatedAt,report->totals,report->questions&order=scanned_at.desc&limit=10`;
   if (beforeIso) q += `&scanned_at=lt.${encodeURIComponent(beforeIso)}`;
   const res = await fetchImpl(`${base}/scan_results?${q}`, { headers });
   if (!res.ok) throw new Error(`scan_results baseline read failed: ${res.status} ${await failText(res)}`);
   const rows = await res.json();
-  const prev = rows.find((r) => !excludeScanId || r.scan_id !== excludeScanId);
+  const prev = rows.find((r) => (!excludeScanId || r.scan_id !== excludeScanId) && sameQuestions(r.questions, questions));
   if (!prev || !prev.totals) return null;
   return { generatedAt: prev.generatedAt || prev.scanned_at, totals: prev.totals };
 }
 
 /**
  * The baseline for a rescan of the same report link: the newest earlier v2 report under this token
- * that asked the same number of questions (so the free 3-question report is never the baseline for
- * the 5-question audit). → { generatedAt, totals } | null. Throws on a failed read.
+ * that asked the same searches (`questions`: same ids and wording; or, from older callers, only the
+ * same number of questions, `questionCount`), so the free 3-question report is never the baseline for
+ * the audit. → { generatedAt, totals } | null. Throws on a failed read.
  */
-export async function getBaselineByToken(env, token, { excludeScanId, questionCount, fetchImpl = fetch } = {}) {
+export async function getBaselineByToken(env, token, { excludeScanId, questionCount, questions = null, fetchImpl = fetch } = {}) {
   if (!token) return null;
   const { base, headers } = supa(env);
   const q = `report_token=eq.${encodeURIComponent(token)}&version=eq.2&report=not.is.null&select=scan_id,scanned_at,report->generatedAt,report->totals,report->questions&order=scanned_at.desc&limit=10`;
@@ -208,7 +222,8 @@ export async function getBaselineByToken(env, token, { excludeScanId, questionCo
   if (!res.ok) throw new Error(`scan_results baseline read failed: ${res.status} ${await failText(res)}`);
   const rows = await res.json();
   const prev = rows.find((r) => (!excludeScanId || r.scan_id !== excludeScanId) && r.totals
-    && (questionCount == null || (Array.isArray(r.questions) && r.questions.length === questionCount)));
+    && (questionCount == null || (Array.isArray(r.questions) && r.questions.length === questionCount))
+    && sameQuestions(r.questions, questions));
   return prev ? { generatedAt: prev.generatedAt || prev.scanned_at, totals: prev.totals } : null;
 }
 
