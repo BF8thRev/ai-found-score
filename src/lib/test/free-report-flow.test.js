@@ -24,6 +24,20 @@ test('the hero form is one step: website first, then name, area and kind; town a
   assert.match(index, /location\.assign\(path\)/);
 });
 
+test('the hero shows only the website box until the site check has run', () => {
+  const form = /<form class="hero-form" id="request-form"[\s\S]*?<\/form>/.exec(index)[0];
+  // The three prefilled boxes sit in one wrapper that the script hides at load (no JS: they stay, the form still posts).
+  const details = /<div class="full hero-details" id="hero-details">([\s\S]*?)<\/div>/.exec(form)[1];
+  for (const n of ['business_name', 'area', 'trade_other']) assert.match(details, new RegExp('name="' + n + '"'));
+  assert.doesNotMatch(details, /name="website"/);
+  assert.doesNotMatch(form, /id="hero-details"[^>]*hidden/, 'hidden by script, not markup');
+  assert.match(index, /detailsBox\.hidden = true;/);
+  // A finished check opens them (all three found: one summary line with Change; else the boxes), and so does a validation prompt.
+  assert.match(index, /revealAfterCheck\(\);/);
+  assert.match(index, /function ask\(text, input\) \{ if \(detailsBox\.contains\(input\)\) showDetails\(\);/);
+  assert.match(form, /id="site-summary-edit"/);
+});
+
 test('parseArea: a town, "Town, ST", an area, or a ZIP', () => {
   assert.deepEqual(parseArea('Stamford, CT'), { town: 'Stamford', state: 'CT' });
   assert.deepEqual(parseArea('Long Island'), { town: 'Long Island' });

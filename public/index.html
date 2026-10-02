@@ -67,11 +67,15 @@
         <form class="hero-form" id="request-form" method="post" action="/api/request" novalidate>
           <label class="full"><span>Your website <small class="hint">(or Facebook page)</small></span> <input name="website" type="text" required maxlength="160" autocomplete="url" inputmode="url" placeholder="e.g. joesplumbing.com"></label>
           <p class="full field-note" id="site-note" hidden role="status"></p>
+          <p class="full field-summary" id="site-summary" hidden><span id="site-summary-text"></span> <button type="button" class="link-btn" id="site-summary-edit">Change</button></p>
+          <!-- JS hides this until the website check has run (no JS: the boxes stay, the form still posts). -->
+          <div class="full hero-details" id="hero-details">
           <label class="full">Business name <input name="business_name" type="text" required maxlength="120" autocomplete="organization" placeholder="The way customers know it"></label>
           <label class="full"><span>Where your customers are <small class="hint">(town, city or area)</small></span> <input name="area" type="text" required maxlength="60" autocomplete="address-level2" placeholder="Massapequa, NY" data-geo-placeholder="town"></label>
           <input name="zip" type="hidden">
           <input name="state" type="hidden" value="NY" data-geo-value="state">
           <label class="full">What you do <input name="trade_other" id="trade-other" type="text" required maxlength="40" autocomplete="off" placeholder="bakery, dentist, plumber, PR agency…"></label>
+          </div>
           <input name="company_url" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
           <button class="btn big" type="submit">Show me who&rsquo;s getting my calls</button>
           <p class="status" id="request-status" role="status"></p>
@@ -720,6 +724,20 @@
     input.value = value; filled[key] = value;
     return true;
   }
+  // Progressive disclosure: only the website to start. After the check, if the page told us all
+  // three things they show as one line ("Mega Wash & Dry · North Babylon, NY · laundromat" + Change);
+  // otherwise the boxes open, prefilled where we could, so the owner fills only what's left.
+  var detailsBox = el('hero-details'), summaryBox = el('site-summary');
+  function showDetails() { detailsBox.hidden = false; summaryBox.hidden = true; }
+  function revealAfterCheck() {
+    var n = nameInput.value.trim(), a = areaInput.value.trim(), k = kindInput.value.trim();
+    if (n && a && k && !/^\d{5}$/.test(a)) {
+      el('site-summary-text').textContent = n + ' · ' + a + ' · ' + k;
+      summaryBox.hidden = false; detailsBox.hidden = true;
+    } else showDetails();
+  }
+  detailsBox.hidden = true;
+  el('site-summary-edit').addEventListener('click', function () { showDetails(); nameInput.focus(); });
   function note(kind, text) { siteNote.hidden = !text; siteNote.className = 'full field-note' + (kind ? ' ' + kind : ''); siteNote.textContent = text; }
   function website() { return String(form.elements.website.value || '').trim(); }
 
@@ -734,13 +752,15 @@
       .then(function (res) {
         if (sitePending && sitePending.site === site) sitePending = null;
         if (!res || res.ok === false) { note('', ''); return res || { ok: true }; }
+        showDetails(); // until the fill-in below says otherwise (a check that couldn't run still needs the boxes)
         siteChecked = site;
         var got = [];
         if (setIf(nameInput, 'name', res.name)) got.push('your name');
         if (res.town) { if (setIf(areaInput, 'area', res.town + (res.state ? ', ' + res.state : ''))) { got.push('your area'); zipInput.value = /^\d{5}$/.test(res.zip || '') ? res.zip : ''; } }
         else if (/^\d{5}$/.test(res.zip || '') && setIf(areaInput, 'area', res.zip)) { got.push('your area'); lookupZip(res.zip); }
         if (setIf(kindInput, 'kind', res.kind)) got.push('what you do');
-        note('ok', got.length ? 'From your website: ' + got.join(', ') + '. Check the boxes below and change anything.' : 'Website found. Fill in the three boxes below.');
+        revealAfterCheck();
+        note('ok', got.length === 3 ? 'Found it on your website. Is this right?' : got.length ? 'From your website: ' + got.join(', ') + '. Add the rest below.' : 'Website found. Add the details below.');
         return res;
       });
     sitePending = { site: site, p: p };
@@ -789,7 +809,7 @@
     return { town: t.replace(/,\s*(?:New York|NY)$/i, ''), state: stateInput.value || 'NY' };
   }
 
-  function ask(text, input) { show(status, 'note', text); try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); } }
+  function ask(text, input) { if (detailsBox.contains(input)) showDetails(); show(status, 'note', text); try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); } }
   function fetchQuestions(data) {
     var qs = new URLSearchParams({ trade: data.trade, preset: presetKind, name: data.business_name, website: data.website, town: data.town, zip: data.zip, state: data.state || 'NY' });
     return fetch('/api/questions?' + qs.toString())
