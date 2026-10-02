@@ -64,7 +64,7 @@ export function siteType(domain, url = '', { trade = '' } = {}) {
   try { path = new URL(String(url)).pathname.toLowerCase(); } catch { path = ''; }
   if (/(^|\/)(awards?|rankings?)(\/|-|$)/.test(path)) return 'award';
   // A post: a dated or blog path, or a "best/top N" headline.
-  if (/(^|\/)(blog|news|posts?|articles?|stories)(\/|$)|\/(19|20)\d\d\/|(^|[/-])(best|top)(-\d+)?-/.test(path)) return 'article';
+  if (/(^|\/)(blog|news|posts?|articles?|stories)(\/|$)|\/(19|20)\d\d\/|(^|[/-])(best|top)(-\d+)?-|(^|[/-])(guides?|tips|how-to|costs?|prices?|vs|reviews?)([/-]|$)/.test(path)) return 'article';
   // A listings page: directory words, or the trade itself in the path (/massapequa-ny/plumbers).
   const tradeWord = squash(String(trade).split(/\s+/).pop() || '').replace(/(ing|er|ers|s)$/, '');
   if (/(^|[/-])(director(y|ies)|listings?|find|near|businesses|companies|agencies|firms|pros|contractors|services)([/-]|$)/.test(path)

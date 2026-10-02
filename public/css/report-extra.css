@@ -549,6 +549,7 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-kitnote { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
 .ap-item.done { background: var(--wash); }
 .ap-item.done .ap-title { text-decoration: line-through; color: var(--muted); }
+.ap-item.done .ap-whotag { text-decoration: none; display: none; }
 .ap-item.done .ap-num { background: var(--green); color: #fff; }
 .ap-foot { margin-top: 4px; }
 .r2-fold { margin-top: 8px; }

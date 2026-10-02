@@ -302,6 +302,7 @@ test('site types: directories are claimed, industry lists are entered, articles 
   assert.equal(siteType('chamber.example.org', 'https://chamber.example.org/directory/'), 'directory');
   assert.equal(siteType('news.example.com', 'https://news.example.com/2026/05/new-shop-opens'), 'article');
   assert.equal(siteType('example.com', 'https://example.com/about'), 'unsure');
+  assert.equal(siteType('guides.example.com', 'https://guides.example.com/the-plumber-guide-2026', { trade: 'plumber' }), 'article');
   const rep = officeReport();
   rep.sources.push({ url: 'https://citymag.example.com/best-pr-agencies-nyc', domain: 'citymag.example.com', citedIn: ['a1'], youListed: null });
   const lists = byId(buildActionPlan(rep), 'lists');
