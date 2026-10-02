@@ -87,7 +87,31 @@
     .fk-qr { width: 140px; height: 140px; margin-top: 10px; }
     .fk-list { margin: 8px 0 0; padding-left: 22px; }
     .fk-list li { margin-bottom: 6px; }
-    .fk-section { margin: 34px 0 14px; }
+    /* Section headings: `.fk h2.fk-section` so it outranks `.fk h2` above (plain `.fk-section` lost, and
+       the headings sat flush against the card before them). */
+    .fk h2.fk-section { margin: 52px 0 16px; }
+    .fk-section + p { margin: -8px 0 20px; color: var(--muted); }
+    .fk-box { padding: 24px 26px; margin: 0 0 32px; }
+    .fk-jobs { gap: 20px; }
+    .fk-job { padding: 22px 24px; }
+    .fk-job .who { margin-top: 4px; }
+    .fk-job details { margin-top: 14px; padding-top: 12px; }
+    .fk-slot { padding: 16px 0; gap: 8px; }
+    .fk-needs .fk-actions, .fk-help .fk-actions { margin-top: 18px; }
+    .fk-box > p.fk-tip { margin: 18px 0 0; padding-top: 16px; border-top: 1px solid #CDE9D9; }
+    .fk-help { margin: 52px 0 0; border: 2px solid var(--blue); background: #F5F9FF; }
+    .fk-help [data-help-form] { display: grid; gap: 18px; margin-top: 4px; }
+    .fk-help .fk-field[data-field="helpWants"] { gap: 10px; }
+    .fk-help .fk-field[data-field="helpWants"] > label:first-child { margin-bottom: 2px; }
+    .fk-help .fk-confirm { font-weight: 500; color: var(--ink); }
+    .fk-help .fk-actions { margin-top: 0; }
+    .fk-done { gap: 10px; }
+    .fk-done li { padding: 12px 16px; background: var(--wash); border-radius: 8px; }
+    .fk-list { margin: 0 0 16px; }
+    [data-plan-only] .btn-secondary { margin-top: 6px; }
+    /* In-page links (#fk-help, #fk-needs) land below the sticky header, not under it. */
+    .fk-box[id] { scroll-margin-top: 88px; }
+    @media (max-width: 560px) { .fk-box { padding: 20px 18px; } .fk-job { padding: 18px; } .fk h2.fk-section { margin-top: 44px; } }
     [hidden] { display: none !important; }
   </style>
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
@@ -270,6 +294,7 @@
           <button class="btn" type="button" data-download>Download my Fix Kit</button>
           <p class="fk-status" data-dl-status role="status" aria-live="polite"></p>
         </div>
+        <p class="fk-tip">No one to put the files on your website? <a href="#fk-help">We can do it for you</a>.</p>
       </section>
 
       <section class="fk-box fk-needs" id="fk-needs" data-needs hidden aria-labelledby="fk-needs-h">
@@ -290,7 +315,7 @@
 
       <div data-sec="web">
         <h2 class="fk-section">For whoever runs your website</h2>
-        <p>These go on your website. Hand over the folder, or ask us below. Only the jobs that help your business are here.</p>
+        <p>These go on your website. Hand over the folder, or <a href="#fk-help">ask us to do it</a>. Only the jobs that help your business are here.</p>
         <p class="fk-platform-line" data-platform-line hidden></p>
         <ol class="fk-jobs" data-jobs-web></ol>
       </div>

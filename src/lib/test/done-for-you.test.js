@@ -141,3 +141,24 @@ test('the kit page: three sections, the website jobs on their own, and the box t
   assert.match(js, /j\.who === 'you' \? lists\.you : lists\.web/, 'the owner\'s jobs and the website jobs are drawn apart');
   assert.match(js, /lists\.after\.appendChild\(c\)/);
 });
+
+test('the kit page: section headings get real space above them, and the download box points to "do it for me"', async () => {
+  const html = readFileSync(new URL('../../../public/fix-kit.html', import.meta.url), 'utf8');
+  // `.fk h2 { margin: 0 ... }` outranks a plain `.fk-section` rule, so the headings sat flush on the card above.
+  const rule = html.match(/\.fk h2\.fk-section\s*\{\s*margin:\s*(\d+)px/);
+  assert.ok(rule, 'section headings need a rule at least as specific as `.fk h2`');
+  assert.ok(Number(rule[1]) >= 40, `section heading top margin is ${rule[1]}px`);
+  // The download box and the website section both link to the help box.
+  const dl = html.slice(html.indexOf('id="fk-dl-h"'), html.indexOf('id="fk-needs"'));
+  assert.match(dl, /href="#fk-help">We can do it for you</);
+  assert.match(html, /Hand over the folder, or <a href="#fk-help">ask us to do it<\/a>/);
+  assert.ok(html.includes('id="fk-help"'));
+  // The sticky header (67px) would cover the box's heading when the link jumps to it.
+  const land = html.match(/\.fk-box\[id\]\s*\{\s*scroll-margin-top:\s*(\d+)px/);
+  assert.ok(land && Number(land[1]) >= 80, 'linked boxes land below the sticky header');
+  // Served through the real router.
+  await withWorker(async ({ call }) => {
+    const res = await call(`/fix-kit/${TOKEN}`);
+    assert.equal(res.status, 200);
+  });
+});
