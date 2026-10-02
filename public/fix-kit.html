@@ -22,13 +22,13 @@
     .fk-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; margin: 0 0 26px; background: #fff; }
     .fk-box > p { margin: 0 0 14px; }
     .fk-facts { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 0; }
-    .fk-facts li { display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
-    .fk-facts li:first-child { border-top: 0; }
+    .fk-facts > li { display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .fk-facts > li:first-child { border-top: 0; }
     .fk-facts .k { font-weight: 700; color: var(--navy); }
     .fk-facts .v { overflow-wrap: anywhere; }
     .fk-miss { display: inline-block; background: #FDECEA; color: var(--red); font-weight: 700; font-size: 14px; padding: 2px 10px; border-radius: 999px; margin-right: 6px; }
     .fk-facts .note { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
-    @media (max-width: 560px) { .fk-facts li { grid-template-columns: 1fr; gap: 2px; } }
+    @media (max-width: 560px) { .fk-facts > li { grid-template-columns: 1fr; gap: 2px; } }
     .fk-form { display: grid; gap: 18px; margin-top: 18px; }
     .fk-form fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; margin: 0; display: grid; gap: 14px; min-width: 0; }
     .fk-form legend { font-weight: 800; color: var(--navy); padding: 0 6px; }
@@ -58,7 +58,10 @@
     .fk-suggest p { margin: 0; }
     .fk-suggest .fk-suggest-h { font-size: 14px; font-weight: 700; color: var(--navy); }
     .fk-suggest .fk-suggest-q { font-size: 14px; color: var(--muted); }
-    .fk-suggest ul { margin: 0; padding-left: 20px; }
+    .fk-suggest { padding: 14px 16px; gap: 10px; margin-top: 10px; }
+    .fk-suggest ul { margin: 0; padding-left: 20px; list-style: disc; display: grid; gap: 10px; }
+    .fk-suggest li strong { display: block; color: var(--ink); font-weight: 600; }
+    .fk-suggest li .fk-suggest-q { display: block; line-height: 1.45; }
     .fk-suggest button { justify-self: start; }
     .fk-slot .for { font-size: 14px; color: var(--muted); margin: 0; }
     .fk-jobs { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; counter-reset: job; }
