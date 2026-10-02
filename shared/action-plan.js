@@ -12,7 +12,9 @@
 //   - "your title doesn't say what you do" is re-checked with the trade's other names ("PR" and
 //     "public relations" for a PR agency) before it is shown;
 //   - FAQ answers use the business's own homepage description, not a one-line template;
-//   - the FAQ is the Fix Kit's own (shared/faq.js): the same questions and answers in the report and the kit.
+//   - the FAQ is the Fix Kit's own (shared/faq.js): the same questions and answers in the report and the kit;
+//   - website steps say where to click on the owner's own site builder (siteCheck.platform, shared/platforms.js:
+//     "In Wix: …" with Wix's own guide linked), and keep the generic steps when we don't know it.
 
 import { kindClass, ACRONYMS } from '../scanner/questions.js';
 import { tradeWords, mentionsAny } from '../scanner/owner-checks.js';
@@ -20,6 +22,7 @@ import { businessDetails, napBlock, GBP_DESCRIPTION_MAX } from '../scanner/extra
 import { isDirectoryName } from './report-v2.js';
 import { faqPlainText, faqJsonLdScript } from './faq.js';
 import { reportFaq } from '../src/lib/fix-kit.js';
+import { platformFor, platformJob, platformStep, guideLinks } from './platforms.js';
 
 export const IMPACT_LABELS = Object.freeze({ high: 'Biggest impact', medium: 'Next', low: 'Quick extra' });
 export const WHO_LABELS = Object.freeze({ you: 'You can do this', web: 'For whoever runs your website', both: 'You, with your web person' });
@@ -111,7 +114,9 @@ export function homepageSaysTrade(meta, trade) {
 }
 
 /**
- * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, kitNote?, time?, cost?, week?, from }], kitOnly? }
+ * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, kitNote?, time?, cost?, week?, platform?, from }], kitOnly?, platform? }
+ * `platform` on a step: { name, guides: [{ label, url }] }, the site builder's own help pages for the steps
+ * written for it; on the plan: { id, name }, the builder the owner's site is made with (unknown: absent).
  * `kind`: 'professional' (an office: agency, firm), 'trade' (goes to the customer) or 'storefront'.
  * `time`, `cost`: a rough, conservative estimate for the step; `week`: one the owner can finish this
  * week (the page's "Do these 3 this week"). `kitNote`: the Fix Kit already has this step's file.
@@ -141,13 +146,20 @@ export function buildActionPlan(report) {
   const own = d.websiteHost.toLowerCase();
   const words = ownWords(r);
   const items = [];
+  // The site builder, when we know it: its own click-paths replace "in most site builders".
+  const pf = platformFor(r);
+  const job = (j) => platformJob(pf, j);
+  const withGuides = (jobs) => { const guides = pf ? guideLinks(pf, jobs) : []; return guides.length ? { platform: { name: pf.name, guides } } : {}; };
+  const told = (e, opts) => (e.can === false ? `In ${pf.name}: ${e.steps}` : platformStep(pf, e, opts));
 
   // 1. What AI gets wrong, and AI being blocked: always first, each its own step.
   for (const i of take((x) => x.kind === 'fact_differs' || x.kind === 'listing_differs' || x.kind === 'listing_mismatch')) {
     items.push({ id: hashId('fact', i.title), impact: 'high', title: i.title, why: `${i.description ? `${i.description} ` : ''}AI repeats what it reads, so customers get the wrong details until every source matches.`, who: 'you', steps: i.steps || [], copyText: i.copyText || [], time: 'About half an hour', cost: 'No cost', week: true, from: [i.kind] });
   }
   for (const i of take((x) => x.kind === 'site_blocks_ai')) {
-    items.push({ id: 'unblock', impact: 'high', title: i.title, why: `${i.description || ''} AI can’t recommend what it isn’t allowed to read.`.trim(), who: 'web', steps: i.steps || [], copyText: i.copyText || [], time: 'Under half an hour for your web person', cost: 'No cost', week: true, from: [i.kind] });
+    // On a known builder: its AI-crawler setting first, then where its robots.txt is edited (or that it can't be).
+    const own = ['aiCrawlers', 'robots'].map((j) => job(j) && told(job(j))).filter(Boolean);
+    items.push({ id: 'unblock', impact: 'high', title: i.title, why: `${i.description || ''} AI can’t recommend what it isn’t allowed to read.`.trim(), who: 'web', steps: [...own, ...(i.steps || [])], copyText: i.copyText || [], time: 'Under half an hour for your web person', cost: 'No cost', week: true, ...withGuides(['aiCrawlers', 'robots']), from: [i.kind] });
   }
 
   // 2. The lists AI read when it named someone else. Checked "not listed" first, then cited lists we
@@ -256,6 +268,16 @@ export function buildActionPlan(report) {
     }
     const rivals = [...hits].sort((x, y) => y[1] - x[1]).slice(0, 3).map((x) => x[0]);
     const rivalText = !rivals.length ? 'other businesses' : hits.size > rivals.length ? `${rivals.join(', ')} and others` : listJoin(rivals);
+    const fq = job('faq');
+    const hc = job('headCode');
+    // The FAQ code: skipped when the builder's FAQ block writes it; else where it goes on this builder.
+    const codeSteps = fq && fq.schema === true
+      ? []
+      : [
+        'Ask whoever runs your website to add the FAQ code below to the same page. The code must say exactly what the page says, so it holds only the finished answers: add each of the others to it once it’s filled in.',
+        ...(hc ? [hc.can === false ? told(hc) : `For the code, ${told(hc, { page: true }).replace(/^In /, 'in ')}`] : []),
+        'Check the page at validator.schema.org: it should read each question and answer.',
+      ];
     items.push({
       id: 'faq',
       impact: lostQs.length ? 'high' : 'medium',
@@ -268,11 +290,11 @@ export function buildActionPlan(report) {
       who: 'both',
       steps: [
         'Add a “Questions” section to your website: a new page, or the bottom of your homepage.',
+        ...(fq ? [told(fq)] : []),
         ...(faq.needs
           ? [`Paste the questions and answers below. ${faq.needs === 1 ? 'One answer has' : `${faq.needs} answers have`} a part in [brackets] that only you know (a specialty, a client, a result): write one true sentence in its place, then delete the brackets.`]
           : ['Paste the questions and answers below.']),
-        'Ask whoever runs your website to add the FAQ code below to the same page. The code must say exactly what the page says, so it holds only the finished answers: add each of the others to it once it’s filled in.',
-        'Check the page at validator.schema.org: it should read each question and answer.',
+        ...codeSteps,
       ],
       copyText: [
         { label: faq.needs ? 'Questions and answers for your website (fill in the brackets)' : 'Questions and answers for your website', text: faqPlainText(faq.items) },
@@ -282,6 +304,7 @@ export function buildActionPlan(report) {
       time: 'About an hour for you, then 1–2 hours for your web person',
       cost: 'No cost',
       week: true,
+      ...withGuides(fq && fq.schema === true ? ['faq'] : ['faq', 'headCode']),
       from: [...new Set([...lostQ, ...faqBase, ...faqSchema].map((i) => i.kind))],
     });
   } else {
@@ -306,7 +329,8 @@ export function buildActionPlan(report) {
       steps.push(missWhat
         ? `Change your page title and main heading so they say ${listJoin(gaps)}. Keep it under about 60 characters.`
         : `Add ${d.town ? `“${d.town}”` : 'the town you work in'} to your page title and your main heading. Keep the title under about 60 characters.`);
-      steps.push('In most site builders this is under “SEO title” and “meta description”; or send this step to whoever runs your website.');
+      const t = job('title');
+      steps.push(t ? told(t) : 'In most site builders this is under “SEO title” and “meta description”; or send this step to whoever runs your website.');
       const place = d.town || where;
       const base = place ? `${fixCase(noun)} in ${place} | ${name}` : `${fixCase(noun)} | ${name}`;
       const title = !missWhat && place && m && typeof m.title === 'string' && m.title && `${m.title} | ${place}`.length <= 65
@@ -330,6 +354,7 @@ export function buildActionPlan(report) {
       time: 'About half an hour for your web person',
       cost: 'No cost',
       week: true,
+      ...(gaps.length ? withGuides(['title']) : {}),
       from: [...new Set([...meta, ...thin].map((i) => i.kind))],
     });
   }
@@ -384,6 +409,8 @@ export function buildActionPlan(report) {
     // The stored code leaves out what we don't know; show where the phone (and street) go instead of
     // asking for them to be "filled in" to a block that has no place for them.
     const codeText = code ? withPlaceholders(String(code.text), { phone: d.phone, street: d.street, wantStreet: !office }) : '';
+    const ft = nap.length ? job('footer') : null;
+    const hc = code ? job('headCode') : null;
     items.push({
       id: 'contact',
       impact: 'medium',
@@ -395,11 +422,14 @@ export function buildActionPlan(report) {
       steps: [
         nap.length && `Put your phone number${office ? '' : ' and street address'} as plain text in the footer of every page${office ? ' (add your office address if clients can visit)' : ''}, written the same as on Google.`,
         nap.length && 'Make the phone number a tap-to-call link.',
-        code && `Ask whoever runs your website to add the code below to your homepage’s <head> section${/\[your /.test(codeText) ? ', after replacing each part in [brackets] with your real details' : ''}.`,
-        code && 'Check it at validator.schema.org: it should read your name and contact details.',
+        ft && told(ft),
+        code && !(hc && hc.can === false) && `Ask whoever runs your website to add the code below to your homepage’s <head> section${/\[your /.test(codeText) ? ', after replacing each part in [brackets] with your real details' : ''}.`,
+        hc && told(hc),
+        code && !(hc && hc.can === false) && 'Check it at validator.schema.org: it should read your name and contact details.',
       ].filter(Boolean),
       copyText: code ? [{ ...code, text: codeText, label: 'Business code for your web person (JSON-LD)' }] : [],
       ...(code ? { kitNote: 'Done for you: this code is ready in your Fix Kit. Send it to whoever runs your website.' } : {}),
+      ...withGuides([ft && 'footer', hc && 'headCode'].filter(Boolean)),
       time: 'About half an hour for your web person',
       cost: 'No cost',
       week: true,
@@ -427,7 +457,7 @@ export function buildActionPlan(report) {
   const ordered = items.map((it, n) => ({ it, n }))
     .sort((x, y) => imp[x.it.impact] - imp[y.it.impact] || pos(x.it) - pos(y.it) || x.n - y.n)
     .map((x) => x.it);
-  return { kind, items: ordered, ...(kitOnly.length ? { kitOnly } : {}) };
+  return { kind, items: ordered, ...(kitOnly.length ? { kitOnly } : {}), ...(pf ? { platform: { id: pf.id, name: pf.name } } : {}) };
 }
 
 // A stored fix as one step. Stored text wrote the trade in lower case ("a pr agency"): fixed here.

@@ -20,11 +20,16 @@
 //
 // sample-* tokens (the bundled fictional reports) are a working demo with no database: they count as
 // paid, a POST is checked but not saved, and the zip is built from the sample's own details.
+//
+// The website builder (siteCheck.platform) makes the jobs and README specific ("In Wix: ..."). Reports
+// scanned before the scanner recorded it get it here, paid only: one homepage fetch, cached by host
+// (src/lib/site-platform.js). If that fails the kit is built as before, with the generic steps.
 
 import { getReport, getPaidTiers, getFixKitDetails, saveFixKitDetails } from './db.js';
 import { rateLimit } from './rate-limit.js';
 import { FIX_KIT_TIERS, prefillDetails, validateDetails, buildKit, zipFiles, zipName } from './fix-kit.js';
 import { directoryChecklistTxt, googlePostsTxt } from './plan.js';
+import { withPlatform } from './site-platform.js';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{1,200}$/;
 const MAX_BODY = 20_000;
@@ -36,11 +41,12 @@ const notPaid = () => json({ ok: false, error: 'The Fix Kit comes with the AI Vi
 
 /**
  * deps (all optional; tests pass fakes): { mockReports, getReport, getPaidTiers, getFixKitDetails,
- * saveFixKitDetails, rateLimit, now }
+ * saveFixKitDetails, rateLimit, now, withPlatform }
  */
 export async function handleFixKit(request, url, env, deps = {}) {
   const d = {
     getReport, getPaidTiers, getFixKitDetails, saveFixKitDetails, rateLimit, mockReports: {}, now: () => new Date(),
+    withPlatform: (r) => withPlatform(r),
     ...deps,
   };
   let raw;
@@ -72,6 +78,8 @@ export async function handleFixKit(request, url, env, deps = {}) {
     paid = tiers.some((t) => FIX_KIT_TIERS.includes(t));
     onPlan = tiers.includes('be_the_answer');
   }
+  // Which site builder, for reports scanned before we recorded it. Never holds the kit up on failure.
+  if (paid && !isSample) report = await d.withPlatform(report).catch(() => report);
 
   if (request.method === 'POST') return postDetails(request, env, d, token, paid, isSample, report, url);
 
@@ -134,6 +142,7 @@ export function kitView(details, report, opts) {
     faq: { items: kit.faq.items, attributes: kit.faq.attributes, needs: kit.faq.needs },
     missing: kit.missing,
     readme: content.get('README.txt'),
+    ...(kit.platform ? { platform: kit.platform } : {}),
   };
 }
 

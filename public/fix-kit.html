@@ -63,6 +63,9 @@
     .fk-opt { font-size: 13px; font-weight: 700; color: var(--muted); background: var(--wash); border-radius: 999px; padding: 2px 10px; }
     .fk-job p { margin: 0 0 8px; }
     .fk-job .who { font-size: 14px; color: var(--muted); }
+    .fk-platform { background: var(--wash); border-radius: 8px; padding: 10px 14px; margin: 0 0 8px; overflow-wrap: anywhere; }
+    .fk-platform ul { margin: 4px 0 8px; padding-left: 20px; }
+    .fk-platform p { margin: 0 0 4px; }
     .fk-job details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
     .fk-job summary { cursor: pointer; font-weight: 700; color: var(--blue); }
     .fk-job pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; background: var(--wash); border-radius: 8px; padding: 12px 14px; margin: 10px 0 0; max-height: 420px; overflow: auto; }
@@ -274,6 +277,7 @@
 
       <h2 class="fk-section">What&rsquo;s in your kit, in order</h2>
       <p>Only the jobs that help your business. Open any file to see exactly what&rsquo;s in it.</p>
+      <p class="fk-platform-line" data-platform-line hidden></p>
       <ol class="fk-jobs" data-jobs></ol>
 
       <div data-done-wrap hidden>

@@ -730,6 +730,7 @@ function actionPlanV2(report) {
               <p class="ap-who">${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}${effort(i) ? `<span class="ap-effort"> · ${effort(i)}</span>` : ''}</p>
               ${i.why ? `<p class="ap-why"><b>Why it matters:</b> ${escapeHtml(i.why)}</p>` : ''}
               ${sites(i.sites)}
+              ${builtOn(i.platform)}
               ${(i.steps || []).length ? `<p class="ap-how-k">How to do it</p><ol class="r2-steps">${i.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}
               ${copyBlocksV2(i.copyText)}
               ${i.kitNote && !demo ? `<p class="ap-kitnote">${escapeHtml(i.kitNote)} <a href="${kitUrl}">Open my Fix Kit</a></p>` : ''}
@@ -742,6 +743,13 @@ function actionPlanV2(report) {
     </section>`;
 }
 
+// "Your site is built on Wix." with Wix's own help pages for the step (shared/platforms.js guideLinks).
+function builtOn(p) {
+  const guides = ((p && p.guides) || []).filter((g) => g && g.url && g.label);
+  if (!p || !p.name || !guides.length) return '';
+  return `<p class="ap-platform">Your site is built on ${escapeHtml(p.name)}, so the steps below are for ${escapeHtml(p.name)}. ${guides.map((g) => `<a href="${safeHref(g.url)}" rel="noopener" target="_blank">${escapeHtml(g.label)}</a>`).join(' · ')}</p>`;
+}
+
 // After the last step: the website work in one hand-off. The Fix Kit files are built for the owner to
 // check; "Email it to my web person" opens the owner's own mail app (a mailto: link, nothing is sent by
 // us, and no address of theirs goes in the link).
@@ -749,7 +757,8 @@ function kitCard(report, kitUrl) {
   const name = (report.business && report.business.name) || 'our business';
   const link = 'https://aifoundscore.com' + kitUrl;
   const subject = `Website files for ${name}`;
-  const body = `Hi,\n\nHere are the files for our website. Please add them as the one-page guide inside explains, so AI assistants can read who we are and what we do:\n\n${link}\n\nThanks!`;
+  const built = report.xray && report.xray.actionPlan && report.xray.actionPlan.platform && report.xray.actionPlan.platform.name;
+  const body = `Hi,\n\nHere are the files for our website. Please add them as the one-page guide inside explains, so AI assistants can read who we are and what we do:\n\n${link}\n\n${built ? `Our site is built on ${built}, so the guide says where each one goes in ${built}.\n\n` : ''}Thanks!`;
   const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return `
       <div class="ap-kitcard">

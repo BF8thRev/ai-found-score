@@ -569,6 +569,7 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-sites .badge { margin: 0; }
 .ap-type { font-size: 13px; color: var(--muted); }
 .ap-kitnote { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.ap-platform { margin: 10px 0 0; font-size: 14px; overflow-wrap: anywhere; }
 .ap-item.done { background: var(--wash); }
 .ap-item.done .ap-title { text-decoration: line-through; color: var(--muted); }
 .ap-item.done .ap-whotag { text-decoration: none; display: none; }

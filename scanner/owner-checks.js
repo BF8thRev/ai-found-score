@@ -21,6 +21,7 @@
 import { resolveKeys } from './config.js';
 import { TRADES, TRADE_ALIASES, normalizeTrade } from './questions.js';
 import { normalizeName, phoneKey, streetKey, findPhones, findStreets } from './extract/normalize.js';
+import { detectPlatform } from '../shared/platform-detect.js';
 
 export const FETCH_TIMEOUT_MS = 8000;
 export const MAX_PAGE_BYTES = 1_500_000;
@@ -165,13 +166,43 @@ export function siteUrl(website) {
   } catch { return null; }
 }
 
-async function getText(fetchImpl, url) {
+/** A response body as text, reading at most maxBytes (the rest is never downloaded). */
+async function readCapped(res, maxBytes) {
+  const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
+  if (!reader) return (await res.text()).slice(0, maxBytes);
+  const dec = new TextDecoder();
+  let out = '';
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.length;
+    out += dec.decode(value, { stream: true });
+    if (n >= maxBytes) { reader.cancel().catch(() => {}); break; }
+  }
+  return (out + dec.decode()).slice(0, maxBytes);
+}
+
+/** The response headers the platform check reads (shared/platform-detect.js), lower-case. */
+const PLATFORM_HEADERS = ['server', 'x-wix-request-id', 'x-shopid', 'powered-by', 'x-shopify-stage', 'x-hs-content-id', 'link', 'x-powered-by'];
+function someHeaders(res) {
+  const out = {};
+  if (!res.headers || typeof res.headers.get !== 'function') return out;
+  for (const k of PLATFORM_HEADERS) { const v = res.headers.get(k); if (v) out[k] = String(v).slice(0, 300); }
+  return out;
+}
+
+/**
+ * GET a page as our crawler: our user agent, redirects followed, a timeout and a size cap.
+ * → { ok, status, text, url?, contentType?, headers? }; never throws.
+ */
+export async function getText(fetchImpl, url, { timeoutMs = FETCH_TIMEOUT_MS, maxBytes = MAX_PAGE_BYTES } = {}) {
   try {
-    const res = await fetchImpl(url, { headers: { 'User-Agent': UA, Accept: 'text/html,text/plain,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    const res = await fetchImpl(url, { headers: { 'User-Agent': UA, Accept: 'text/html,text/plain,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) return { ok: false, status: res.status, text: '' };
-    const text = (await res.text()).slice(0, MAX_PAGE_BYTES);
+    const text = await readCapped(res, maxBytes);
     const contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-    return { ok: true, status: res.status, text, url: res.url || url, contentType };
+    return { ok: true, status: res.status, text, url: res.url || url, contentType, headers: someHeaders(res) };
   } catch (e) {
     return { ok: false, status: 0, text: '', error: String(e?.message || e).slice(0, 200) };
   }
@@ -400,7 +431,8 @@ export async function checkSpeed(url, env = {}, { fetchImpl = fetch, timeoutMs =
  *   meta: { title, description, h1, mentionsTrade, mentionsTown } | null,   (null: homepage didn't load)
  *   faqSchema: boolean | null,
  *   pages: { internalLinks, servicePages, townPages } | null,
- *   speed: { score (0-100), strategy: 'mobile' } | null }   (null: no key, or PageSpeed failed or timed out)
+ *   speed: { score (0-100), strategy: 'mobile' } | null,   (null: no key, or PageSpeed failed or timed out)
+ *   platform: { id, name, confidence, evidence } | null }  (the site builder, shared/platform-detect.js)
  * opts.business ({ trade, town, nearbyTown }) feeds the trade/town checks; opts.env the PageSpeed key.
  */
 export async function checkSite(website, { fetchImpl = fetch, business = {}, env = {} } = {}) {
@@ -448,6 +480,7 @@ export async function checkSite(website, { fetchImpl = fetch, business = {}, env
     faqSchema: page ? page.schemaTypes.includes('FAQPage') : null,
     pages: home.ok ? countPages(readLinks(home.text, home.url || origin + '/'), business) : null,
     speed: home.ok ? speed : null,
+    platform: home.ok ? detectPlatform(home.text, home.headers, home.url || origin) : null,
   };
 }
 

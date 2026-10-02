@@ -16,6 +16,9 @@
 //                                     the site, no llms.txt when it has one, business code optional when it
 //                                     already has some), the FAQ (shared/faq.js) as faq-page.html + .txt,
 //                                     google-business-profile.txt, review-qr.svg (with a review link), README.txt
+//                                     Site builder known (siteCheck.platform, shared/platforms.js): each website
+//                                     job also says where it goes on that builder, with its own guide, and a
+//                                     job the builder can't take (or does itself) is marked optional and says so
 //   zipFiles(files, opts)           → Uint8Array: a STORE-only (uncompressed) ZIP, CRC-32, no dependencies
 //
 // Truthful by construction, like scanner/extract/fixes.js: every file is a fixed template filled ONLY
@@ -30,6 +33,7 @@ import { SCHEMA_TYPES, GBP_DESCRIPTION_MAX, alwaysOpen } from '../../scanner/ext
 import { phoneKey } from '../../scanner/extract/normalize.js';
 import { qrSvg } from './vendor/qrcode.js';
 import { buildFaq, faqPlainText, faqJsonLdScript, ownWords, ATTRIBUTES } from '../../shared/faq.js';
+import { platformFor, platformJob, platformStep, guideLinks } from '../../shared/platforms.js';
 
 /** Tiers whose buyers get the Fix Kit (tier keys from TIER_BY_CENTS in src/lib/stripe.js). */
 export const FIX_KIT_TIERS = Object.freeze(['xray', 'fix_kit', 'be_the_answer']);
@@ -553,9 +557,10 @@ export function missingDetails(d) {
 }
 
 /**
- * buildKit(details, report, opts) → { jobs, done, faq, missing, files }
- *   jobs: [{ id, title, tech, what, where, who, optional, note?, files: [path] }] — only what is left
- *         to do for this business, most useful first.
+ * buildKit(details, report, opts) → { jobs, done, faq, missing, files, platform? }
+ *   jobs: [{ id, title, tech, what, where, who, optional, note?, platform?, files: [path] }] — only what is
+ *         left to do for this business, most useful first. platform: { name, steps: [line], guides: [{ label, url }] }
+ *         when the site builder is known; the kit's `platform` is then { id, name }.
  *   done: [{ id, title, note }] — what the website check found already in place (nothing to do).
  *   faq:  shared/faq.js buildFaq result; missing: missingDetails(d); files: [{ path, content }], README first.
  * opts: { origin, token, date } for README.txt.
@@ -569,6 +574,20 @@ export function buildKit(details, report, opts = {}) {
   const files = [];
   const add = (path, content) => { files.push({ path, content }); return path; };
   const blockedWho = site.blocked.map((b) => b.who || b.agent).filter(Boolean);
+  // The site builder, when known: "In Wix: …" for each website job, with the builder's own guide.
+  const pf = platformFor(report);
+  const onBuilder = (jobIds, { page = false } = {}) => {
+    if (!pf) return {};
+    const entries = jobIds.map((j) => [j, platformJob(pf, j)]).filter(([, e]) => e);
+    if (!entries.length) return {};
+    const steps = entries
+      // The FAQ block that writes its own code: the code step is not needed.
+      .filter(([j]) => !(j === 'headCode' && jobIds.includes('faq') && platformJob(pf, 'faq')?.schema === true))
+      .map(([j, e]) => (j === 'headCode' && jobIds.includes('faq') && e.can !== false
+        ? `For the code from faq-page.html, ${platformStep(pf, e, { page }).replace(/^In /, 'in ')}`
+        : platformStep(pf, e, { page })));
+    return { platform: { name: pf.name, steps, guides: guideLinks(pf, entries.map(([j]) => j)) } };
+  };
 
   if (!site.checked || site.blocked.length) {
     jobs.push({
@@ -584,6 +603,7 @@ export function buildKit(details, report, opts = {}) {
       who: 'web',
       optional: false,
       files: [add('robots.txt', robotsTxt(d, { blocked: site.blocked }))],
+      ...onBuilder(['aiCrawlers', 'robots']),
     });
   } else {
     done.push({
@@ -606,6 +626,7 @@ export function buildKit(details, report, opts = {}) {
     optional: false,
     ...(site.faqSchema ? { note: 'Your website already has some FAQ code. Add these questions to that page rather than making a second one.' } : {}),
     files: [add('faq-page.html', faqHtml(d, report, faq)), add('faq-page.txt', faqTxt(d, report, faq))],
+    ...onBuilder(['faq', 'headCode'], { page: true }),
   });
 
   jobs.push({
@@ -630,6 +651,7 @@ export function buildKit(details, report, opts = {}) {
     optional: hasSchema,
     ...(hasSchema ? { note: `Your website already has business code (${site.businessSchema.slice(0, 2).join(', ')}). Use ours only if yours is missing your phone, address or hours.` } : {}),
     files: [add('schema-localbusiness.html', schemaHtml(d))],
+    ...onBuilder(['headCode']),
   });
 
   if (site.llmsTxt) {
@@ -644,6 +666,7 @@ export function buildKit(details, report, opts = {}) {
       who: 'web',
       optional: true,
       files: [add('llms.txt', llmsTxt(d))],
+      ...onBuilder(['llms']),
     });
   }
 
@@ -660,18 +683,38 @@ export function buildKit(details, report, opts = {}) {
     });
   }
 
+  // On a builder that can't take a job's file, or makes the file itself: say so, and make it optional.
+  if (pf) {
+    for (const j of jobs) {
+      const own = { schema: platformJob(pf, 'headCode'), llms: platformJob(pf, 'llms'), robots: platformJob(pf, 'robots') }[j.id];
+      if (!own) continue;
+      if (own.can === false) {
+        j.optional = true;
+        // Said once, in "Where it goes", not again as a step.
+        if (j.platform) j.platform.steps = j.platform.steps.filter((x) => x !== platformStep(pf, own));
+        j.where = j.id === 'robots' && platformJob(pf, 'aiCrawlers')
+          ? `${pf.name} doesn’t let you edit robots.txt, so this file can’t be used there. Use ${pf.name}’s setting below instead.`
+          : `${pf.name} can’t take this file, so skip it. ${own.steps}`;
+      } else if (own.auto === true) {
+        j.optional = true;
+        j.where = `${pf.name} makes this file for you, so you don’t need ours. Use ours only if you’d rather write your own.`;
+      }
+    }
+  }
+
   // Required jobs first (in the order above), the optional ones after.
   const rank = (j) => (j.optional ? 10 : j.order ?? ({ faq: 1, google: 2, schema: 3 }[j.id] || 6));
   const ordered = jobs.map((j, n) => ({ j, n })).sort((a, b) => rank(a.j) - rank(b.j) || a.n - b.n).map(({ j }) => { const { order, ...rest } = j; return rest; });
   const missing = missingDetails(d);
-  const readme = { path: 'README.txt', content: readmeTxt(d, { jobs: ordered, done, faq, missing }, opts) };
+  const platform = pf ? { id: pf.id, name: pf.name } : null;
+  const readme = { path: 'README.txt', content: readmeTxt(d, { jobs: ordered, done, faq, missing, platform }, opts) };
   const byPath = new Map(files.map((f) => [f.path, f]));
   const out = [readme, ...ordered.flatMap((j) => j.files.map((p) => byPath.get(p)))];
-  return { jobs: ordered, done, faq, missing, files: out };
+  return { jobs: ordered, done, faq, missing, files: out, ...(platform ? { platform } : {}) };
 }
 
 export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token = '', date = new Date() } = {}) {
-  const { jobs = [], done = [], faq = { items: [], needs: 0 }, missing = [] } = kit || {};
+  const { jobs = [], done = [], faq = { items: [], needs: 0 }, missing = [], platform = null } = kit || {};
   const out = [
     `YOUR FIX KIT: ${d.name}`,
     `Made ${date.toISOString().slice(0, 10)} by AI Found Score, from your website, your report and the details you checked.`,
@@ -680,6 +723,7 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
     'Give this folder to whoever looks after your website. Each job below says what it does and where it goes.',
     'Nothing changes on your website until someone puts these files in place.',
     '',
+    ...(platform ? [`Your website is built on ${platform.name}. Where a job can be done in ${platform.name}, it says exactly where to click, with ${platform.name}’s own guide.`, ''] : []),
   ];
   if (missing.length || faq.needs) {
     out.push('BEFORE YOU SEND IT ON');
@@ -694,6 +738,8 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
       `   ${j.files.length > 1 ? 'Files' : 'File'}: ${j.files.join(', ')}`,
       `   What it does: ${j.what}`,
       `   Where it goes: ${j.where}`,
+      ...(j.platform ? j.platform.steps.map((x) => `   ${x}`) : []),
+      ...(j.platform ? j.platform.guides.map((g) => `   ${g.label}: ${g.url}`) : []),
       ...(j.note ? [`   Note: ${j.note}`] : []),
       '',
     );

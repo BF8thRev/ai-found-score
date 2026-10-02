@@ -206,6 +206,25 @@
       where.appendChild(el('strong', null, 'Where it goes: '));
       where.appendChild(document.createTextNode(j.where));
       li.appendChild(where);
+      // The site builder's own click-paths and help pages (shared/platforms.js), when we know it.
+      if (j.platform && ((j.platform.steps || []).length || (j.platform.guides || []).length)) {
+        var box = el('div', 'fk-platform');
+        box.appendChild(el('p', null, 'Your site is built on ' + j.platform.name + ':'));
+        var ul = el('ul');
+        (j.platform.steps || []).forEach(function (s) { ul.appendChild(el('li', null, s)); });
+        if (ul.childNodes.length) box.appendChild(ul);
+        (j.platform.guides || []).forEach(function (g) {
+          if (!/^https:\/\//.test(g.url)) return;
+          var a = el('a', null, g.label);
+          a.href = g.url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          var gp = el('p');
+          gp.appendChild(a);
+          box.appendChild(gp);
+        });
+        li.appendChild(box);
+      }
       li.appendChild(el('p', 'who', WHO[j.who] || ''));
       if (j.note) li.appendChild(el('p', 'fk-note sample', j.note));
       if (j.id === 'faq' && kit.faq) {
@@ -227,7 +246,12 @@
       r.appendChild(fileDetails({ path: 'README.txt', content: kit.readme }));
       list.appendChild(r);
     }
-    var done = $('[data-done]');
+    var line = $('[data-platform-line]');
+    if (line) {
+      line.textContent = kit.platform && kit.platform.name ? 'Your site is built on ' + kit.platform.name + ', so each job says where it goes in ' + kit.platform.name + '.' : '';
+      line.hidden = !(kit.platform && kit.platform.name);
+    }
+        var done = $('[data-done]');
     done.textContent = '';
     (kit.done || []).forEach(function (x) { done.appendChild(el('li', null, x.note)); });
     $('[data-done-wrap]').hidden = !(kit.done || []).length;
