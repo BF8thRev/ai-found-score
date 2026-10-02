@@ -7,6 +7,7 @@ import {
   esc, usd, pct, moneySummary, engineVerdicts, activityFeed, shortTime, nyDate, EXPENSE_CATEGORIES,
   FIXED_COSTS, STRIPE_FEE, chargeDates, fixedCosts, unitEconomics,
 } from './metrics.js';
+import { hasBreakdown } from './unlock.js';
 import { emailFunnelTable, prospectsSection, logEmailSection, gmailSection, OUTREACH_CSS, OUTREACH_JS } from './outreach.js';
 
 const engineName = (id) => ENGINE_NAMES[id] || id;
@@ -47,7 +48,8 @@ const CSS = `
 .verdict{font-size:13px;line-height:1.4;min-width:220px}
 .adm form.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 12px}
 .adm label{display:block;font-size:13px;font-weight:600;color:var(--navy)}
-.adm input[type=text],.adm input[type=date],.adm input[type=number],.adm input[type=password],.adm select{display:block;width:100%;margin-top:4px;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.adm input[type=text],.adm input[type=date],.adm input[type=number],.adm input[type=password],.adm input[type=email],.adm select{display:block;width:100%;margin-top:4px;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.adm label>.small{display:block;margin-top:4px;font-weight:400}
 .adm fieldset{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0;grid-column:1/-1}
 .adm fieldset label{display:inline-flex;align-items:center;gap:6px;font-weight:500;margin:4px 14px 4px 0}
 .adm .full{grid-column:1/-1}
@@ -478,7 +480,86 @@ export function creditBanner(credits) {
  * The dashboard. `dash` = loadDashboard() result; `flash` = { run, expense } messages
  * ({ ok: boolean, text }); `watch` = scan ids to show live status for.
  */
-export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES, sent = null, siteOrigin = 'https://aifoundscore.com', gmail = null }) {
+// "Find a report": paste a /report/ link → who it's for, locked or not, what was paid, and every
+// scan under that link with its real API cost. Unlock writes the same payments row a Stripe checkout
+// does (src/admin/unlock.js); by default it makes no API calls and shows the answers already collected.
+const TIER_NAME = { xray: 'Full audit', competitor_breakdown: 'Competitor Breakdown', be_the_answer: 'Be the Answer', fix_kit: 'Fix Kit' };
+const SCAN_KIND = { request: 'Free report', paid: 'Full audit', recheck: '30-day re-check', monthly: 'Monthly scan', admin: 'Admin scan' };
+export function paymentSource(p) {
+  if (!String(p.stripe_session_id || '').startsWith('admin_')) return p.livemode === false ? 'Stripe (test)' : 'Stripe';
+  return Number(p.amount_cents) > 0 ? 'Admin, paid outside Stripe' : 'Admin, comp';
+}
+
+function reportSection(lookup, { flash = '', activeIds = ACTIVE_ENGINES } = {}) {
+  const L = lookup || {};
+  const box = `<form class="grid" method="get" action="/admin#report">
+    <label class="full">Report link or token<input type="text" name="report" required maxlength="300" value="${esc(L.input || '')}" placeholder="https://aifoundscore.com/report/…"></label>
+    <div class="full"><button class="primary" type="submit">Look up</button></div>
+  </form>`;
+  let body = '';
+  if (L.error) body = `<p class="err">${esc(L.error)}</p>`;
+  else if (L.token) {
+    const scans = L.scans || [];
+    const pays = L.payments || [];
+    const fullEst = estimateScanCost({ engines: activeIds, questions: 5, runs: 1 }).total;
+    const fullDone = scans.some((s) => s.trigger === 'paid' && s.status === 'done');
+    const fullRunning = scans.some((s) => s.trigger === 'paid' && (s.status === 'running' || s.status === 'queued'));
+    const have = scans.filter((s) => s.status === 'done' && s.report_saved);
+    const answers = have.reduce((n, s) => n + (Number(s.answers) || 0), 0);
+    const haveEngines = [...new Set(have.flatMap((s) => s.engines || []))];
+    const link = `/report/${encodeURIComponent(L.token)}`;
+    const runBox = fullDone
+      ? '<p class="small">The full audit already ran on this link, so unlocking just shows it.</p>'
+      : `<label class="full"><input type="checkbox" name="run"> Also run the full audit now: every question on ${esc(activeIds.length)} assistants (${esc(activeIds.map(engineName).join(', '))}), about ${usd(fullEst)} in API calls, added to this business’s cost below. Leave it off to show the answers already collected (no new calls).</label>`;
+    const unlockForm = L.unlocked || !L.hasReport ? '' : `<h3>Unlock this report</h3>
+  <p class="sub">Shows everything on the same link (every answer word for word, every fix, the Fix Kit) and hides the offers, exactly as if they had paid on the page. To have them pay by card instead, just send them the link: the button on the page does it.</p>
+  <form class="grid" method="post" action="/admin/report/unlock" data-confirm="Unlock this report on its link?">
+    <input type="hidden" name="token" value="${esc(L.token)}">
+    <label>Amount received ($)<input type="text" name="amount" inputmode="decimal" value="0" maxlength="7"><span class="small">0 = free (comp, not revenue). Over 0 = paid outside Stripe (counted as revenue).</span></label>
+    <label>Their email (optional)<input type="email" name="email" maxlength="200"><span class="small">Gets the “full audit ready” and 30-day emails.</span></label>
+    <label class="full"><input type="checkbox" name="breakdown" checked> Include the Competitor Breakdown (built from the answers we have, no extra calls)</label>
+    ${runBox}
+    <div class="full"><button class="primary" type="submit">Unlock</button></div>
+  </form>`;
+    const rerun = L.unlocked && !fullDone && !fullRunning ? `<form class="acts" method="post" action="/admin/scan/paid" data-confirm="Run the full audit for this report? About ${esc(usd(fullEst))} in API calls.">
+    <input type="hidden" name="token" value="${esc(L.token)}"><button type="submit">Run full audit (about ${usd(fullEst)})</button>
+    <span class="small">Optional: the page already shows the answers we have.</span></form>` : '';
+    const addBreakdown = L.unlocked && !hasBreakdown(pays) ? `<h3>Add the Competitor Breakdown</h3>
+  <p class="sub">Built from the answers already collected (no API calls). Shows in the report on the same link.</p>
+  <form class="grid" method="post" action="/admin/report/breakdown" data-confirm="Add the Competitor Breakdown to this report?">
+    <input type="hidden" name="token" value="${esc(L.token)}">
+    <label>Amount received ($)<input type="text" name="amount" inputmode="decimal" value="0" maxlength="7"><span class="small">0 = free. Over 0 = paid outside Stripe.</span></label>
+    <div class="full"><button class="primary" type="submit">Add Competitor Breakdown</button></div>
+  </form>` : '';
+    body = `<p><b>${esc(L.name || 'Unknown business')}</b> ${L.unlocked ? toneBadge('good', 'unlocked') : toneBadge('warn', 'locked')}
+      ${fullRunning ? toneBadge('neutral', 'full audit running') : ''} · <a href="${esc(link)}" target="_blank" rel="noopener">Open report</a></p>
+    <p class="small">Answers already collected: ${esc(answers)}${haveEngines.length ? ` from ${esc(haveEngines.map(engineName).join(', '))}` : ''}.
+      API cost on this link so far: <b>${usd(L.costUsd || 0)}</b> across ${esc(scans.length)} scan${scans.length === 1 ? '' : 's'}.</p>
+    ${scans.length ? `<div class="tw"><table>
+      <thead><tr><th>Scan</th><th>Started</th><th>Status</th><th class="n">Answers</th><th class="n">Cost</th></tr></thead>
+      <tbody>${scans.map((s) => `<tr><td>${esc(SCAN_KIND[s.trigger] || s.trigger || '—')}<div class="small">${esc((s.engines || []).map(engineName).join(', '))}</div></td>
+        <td class="small">${esc(shortTime(s.started_at))}</td><td>${esc(s.status || '—')}</td>
+        <td class="n">${esc(s.answers ?? '—')}</td><td class="n">${usd(s.total_cost_usd)}</td></tr>`).join('')}</tbody>
+    </table></div>` : ''}
+    ${pays.length ? `<div class="tw"><table>
+      <thead><tr><th>Paid</th><th>What</th><th class="n">Amount</th><th>How</th><th>Email</th></tr></thead>
+      <tbody>${pays.map((p) => `<tr><td class="small">${esc(shortTime(p.paid_at))}</td>
+        <td>${esc([p.tier, ...(Array.isArray(p.addons) ? p.addons : [])].filter(Boolean).map((t) => TIER_NAME[t] || t).join(' + '))}${p.revoked_at ? ` ${toneBadge('bad', 'refunded')}` : ''}</td>
+        <td class="n">${usd((Number(p.amount_cents) || 0) / 100)}</td><td class="small">${esc(paymentSource(p))}</td><td class="small">${esc(p.customer_email || '—')}</td></tr>`).join('')}</tbody>
+    </table></div>` : '<p class="small">No payments on this link.</p>'}
+    ${L.hasReport ? '' : '<p class="small">No finished report on this link yet, so there is nothing to unlock.</p>'}
+    ${unlockForm}${addBreakdown}${rerun}`;
+  }
+  return `<section id="report">
+  <h2>Find a report</h2>
+  <p class="sub">Paste a report link to see who it’s for, whether it’s unlocked, what was paid and what its scans cost. Unlock it here when someone buys outside the site.</p>
+  ${flash}
+  ${box}
+  ${body}
+</section>`;
+}
+
+export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = [], now = new Date(), dryRun = false, activeIds = ACTIVE_ENGINES, sent = null, siteOrigin = 'https://aifoundscore.com', gmail = null, lookup = null }) {
   const d = dash.data || {};
   const errors = dash.errors || {};
   const flashHtml = (f) => (f ? `<p class="${f.ok ? 'ok-msg' : 'err'}" role="status">${esc(f.text)}</p>` : '');
@@ -493,13 +574,14 @@ export function renderDashboard(dash, { nonce, engineIds, flash = {}, watch = []
 </div></header>
 <main class="adm wrap">
   <nav class="adm-nav" aria-label="Sections">
-    <a href="#money">Money</a><a href="#costs">Costs</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
+    <a href="#money">Money</a><a href="#costs">Costs</a><a href="#report">Find report</a><a href="#requests">Requests</a><a href="#run">Run scan</a><a href="#scans">Scans</a><a href="#engines">Engines</a><a href="#refunds">Refunds</a>
     <a href="#funnel">Funnel</a><a href="#prospects">Prospects</a><a href="#log-email">Log email</a><a href="#gmail">Gmail</a><a href="#gates">Gates</a><a href="#activity">Activity</a><a href="#expenses">Expenses</a>
   </nav>
   ${creditBanner(d.credits)}
   ${notConfigured}
   ${moneySection(d, errors, now)}
   ${costsSection(d, errors, { now, activeIds })}
+  ${reportSection(lookup, { flash: flashHtml(flash.report), activeIds })}
   ${requestsSection(d, errors, { flash: flashHtml(flash.requests) })}
   ${runSection(d, { watch, engineIds, flash: flashHtml(flash.run), activeIds })}
   ${scansSection(d, errors)}
