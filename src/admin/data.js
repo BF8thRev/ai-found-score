@@ -170,16 +170,31 @@ export async function reportLookup(env, token) {
   const s = supa(env);
   if (!s) throw new Error('SUPABASE_SERVICE_KEY is not set');
   const t = encodeURIComponent(token);
-  const [scans, payments, saved, unlockedRes] = await Promise.all([
+  const [scans, payments, saved, towns] = await Promise.all([
     get(env, s, `v_scan_costs?select=scan_id,trigger,status,started_at,total_cost_usd,business_name,report_saved,engines,answers,calls_ok&report_token=eq.${t}&order=started_at.asc.nullslast`),
     get(env, s, `payments?select=tier,amount_cents,addons,livemode,paid_at,revoked_at,stripe_session_id,customer_email&report_token=eq.${t}&order=paid_at.asc`),
     get(env, s, `scan_results?select=name:report->business->>name&report_token=eq.${t}&version=eq.2&order=scanned_at.desc&limit=1`),
-    fetch(`${s.base}/rpc/report_unlocked`, { method: 'POST', headers: s.headers, body: JSON.stringify({ p_token: token }) }),
+    get(env, s, `plan_towns?select=report_token&town_token=eq.${t}&limit=1`),
   ]);
-  if (!unlockedRes.ok) throw new Error(`report_unlocked: HTTP ${unlockedRes.status}`);
-  const unlocked = (await unlockedRes.json()) === true;
+  // A Be the Answer town report is unlocked by its plan's payment (report_unlocked's second half).
+  const planPayments = towns[0]?.report_token
+    ? await get(env, s, `payments?select=tier,amount_cents,revoked_at&report_token=eq.${encodeURIComponent(towns[0].report_token)}`)
+    : [];
+  // Worked out here, not with rpc/report_unlocked: that call answered 401 from /admin on the preview.
+  const unlocked = unlockedFrom(payments, planPayments);
   if (!scans.length && !saved.length && !payments.length) return null;
   const costUsd = scans.reduce((sum, r) => sum + (Number(r.total_cost_usd) || 0), 0);
   const name = saved[0]?.name || [...scans].reverse().find((r) => r.business_name)?.business_name || null;
   return { token, name, hasReport: saved.length > 0, unlocked, payments, scans, costUsd };
+}
+
+/**
+ * The report_unlocked() rule (supabase/v9_refunds.sql) applied to rows already read: any live payment
+ * except a Competitor Breakdown on its own; or, for a Be the Answer town report, its plan's payment.
+ */
+export function unlockedFrom(payments, planPayments = []) {
+  const live = (p) => !p.revoked_at;
+  const tier = (p) => p.tier || 'unknown';
+  return (payments || []).some((p) => live(p) && tier(p) !== 'competitor_breakdown' && !(tier(p) === 'unknown' && Number(p.amount_cents) === 2500))
+    || (planPayments || []).some((p) => live(p) && (p.tier === 'be_the_answer' || (tier(p) === 'unknown' && Number(p.amount_cents) === 49900)));
 }

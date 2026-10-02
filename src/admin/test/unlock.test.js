@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleAdminRequest } from '../routes.js';
-import { reportTokenFrom } from '../data.js';
+import { reportTokenFrom, unlockedFrom } from '../data.js';
 import { parseUnlockForm } from '../unlock.js';
 import { paymentSource } from '../page.js';
 
@@ -35,10 +35,8 @@ function fakeDb({ payments = [], scans } = {}) {
     const method = init.method || 'GET';
     db.calls.push(`${method} ${u.pathname}`);
     const forToken = u.search.includes(encodeURIComponent(TOKEN)) || u.search.includes(TOKEN);
-    if (u.pathname === '/rest/v1/rpc/report_unlocked') {
-      const { p_token } = JSON.parse(init.body);
-      return json(p_token === TOKEN && db.payments.some((p) => !p.revoked_at && p.tier !== 'competitor_breakdown'));
-    }
+    // As on the preview: the RPC answers 401. /admin must not depend on it.
+    if (u.pathname === '/rest/v1/rpc/report_unlocked') return json({ message: 'Unauthorized' }, 401);
     if (u.pathname === '/rest/v1/v_scan_costs') return json(forToken ? db.scans : []);
     if (u.pathname === '/rest/v1/scan_results') return json(forToken ? [{ name: 'PR 73' }] : []);
     if (u.pathname === '/rest/v1/payments' && method === 'GET') return json(forToken ? db.payments : []);
@@ -78,6 +76,16 @@ test('reportTokenFrom: a pasted link or a bare token', () => {
   assert.equal(reportTokenFrom(` ${TOKEN} `), TOKEN);
   assert.equal(reportTokenFrom('nope!'), null);
   assert.equal(reportTokenFrom(''), null);
+});
+
+test('unlockedFrom follows report_unlocked(): any live payment but a lone Breakdown; a town report by its plan', () => {
+  assert.equal(unlockedFrom([]), false);
+  assert.equal(unlockedFrom([{ tier: 'xray', amount_cents: 0 }]), true, 'a $0 admin unlock counts');
+  assert.equal(unlockedFrom([{ tier: 'xray', amount_cents: 4900, revoked_at: '2026-10-02' }]), false, 'refunded');
+  assert.equal(unlockedFrom([{ tier: 'competitor_breakdown', amount_cents: 2500 }]), false);
+  assert.equal(unlockedFrom([{ tier: null, amount_cents: 2500 }]), false);
+  assert.equal(unlockedFrom([], [{ tier: 'be_the_answer', amount_cents: 49900 }]), true);
+  assert.equal(unlockedFrom([], [{ tier: 'xray', amount_cents: 4900 }]), false, 'only the plan unlocks its towns');
 });
 
 test('parseUnlockForm: dollars, optional email, tick boxes', () => {

@@ -16,13 +16,12 @@ export function esc(value) {
 
 const num = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
 
-/** "$12.34"; amounts under $1 keep 4 decimals ("$0.0412") so per-call costs stay readable. */
-export function usd(value, { precise = false } = {}) {
+/** "$12.34". Hard rule (owner, Oct 2): every amount on /admin shows exactly 2 decimals, small costs included. */
+export function usd(value) {
   const n = num(value);
   if (n == null) return '—';
   const abs = Math.abs(n);
-  const digits = precise || (abs > 0 && abs < 1) ? 4 : 2;
-  const s = abs.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const s = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${n < 0 ? '−' : ''}$${s}`;
 }
 
