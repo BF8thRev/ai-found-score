@@ -82,7 +82,8 @@ test('check-it-worked.txt: what to expect with no promise, each file to check, t
   const text = t.content;
   assert.match(text, /^CHECK IT WORKED: Harbor Lane PR/);
   assert.match(text, /We cannot promise any assistant will name you/);
-  assert.match(text, /Your next scan asks AI the same questions again[^\n]*Be the Answer re-scans every month/, 'true for every tier that gets the kit');
+  assert.match(text, /Your next scan asks AI the same questions again[^\n]*a free re-check 30 days after you buy\./);
+  assert.doesNotMatch(text, /Be the Answer/, 'off sale: never named to an audit buyer');
   assert.doesNotMatch(text, /free re-check, 30 days/);
   assert.match(text, /validator\.schema\.org/);
   assert.doesNotMatch(text, /rich-results/, 'Google shows FAQ results for few sites: no check that depends on it');

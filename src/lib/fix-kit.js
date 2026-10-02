@@ -662,7 +662,7 @@ export function checkTxt(d, report, jobs = [], { token = '', origin = 'https://a
     'WHAT TO EXPECT',
     '- These files give AI assistants and Google correct facts about your business to read. We cannot promise any assistant will name you: each one decides for itself, and its answers change from one asking to the next.',
     '- Changes show up at different speeds. Google can take a few days. AI assistants refresh on their own schedule, so look again in about a month.',
-    '- Your next scan asks AI the same questions again and shows what changed. The audit includes a re-check 30 days after you buy; Be the Answer re-scans every month.',
+    '- Your next scan asks AI the same questions again and shows what changed. The audit includes a free re-check 30 days after you buy.',
     '',
     'STEP 1: CHECK EACH FILE IS LIVE (under half an hour, once your web person is done)',
     ...(steps.length ? steps.map((x, n) => `${n + 1}. ${x}`) : ['Nothing on your website to check: everything it needed is already in place.']),

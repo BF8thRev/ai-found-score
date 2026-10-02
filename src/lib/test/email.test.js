@@ -115,3 +115,12 @@ test('sendEmail: "Stop these emails" on any of a plan\'s reports stops the other
   assert.equal((await sendEmail(ENV, { ...mail, token: 'plan_tok', alsoTokens: ['other_tok'] }, { fetchImpl: f })).ok, true);
   assert.equal(sent.length, 1);
 });
+
+test('30-day re-check email: Be the Answer is off sale, so it is never pitched; the reply offer is "we can do it"', () => {
+  const env = { SITE_URL: 'https://aifoundscore.com' };
+  const { text, html } = recheckEmail(env, { token: 'tok', name: 'PR73', totals: { namedYou: 0, answers: 15 }, before: { namedYou: 0, answers: 15 } });
+  for (const body of [text, html]) {
+    assert.doesNotMatch(body, /Be the Answer|keep watching|every month for a year/);
+    assert.match(body, /No one to put the fixes on your website\? Reply to this email/);
+  }
+});
