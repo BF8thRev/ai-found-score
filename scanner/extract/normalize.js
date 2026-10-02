@@ -94,3 +94,74 @@ export function normalizeUrl(url) {
     return String(url || '');
   }
 }
+
+// ---------------------------------------------------------------------------
+// One business, several spellings ("PR 73" / "PR73", "Smith & Sons" / "Smith and Sons")
+// ---------------------------------------------------------------------------
+
+/** "PR 73" and "PR73" → "pr73"; "&" counts as "and". The same letters and digits, spacing and punctuation ignored. */
+export function squashName(s) {
+  return String(s || '').toLowerCase().replace(/&/g, 'and').replace(/['’`]/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+const collapse = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+
+/**
+ * The ways a business name is commonly written: as given first, then with the space between letters
+ * and digits closed or opened ("PR 73" ↔ "PR73"), then "&" ↔ "and". Same letters only, never a guess
+ * at another name. Case-insensitive duplicates dropped.
+ */
+export function nameVariants(name) {
+  const n = collapse(name);
+  if (!n) return [];
+  const out = [n];
+  const joined = n.replace(/(\p{L})\s+(?=\p{N})|(\p{N})\s+(?=\p{L})/gu, '$1$2');
+  const split = n.replace(/(\p{L})(?=\p{N})|(\p{N})(?=\p{L})/gu, '$1$2 ');
+  out.push(joined, split);
+  for (const v of [...out]) {
+    if (/\s&\s/.test(v)) out.push(v.replace(/\s&\s/g, ' and '));
+    if (/\sand\s/i.test(v)) out.push(v.replace(/\sand\s/gi, ' & '));
+  }
+  const seen = new Set();
+  return out.map(collapse).filter((v) => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
+}
+
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** How many times `name` appears in `text` as written (case-insensitive, whole words, any run of spaces). */
+export function countSpelling(text, name) {
+  const body = collapse(name).split(' ').map(escRe).join('\\s+');
+  if (!body) return 0;
+  return (String(text || '').match(new RegExp(`(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])`, 'giu')) || []).length;
+}
+
+/**
+ * The business name as the owner's website writes it, compared with the name the owner typed.
+ * candidates: [{ name, from }] read off the site (og:site_name, schema name, title segments), in
+ * order of trust; text: the site's words to count spellings in.
+ * → { name, from, related, differs, consistent } | null
+ *   related: the same letters as the typed name (only a spacing or "&"/"and" difference);
+ *   differs: related, but written differently (case alone doesn't count);
+ *   consistent: the site writes its spelling and never the typed one.
+ * An unrelated brand (the title's last segment, og:site_name) comes back with related false: a
+ * search term, never a name to put in the owner's copy.
+ */
+export function spellingOnSite(candidates, typed, text = '') {
+  const list = (candidates || []).map((c) => c && { name: collapse(c.name), from: c.from })
+    .filter((c) => c && c.name && c.name.length <= 60 && squashName(c.name).length >= 2);
+  if (!list.length) return null;
+  const want = squashName(typed);
+  const same = want ? list.find((c) => squashName(c.name) === want) : null;
+  if (!same) {
+    const brand = list.find((c) => c.from !== 'title') || list[0];
+    return { name: brand.name, from: brand.from, related: false, differs: false, consistent: false };
+  }
+  const differs = same.name.toLowerCase() !== collapse(typed).toLowerCase();
+  const all = `${list.map((c) => c.name).join(' \n ')} \n ${text}`;
+  const consistent = differs && countSpelling(all, same.name) > 0 && countSpelling(all, typed) === 0;
+  return { name: same.name, from: same.from, related: true, differs, consistent };
+}
+
+/** A page title's parts: "Integrated Communications | PR73" → ["Integrated Communications", "PR73"]. */
+export function titleParts(title) {
+  return collapse(title).split(/\s+[|–—-]\s+|\s*\|\s*|\s+[·•:]\s+/).map(collapse).filter(Boolean);
+}

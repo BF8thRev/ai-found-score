@@ -40,7 +40,7 @@
 
 import {
   recordPayment, recordUnsubscribe, recordVisit, recordLead,
-  getReport, getReportLink, isReportUnlocked, getPaidTiers,
+  getReport, getReportLink, isReportUnlocked, getPayments, paidTiersFrom,
   getRequestInfo, requestHasEmail, attachRequestEmailByToken,
 } from './lib/db.js';
 import { handleQuestions } from './lib/questions-route.js';
@@ -54,7 +54,7 @@ import { MOCK_REPORTS } from './mock/sample-reports.js';
 import { validateReport } from '../shared/report-v2.js';
 import { reportBody, BREAKDOWN_TIERS } from './lib/lock.js';
 import {
-  pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent,
+  pendingReportStatus, startPaidScan, paidScanRunning, startDueRechecks, startDueMonthly, readPlanParent, recheckDueAt,
   retryFailedScans, startAbandonedCheckout, REQUEST_TOKEN_RE,
 } from './lib/auto-scan.js';
 import { sendCreditAlerts, sendPaidScanAlert } from './lib/alerts.js';
@@ -69,6 +69,7 @@ import { handleLivePreview, livePreviewStatus } from './lib/live-preview.js';
 import { handleProof } from './lib/proof.js';
 import { handleZip } from './lib/zip.js';
 import { handleFixKit } from './lib/fix-kit-route.js';
+import { cachedPlatform } from './lib/site-platform.js';
 import { handlePlan } from './lib/plan-route.js';
 import { handleCheckout, SHOWCASE_TOKENS, SHOWCASE_ALIASES } from './lib/checkout.js';
 import { handleRefundEvent, REFUND_EVENTS } from './lib/refunds.js';
@@ -180,7 +181,7 @@ export default {
       try { id = decodeURIComponent(url.pathname.slice('/api/report/'.length)); } catch {
         return Response.json({ error: 'Report not found' }, { status: 404 });
       }
-      return handleGetReport(id, url, env, previewDryRun(env, url));
+      return handleGetReport(id, url, env, previewDryRun(env, url), ctx);
     }
 
     // Pretty-URL rewrites. Serve the clean-URL asset paths directly.
@@ -318,7 +319,7 @@ async function pendingInfo(env, token) {
   });
 }
 
-async function handleGetReport(id, url, env, dryRun = false) {
+async function handleGetReport(id, url, env, dryRun = false, ctx = null) {
   if (Object.hasOwn(SHOWCASE_ALIASES, id)) id = SHOWCASE_ALIASES[id];
   const isSample = id.startsWith('sample-');
   let report;
@@ -367,17 +368,27 @@ async function handleGetReport(id, url, env, dryRun = false) {
   }
   // Paid plans on this report. A Be the Answer town report (plan_towns) takes its plan's.
   let tiers = [];
+  let payments = [];
   let planToken = null;
   if (unlocked && !isSample && !dryRun) {
     planToken = await readPlanParent(env, id).catch(() => null);
-    tiers = await getPaidTiers(env, planToken || id).catch((e) => { console.error('[report] tiers read failed', e); return []; });
+    payments = await getPayments(env, planToken || id).catch((e) => { console.error('[report] tiers read failed', e); return []; });
+    tiers = paidTiersFrom(payments);
   }
   const onPlan = tiers.includes('be_the_answer');
+  // The website builder, for paid reports scanned before the scanner recorded it: from the cache only
+  // (never waiting on the owner's website); on a miss it is looked up after the page is sent
+  // (src/lib/site-platform.js), and the Fix Kit fills the cache too.
+  if (unlocked && !isSample && !dryRun && report.version === 2) {
+    report = await cachedPlatform(report, { waitUntil: ctx && ctx.waitUntil ? (p) => ctx.waitUntil(p) : null }).catch(() => report);
+  }
   // Unlocked v2 reports also get the X-Ray sections; locked ones never carry them (src/lib/lock.js).
   // The sample shows the Competitor Breakdown too, as a demo.
   const body = reportBody(report, unlocked, { breakdown: isSample || SHOWCASE_TOKENS.includes(id) || tiers.some((t) => BREAKDOWN_TIERS.includes(t)) });
   // Be the Answer: the page links to the plan (and its Fix Kit) instead of offering the plan again.
   if (onPlan) body.plan = { token: planToken || id, town: !!planToken };
+  // The free 30-day re-check that comes with the audit: the page says when (a date only, never more).
+  else if (unlocked && report.version === 2) { const due = recheckDueAt(payments); if (due) body.recheckOn = due; }
   // Paid, and the full scan (every question, every assistant) is still running: the page says so.
   if (unlocked && !isSample && !dryRun && (await paidScanRunning(env, id))) body.fullScanPending = true;
   // A free report whose request already has an email: the page shows no email box (never the address).

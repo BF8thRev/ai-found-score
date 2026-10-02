@@ -20,7 +20,8 @@
 
 import { resolveKeys } from './config.js';
 import { TRADES, TRADE_ALIASES, normalizeTrade } from './questions.js';
-import { normalizeName, phoneKey, streetKey, findPhones, findStreets } from './extract/normalize.js';
+import { normalizeName, phoneKey, streetKey, findPhones, findStreets, squashName, nameVariants, spellingOnSite, titleParts } from './extract/normalize.js';
+import { detectPlatform } from '../shared/platform-detect.js';
 
 export const FETCH_TIMEOUT_MS = 8000;
 export const MAX_PAGE_BYTES = 1_500_000;
@@ -80,6 +81,26 @@ export function blocksHome(groups, agent) {
     if (!best || r.path.length > best.path.length || (r.path.length === best.path.length && r.allow)) best = r;
   }
   return !!best && !best.allow;
+}
+
+/**
+ * May this user agent read this path (with its ?query)? The group for the agent (else "*"); the longest
+ * matching rule wins, allow on a tie; "*" matches anything, "$" ends the path. No group: allowed.
+ */
+export function robotsAllows(groups, agent, path) {
+  const a = String(agent || '').toLowerCase();
+  const group = groups.find((g) => g.agents.includes(a)) || groups.find((g) => g.agents.includes('*'));
+  if (!group) return true;
+  const p = String(path || '/');
+  let best = null;
+  for (const r of group.rules) {
+    if (!r.path) continue; // "Disallow:" (empty) allows everything
+    const end = r.path.endsWith('$');
+    const body = (end ? r.path.slice(0, -1) : r.path).split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+    if (!new RegExp(`^${body}${end ? '$' : ''}`).test(p)) continue;
+    if (!best || r.path.length > best.path.length || (r.path.length === best.path.length && r.allow)) best = r;
+  }
+  return !best || best.allow;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,13 +186,43 @@ export function siteUrl(website) {
   } catch { return null; }
 }
 
-async function getText(fetchImpl, url) {
+/** A response body as text, reading at most maxBytes (the rest is never downloaded). */
+async function readCapped(res, maxBytes) {
+  const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
+  if (!reader) return (await res.text()).slice(0, maxBytes);
+  const dec = new TextDecoder();
+  let out = '';
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.length;
+    out += dec.decode(value, { stream: true });
+    if (n >= maxBytes) { reader.cancel().catch(() => {}); break; }
+  }
+  return (out + dec.decode()).slice(0, maxBytes);
+}
+
+/** The response headers the platform check reads (shared/platform-detect.js), lower-case. */
+const PLATFORM_HEADERS = ['server', 'x-wix-request-id', 'x-shopid', 'powered-by', 'x-shopify-stage', 'x-hs-content-id', 'link', 'x-powered-by'];
+function someHeaders(res) {
+  const out = {};
+  if (!res.headers || typeof res.headers.get !== 'function') return out;
+  for (const k of PLATFORM_HEADERS) { const v = res.headers.get(k); if (v) out[k] = String(v).slice(0, 300); }
+  return out;
+}
+
+/**
+ * GET a page as our crawler: our user agent, redirects followed, a timeout and a size cap.
+ * → { ok, status, text, url?, contentType?, headers? }; never throws.
+ */
+export async function getText(fetchImpl, url, { timeoutMs = FETCH_TIMEOUT_MS, maxBytes = MAX_PAGE_BYTES } = {}) {
   try {
-    const res = await fetchImpl(url, { headers: { 'User-Agent': UA, Accept: 'text/html,text/plain,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    const res = await fetchImpl(url, { headers: { 'User-Agent': UA, Accept: 'text/html,text/plain,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) return { ok: false, status: res.status, text: '' };
-    const text = (await res.text()).slice(0, MAX_PAGE_BYTES);
+    const text = await readCapped(res, maxBytes);
     const contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-    return { ok: true, status: res.status, text, url: res.url || url, contentType };
+    return { ok: true, status: res.status, text, url: res.url || url, contentType, headers: someHeaders(res) };
   } catch (e) {
     return { ok: false, status: 0, text: '', error: String(e?.message || e).slice(0, 200) };
   }
@@ -205,6 +256,43 @@ export function readMeta(html) {
   }
   const h1 = cleanText((/<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(h) || [])[1] || '');
   return { title: title.slice(0, 200), description: description.slice(0, 400), h1: h1.slice(0, 200) };
+}
+
+/**
+ * The names the homepage gives the business, most trusted first → [{ name, from }]:
+ * og:site_name, the schema name (a business, Organization or WebSite node), then the title's parts
+ * (the last part first: "Integrated Communications, PR & Media Relations | PR73" → "PR73").
+ */
+export function siteNames(html) {
+  const h = String(html || '');
+  const out = [];
+  for (const m of h.matchAll(/<meta\b[^>]*>/gi)) {
+    const tag = m[0];
+    if (!/\bproperty\s*=\s*["']?og:site_name["'\s/>]/i.test(tag)) continue;
+    const c = /\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tag);
+    if (c) out.push({ name: cleanText(c[1] ?? c[2]), from: 'og' });
+    break;
+  }
+  const nodes = [];
+  for (const m of h.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { flattenLd(JSON.parse(m[1].trim()), nodes); } catch { /* bad JSON-LD: ignore */ }
+  }
+  const named = nodes.filter((n) => n && typeof n.name === 'string' && n.name.trim());
+  const typeIs = (n, re) => [].concat(n['@type'] || []).some((t) => re.test(String(t)));
+  const ordered = [...named.filter(isBusinessNode), ...named.filter((n) => typeIs(n, /^Organization$|Corporation/)), ...named.filter((n) => typeIs(n, /^WebSite$/))];
+  for (const n of ordered) out.push({ name: cleanText(n.name), from: 'schema' });
+  const parts = titleParts(cleanText((/<title[^>]*>([\s\S]*?)<\/title>/i.exec(h) || [])[1] || ''));
+  if (parts.length > 1) for (const p of [parts[parts.length - 1], ...parts.slice(0, -1)]) out.push({ name: p, from: 'title' });
+  else if (parts.length === 1) out.push({ name: parts[0], from: 'title' });
+  const seen = new Set();
+  return out.filter((c) => c.name && !seen.has(c.name.toLowerCase()) && seen.add(c.name.toLowerCase())).slice(0, 8);
+}
+
+/** The homepage's spelling of the business name vs the one typed (normalize.js spellingOnSite), or null. */
+export function brandOnSite(html, typedName) {
+  const cands = siteNames(html);
+  const m = readMeta(html);
+  return spellingOnSite(cands, typedName, [m.title, m.description, m.h1, pageText(html).slice(0, 20000)].join(' \n '));
 }
 
 /**
@@ -400,7 +488,9 @@ export async function checkSpeed(url, env = {}, { fetchImpl = fetch, timeoutMs =
  *   meta: { title, description, h1, mentionsTrade, mentionsTown } | null,   (null: homepage didn't load)
  *   faqSchema: boolean | null,
  *   pages: { internalLinks, servicePages, townPages } | null,
- *   speed: { score (0-100), strategy: 'mobile' } | null }   (null: no key, or PageSpeed failed or timed out)
+ *   speed: { score (0-100), strategy: 'mobile' } | null,   (null: no key, or PageSpeed failed or timed out)
+ *   platform: { id, name, confidence, evidence } | null,  (the site builder, shared/platform-detect.js)
+ *   brand: { name, from, related, differs, consistent } | null }  (the name as the homepage writes it: brandOnSite)
  * opts.business ({ trade, town, nearbyTown }) feeds the trade/town checks; opts.env the PageSpeed key.
  */
 export async function checkSite(website, { fetchImpl = fetch, business = {}, env = {} } = {}) {
@@ -448,6 +538,9 @@ export async function checkSite(website, { fetchImpl = fetch, business = {}, env
     faqSchema: page ? page.schemaTypes.includes('FAQPage') : null,
     pages: home.ok ? countPages(readLinks(home.text, home.url || origin + '/'), business) : null,
     speed: home.ok ? speed : null,
+    platform: home.ok ? detectPlatform(home.text, home.headers, home.url || origin) : null,
+    // How the homepage writes the business name (a Google search term, and the spelling check).
+    brand: home.ok ? brandOnSite(home.text, business.name) : null,
   };
 }
 
@@ -466,19 +559,42 @@ export const MAX_REVIEW_LOOKUPS = 3;
 
 const hostOf = (s) => { try { return new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
 
-/** Best Places result for this business: same website host first, else the closest name. */
-export function pickPlace(places, business) {
+/**
+ * Best Places result for this business: same website host first (strong evidence, whatever the name
+ * on Google), else the closest name. opts.names: other spellings of the same name to accept
+ * ("PR73" for "PR 73"); a different brand is never accepted by name, only by website.
+ */
+export function pickPlace(places, business, { names = [] } = {}) {
   const list = Array.isArray(places) ? places : [];
   const host = hostOf(business.website || '');
   if (host) {
     const byHost = list.find((p) => p.websiteUri && hostOf(p.websiteUri) === host);
     if (byHost) return byHost;
   }
-  const want = normalizeName(business.name);
-  if (!want) return null;
-  return list.find((p) => normalizeName(p.displayName?.text) === want)
-    || list.find((p) => { const n = normalizeName(p.displayName?.text); return n && (n.includes(want) || want.includes(n)); })
+  const wants = [...new Set([business.name, ...names].map(normalizeName).filter(Boolean))];
+  if (!wants.length) return null;
+  const squashed = new Set(wants.map(squashName));
+  return list.find((p) => { const n = normalizeName(p.displayName?.text); return n && (wants.includes(n) || squashed.has(squashName(n))); })
+    || list.find((p) => { const n = normalizeName(p.displayName?.text); return n && wants.some((w) => n.includes(w) || w.includes(n)); })
     || null;
+}
+
+/** Most Places Text Search calls to find the owner's own listing (the name as given, then other spellings). */
+export const MAX_PLACE_SEARCHES = 3;
+
+/**
+ * The searches to try after the name as given, in order: the website's own spelling of the same name,
+ * the other spellings (nameVariants), then the website's brand when it is a different name (matched
+ * by website only). brand: siteCheck.brand ({ name, related }) or null.
+ */
+export function placeQueries(name, brand) {
+  const typed = String(name || '').replace(/\s+/g, ' ').trim();
+  const out = [];
+  if (brand && brand.related && brand.name) out.push(brand.name);
+  out.push(...nameVariants(typed).slice(1));
+  if (brand && !brand.related && brand.name) out.push(brand.name);
+  const seen = new Set([typed.toLowerCase()]);
+  return out.filter((q) => q && !seen.has(q.toLowerCase()) && seen.add(q.toLowerCase()));
 }
 
 /** One Places Text Search call → { ok, places: [...], error }. */
@@ -498,13 +614,39 @@ export async function placesSearch(textQuery, key, fieldMask, fetchImpl) {
   }
 }
 
-/** → { ok, place | null, error } */
-export async function findGooglePlace(business, env, { fetchImpl = fetch } = {}) {
+/**
+ * The owner's own Google listing → { ok, place | null, error, searched: [name], searches }.
+ * First the name as given. No match: the website's spelling and the other spellings (placeQueries),
+ * at most MAX_PLACE_SEARCHES calls in all, stopping at the first match. A place whose website is the
+ * owner's own site is a match whatever its name. opts.brand: siteCheck.brand, or a promise of it
+ * (awaited only when the first search finds nothing, so the first call runs alongside the site check).
+ * Cost: each call is one Places Text Search (Enterprise SKU, for the rating fields), inside Google's
+ * monthly free usage at our volume. Not tracked in scan_usage (no Places spend is); a scan makes at
+ * most MAX_PLACE_SEARCHES of these plus MAX_REVIEW_LOOKUPS for competitors.
+ */
+export async function findGooglePlace(business, env, { fetchImpl = fetch, brand = null } = {}) {
   const key = resolveKeys(env).googlePlacesKey;
-  if (!key) return { ok: false, place: null, error: 'no key' };
-  const textQuery = [business.name, business.town, [business.state, business.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-  const r = await placesSearch(textQuery, key, PLACES_FIELDS, fetchImpl);
-  return { ok: r.ok, place: r.ok ? pickPlace(r.places, business) : null, error: r.error };
+  if (!key) return { ok: false, place: null, error: 'no key', searched: [], searches: 0 };
+  const where = [business.town, [business.state, business.zip].filter(Boolean).join(' ')].filter(Boolean);
+  const query = (n) => [n, ...where].filter(Boolean).join(', ');
+  const typed = String(business.name || '').replace(/\s+/g, ' ').trim();
+  const searched = [typed];
+  const first = await placesSearch(query(typed), key, PLACES_FIELDS, fetchImpl);
+  if (!first.ok) return { ok: false, place: null, error: first.error, searched, searches: 1 };
+  // Other spellings of the same name are accepted by name; the website's brand only when related.
+  let b = null;
+  const accepted = () => [...nameVariants(typed), ...(b && b.related && b.name ? [b.name] : [])];
+  let place = pickPlace(first.places, business, { names: accepted() });
+  if (place || !typed) return { ok: true, place, error: null, searched, searches: 1 };
+  b = await Promise.resolve(brand).catch(() => null);
+  for (const q of placeQueries(typed, b).slice(0, MAX_PLACE_SEARCHES - 1)) {
+    searched.push(q);
+    const r = await placesSearch(query(q), key, PLACES_FIELDS, fetchImpl);
+    if (!r.ok) break;
+    place = pickPlace(r.places, business, { names: accepted() });
+    if (place) return { ok: true, place, error: null, searched, searches: searched.length };
+  }
+  return { ok: true, place: null, error: null, searched, searches: searched.length };
 }
 
 /** A Places result → { rating: number | null, count: integer } (a place with no reviews has neither field). */
@@ -583,11 +725,14 @@ export function reviewsIssue({ reviews, placeId, business }) {
  * { platform: 'Google', status: 'match' | 'mismatch' | 'unchecked', details, url, fields: { name, phone, address } }
  * plus `diffs` (which fields differ) for the issue builder.
  */
-export function compareListing(place, truth, business) {
+export function compareListing(place, truth, business, { searched = [] } = {}) {
   if (!place) {
+    // The spellings we searched ("PR 73 or PR73"), so the owner knows we tried theirs.
+    const want = squashName(business.name);
+    const names = [...new Set([business.name, ...searched.filter((n) => want && squashName(n) === want)].filter(Boolean))];
     return {
       platform: 'Google', status: 'mismatch', url: null, diffs: ['missing'],
-      details: `We couldn't find a Google Maps listing for ${business.name}${business.town ? ` near ${business.town}` : ''}.`,
+      details: `We couldn't find a Google Maps listing for ${names.join(' or ') || business.name}${business.town ? ` near ${business.town}` : ''}.`,
       fields: {},
     };
   }
@@ -606,7 +751,8 @@ export function compareListing(place, truth, business) {
     checked.push('name');
     const a = normalizeName(fields.name);
     const b = normalizeName(business.name);
-    if (a !== b && !a.includes(b) && !b.includes(a)) diffs.push('name');
+    // "PR73" on Google and "PR 73" typed are the same name (the spelling is flagged elsewhere).
+    if (a !== b && !a.includes(b) && !b.includes(a) && squashName(a) !== squashName(b)) diffs.push('name');
   }
   const label = { name: 'name', phone: 'phone number', address: 'address' };
   const src = truth.source === 'website' ? 'your website' : 'what you told us';
@@ -876,24 +1022,28 @@ export function ownerIssues({ siteCheck, google, business, truth }) {
 
 /**
  * Everything above, for one business. deps: { fetchImpl }.
- * → { siteCheck | null, listings: [...], issues: [...], facts: { phone?, address? }, google: { ok, error },
+ * → { siteCheck | null, listings: [...], issues: [...], facts: { phone?, address? }, google: { ok, error, searches },
  *     reviews: { rating, count, placeId } | null }   (reviews null: no key, a failed call, or no listing found)
  */
 export async function runOwnerChecks(business, env, { fetchImpl = fetch } = {}) {
   const b = business || {};
+  // The first Google search runs alongside the site check; the website's spelling of the name is
+  // only waited for when that search finds nothing.
+  const siteP = checkSite(b.website, { fetchImpl, business: b, env }).catch(() => null);
   const [siteCheck, g] = await Promise.all([
-    checkSite(b.website, { fetchImpl, business: b, env }).catch(() => null),
-    findGooglePlace(b, env, { fetchImpl }).catch((e) => ({ ok: false, place: null, error: String(e) })),
+    siteP,
+    findGooglePlace(b, env, { fetchImpl, brand: siteP.then((sc) => (sc && sc.brand) || null) })
+      .catch((e) => ({ ok: false, place: null, error: String(e), searched: [], searches: 0 })),
   ]);
   const siteTruth = siteCheck && (siteCheck.onSite.phone || siteCheck.onSite.address);
   const truth = siteTruth
     ? { phone: siteCheck.onSite.phone || b.phone || '', address: siteCheck.onSite.address || b.address || '', source: 'website' }
     : { phone: b.phone || '', address: b.address || '', source: 'owner' };
-  const google = g.ok ? compareListing(g.place, truth, b) : null;
+  const google = g.ok ? compareListing(g.place, truth, b, { searched: g.searched || [] }) : null;
   const listings = google ? [{ platform: google.platform, status: google.status, details: google.details, fields: google.fields, ...(google.url ? { url: google.url } : {}) }] : [];
   const facts = {};
   if (siteCheck && siteCheck.onSite.phone) facts.phone = siteCheck.onSite.phone;
   if (siteCheck && siteCheck.onSite.address) facts.address = siteCheck.onSite.address;
   const reviews = g.ok && g.place ? { ...placeReviews(g.place), placeId: g.place.id || null } : null;
-  return { siteCheck, listings, issues: ownerIssues({ siteCheck, google, business: b, truth }), facts, google: { ok: g.ok, error: g.error }, reviews };
+  return { siteCheck, listings, issues: ownerIssues({ siteCheck, google, business: b, truth }), facts, google: { ok: g.ok, error: g.error, searches: g.searches || 0 }, reviews };
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Your Fix Kit — AI Found Score</title>
-  <meta name="description" content="Confirm your business details and download your Fix Kit: ready-to-install files for your website and Google profile.">
+  <meta name="description" content="Your Fix Kit, built for you: ready-to-install files for your website and Google profile. Check the details and download.">
   <link rel="icon" type="image/svg+xml" href="/img/mark.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,13 +15,24 @@
     /* Fix Kit page only (kept here so styles.css keeps its version). */
     .fk { padding: 40px 0 72px; }
     .fk h1 { font-size: clamp(30px, 4vw, 40px); margin: 0 0 12px; }
+    .fk h2 { font-size: 24px; margin: 0 0 8px; }
     .fk .lede-page { font-size: 19px; line-height: 1.55; margin: 0 0 22px; }
     .fk-note { background: #EEF4FE; border: 1px solid #C9DBFA; border-radius: var(--radius); padding: 14px 18px; font-weight: 600; color: var(--navy); margin: 0 0 24px; }
     .fk-note.sample { background: var(--wash); border-color: var(--line); font-weight: 500; }
-    .fk-form { display: grid; gap: 18px; }
-    .fk-form fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; margin: 0; display: grid; gap: 14px; }
+    .fk-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; margin: 0 0 26px; background: #fff; }
+    .fk-box > p { margin: 0 0 14px; }
+    .fk-facts { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 0; }
+    .fk-facts li { display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .fk-facts li:first-child { border-top: 0; }
+    .fk-facts .k { font-weight: 700; color: var(--navy); }
+    .fk-facts .v { overflow-wrap: anywhere; }
+    .fk-miss { display: inline-block; background: #FDECEA; color: var(--red); font-weight: 700; font-size: 14px; padding: 2px 10px; border-radius: 999px; margin-right: 6px; }
+    .fk-facts .note { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+    @media (max-width: 560px) { .fk-facts li { grid-template-columns: 1fr; gap: 2px; } }
+    .fk-form { display: grid; gap: 18px; margin-top: 18px; }
+    .fk-form fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; margin: 0; display: grid; gap: 14px; min-width: 0; }
     .fk-form legend { font-weight: 800; color: var(--navy); padding: 0 6px; }
-    .fk-field { display: grid; gap: 6px; }
+    .fk-field { display: grid; gap: 6px; min-width: 0; }
     .fk-field label { font-weight: 700; color: var(--navy); }
     .fk-field .hint { font-size: 14px; color: var(--muted); margin: 0; }
     .fk-field input, .fk-field textarea { font: inherit; width: 100%; padding: 11px 13px; border: 2px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
@@ -38,11 +49,39 @@
     .fk-status { margin: 0; font-weight: 600; }
     .fk-status.ok { color: var(--green); }
     .fk-status.bad { color: var(--red); }
-    .fk-download { border: 2px solid var(--green); border-radius: var(--radius); padding: 20px 22px; margin: 0 0 26px; background: #F1FAF5; }
-    .fk-download h2 { margin: 0 0 6px; font-size: 22px; }
-    .fk-download p { margin: 0 0 14px; }
+    .fk-download { border: 2px solid var(--green); background: #F1FAF5; }
+    .fk-download .fk-actions { margin-top: 14px; }
+    .fk-needs { border: 2px solid #F3C98B; background: #FFFAF0; }
+    .fk-slot { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid #F3DDB8; }
+    .fk-slot:first-of-type { border-top: 0; }
+    .fk-slot .for { font-size: 14px; color: var(--muted); margin: 0; }
+    .fk-jobs { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; counter-reset: job; }
+    .fk-job { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; background: #fff; min-width: 0; }
+    .fk-job h3 { margin: 0; font-size: 19px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .fk-job h3::before { counter-increment: job; content: counter(job); flex: none; display: inline-grid; place-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 15px; }
+    .fk-tech { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 10px; }
+    .fk-opt { font-size: 13px; font-weight: 700; color: var(--muted); background: var(--wash); border-radius: 999px; padding: 2px 10px; }
+    .fk-job p { margin: 0 0 8px; }
+    .fk-job .who { font-size: 14px; color: var(--muted); }
+    .fk-platform { background: var(--wash); border-radius: 8px; padding: 10px 14px; margin: 0 0 8px; overflow-wrap: anywhere; }
+    .fk-platform ul { margin: 4px 0 8px; padding-left: 20px; }
+    .fk-platform p { margin: 0 0 4px; }
+    .fk-job details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+    .fk-job summary { cursor: pointer; font-weight: 700; color: var(--blue); }
+    .fk-job pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; background: var(--wash); border-radius: 8px; padding: 12px 14px; margin: 10px 0 0; max-height: 420px; overflow: auto; }
+    .fk-qa { margin: 10px 0 0; display: grid; gap: 12px; }
+    .fk-qa div { border-left: 3px solid var(--line); padding-left: 12px; }
+    .fk-qa div.todo { border-left-color: #F3C98B; }
+    .fk-qa strong { display: block; color: var(--navy); }
+    .fk-qa p { margin: 2px 0 0; }
+    .fk-qa mark { background: #FFF1D6; color: var(--amber); font-weight: 600; padding: 0 2px; }
+    .fk-tag { font-size: 12px; font-weight: 700; color: var(--red); background: #FDECEA; border-radius: 999px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; }
+    .fk-done { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+    .fk-done li::before { content: "✓ "; color: var(--green); font-weight: 800; }
+    .fk-qr { width: 140px; height: 140px; margin-top: 10px; }
     .fk-list { margin: 8px 0 0; padding-left: 22px; }
     .fk-list li { margin-bottom: 6px; }
+    .fk-section { margin: 34px 0 14px; }
     [hidden] { display: none !important; }
   </style>
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
@@ -71,7 +110,7 @@
 <main class="fk">
   <div class="wrap narrow">
     <div data-state="loading">
-      <p>Loading your details…</p>
+      <p>Building your Fix Kit…</p>
     </div>
 
     <div data-state="notfound" hidden>
@@ -91,20 +130,20 @@
       <p>Reload the page in a minute. If it keeps happening, email <a href="mailto:hello@aifoundscore.com?subject=Fix%20Kit">hello@aifoundscore.com</a>.</p>
     </div>
 
-    <div data-state="form" hidden>
-      <h1>Your Fix Kit</h1>
-      <p class="lede-page">Ready-to-install files that help AI assistants and Google get your business right. Check your details, confirm them, then download the kit and hand it to whoever looks after your website.</p>
+    <div data-state="kit" hidden>
+      <h1>Your Fix Kit is ready</h1>
+      <p class="lede-page">We built these files for <strong data-biz-name>your business</strong> from your website and your report. Check the details, tick the box and download. Then hand the folder to whoever runs your website.</p>
 
-      <div class="fk-download" data-download hidden>
-        <h2>Your Fix Kit is ready</h2>
-        <p data-download-note>Built from the details below. Change anything and confirm again to get a fresh copy.</p>
-        <a class="btn" data-download-link href="#" download>Download your Fix Kit</a>
-      </div>
+      <p class="fk-note sample" data-sample-note hidden>This is the sample. You can try everything here, but the download always uses the sample business's details.</p>
 
-      <p class="fk-note sample" data-sample-note hidden>This is the sample. You can try the form, but the download always uses the sample business's details.</p>
-      <p class="fk-note">Check every detail. We only use what you confirm here.</p>
+      <section class="fk-box" aria-labelledby="fk-check-h">
+        <h2 id="fk-check-h">Check these <span data-fact-count>6</span> details</h2>
+        <p>We built this from your website and your report. If something is wrong or missing, fix it here and the kit is rebuilt.</p>
+        <ul class="fk-facts" data-facts></ul>
+        <button class="btn-secondary" type="button" data-edit>Edit details</button>
 
-      <form class="fk-form" novalidate>
+        <form class="fk-form" novalidate hidden>
+
         <fieldset>
           <legend>Your business</legend>
           <div class="fk-field" data-field="name">
@@ -176,6 +215,12 @@
             <input id="fk-hours" name="hours" type="text" maxlength="300">
             <p class="fk-err"></p>
           </div>
+          <div class="fk-field" data-field="price">
+            <label for="fk-price">Prices (optional)</label>
+            <p class="hint">Only a price you publish, like: $89 service call, free quotes on installs. It goes in your pricing answer.</p>
+            <input id="fk-price" name="price" type="text" maxlength="160">
+            <p class="fk-err"></p>
+          </div>
           <div class="fk-field" data-field="description">
             <label for="fk-description">Short description</label>
             <p class="hint">A sentence or two about your business, in your words. <span data-count>0</span> of 750 characters.</p>
@@ -199,31 +244,56 @@
             <p class="fk-err"></p>
           </div>
         </fieldset>
+          <div class="fk-actions">
+            <button class="btn" type="submit">Save and rebuild my kit</button>
+            <button class="btn-secondary" type="button" data-cancel>Cancel</button>
+            <p class="fk-status" data-form-status role="status" aria-live="polite"></p>
+          </div>
+        </form>
+      </section>
 
+      <section class="fk-box fk-download" aria-labelledby="fk-dl-h">
+        <h2 id="fk-dl-h">Download your kit</h2>
+        <p data-dl-note>Every file below, with a one-page guide for whoever runs your website. Nothing changes on your website until someone puts the files in place.</p>
         <div class="fk-field" data-field="confirm">
-          <label class="fk-confirm"><input type="checkbox" name="confirm"> I own or manage this business and these details are correct.</label>
+          <label class="fk-confirm"><input type="checkbox" name="confirm" data-confirm> I own or manage this business and these details are correct.</label>
           <p class="fk-err"></p>
         </div>
-
         <div class="fk-actions">
-          <button class="btn" type="submit">Confirm my details</button>
-          <p class="fk-status" role="status" aria-live="polite"></p>
+          <button class="btn" type="button" data-download>Download my Fix Kit</button>
+          <p class="fk-status" data-dl-status role="status" aria-live="polite"></p>
         </div>
-      </form>
+      </section>
 
-      <h2 style="margin-top:40px">What's in the kit</h2>
-      <ul class="fk-list">
-        <li><strong>robots.txt</strong>: lets ChatGPT, Claude, Perplexity, Gemini, Google and Bing read your website.</li>
-        <li><strong>llms.txt</strong>: a plain summary of your business written for AI assistants.</li>
-        <li><strong>Business schema</strong>: your name, phone, address and service area in the code format Google reads.</li>
-        <li><strong>FAQ page</strong>: answers to the questions people ask AI about businesses like yours.</li>
-        <li><strong>Google Business Profile text</strong>: description, categories, services and service areas to copy in.</li>
-        <li><strong>Review QR code</strong>: if you add your review link, a code to print on invoices and cards.</li>
-        <li><strong>README</strong>: where each file goes, in plain words.</li>
-        <li data-plan-only hidden><strong>Directory checklist</strong>: 30+ sites, each with its link, and the exact text to paste.</li>
-        <li data-plan-only hidden><strong>12 Google posts</strong>: one a month, ready to paste.</li>
-      </ul>
-      <p data-plan-only hidden><a class="btn-secondary" data-plan-link href="/">Back to your Be the Answer plan</a></p>
+      <section class="fk-box fk-needs" id="fk-needs" data-needs hidden aria-labelledby="fk-needs-h">
+        <h2 id="fk-needs-h"><span data-needs-count>0</span> need one detail from you</h2>
+        <p>AI picked other businesses for things only you can tell it, like <span data-needs-why>what you specialize in</span>. Write one true sentence for each. We put it into the answer. Any you leave blank stay out of the code until you fill them in.</p>
+        <div data-slots></div>
+        <div class="fk-actions">
+          <button class="btn" type="button" data-save-slots>Add to my answers</button>
+          <p class="fk-status" data-slots-status role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <h2 class="fk-section">What&rsquo;s in your kit, in order</h2>
+      <p>Only the jobs that help your business. Open any file to see exactly what&rsquo;s in it.</p>
+      <p class="fk-platform-line" data-platform-line hidden></p>
+      <ol class="fk-jobs" data-jobs></ol>
+
+      <div data-done-wrap hidden>
+        <h2 class="fk-section">Already done on your website</h2>
+        <ul class="fk-done" data-done></ul>
+      </div>
+
+      <div data-plan-only hidden>
+        <h2 class="fk-section">With your Be the Answer plan</h2>
+        <ul class="fk-list">
+          <li><strong>Directory checklist</strong>: 30+ sites, each with its link, and the exact text to paste.</li>
+          <li><strong>12 Google posts</strong>: one a month, ready to paste.</li>
+        </ul>
+        <p>Both are in the download.</p>
+        <p><a class="btn-secondary" data-plan-link href="/">Back to your Be the Answer plan</a></p>
+      </div>
     </div>
   </div>
 </main>

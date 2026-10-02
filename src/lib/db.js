@@ -454,8 +454,11 @@ function supaService(env) {
  * report_unlocked(), so a sandbox checkout can be tried end to end.
  */
 export async function getPaidTiers(env, token) {
-  const s = supaService(env);
-  const rows = await getPayments(env, token);
+  return paidTiersFrom(await getPayments(env, token));
+}
+
+/** The tiers paid for, from getPayments() rows (add-ons included). */
+export function paidTiersFrom(rows) {
   const tiers = new Set();
   for (const p of rows) {
     const t = p.tier && p.tier !== 'unknown' ? p.tier : TIER_BY_CENTS[p.amount_cents];
@@ -465,10 +468,10 @@ export async function getPaidTiers(env, token) {
   return [...tiers];
 }
 
-/** Every payment on a report token that isn't refunded in full: [{ tier, amount_cents, addons, livemode }]. Service key. */
+/** Every payment on a report token that isn't refunded in full: [{ tier, amount_cents, addons, livemode, paid_at }]. Service key. */
 export async function getPayments(env, token) {
   const s = supaService(env);
-  const res = await fetch(`${s.base}/${TABLES.PAYMENTS}?report_token=eq.${encodeURIComponent(token)}&revoked_at=is.null&select=tier,amount_cents,addons,livemode`, { headers: s.headers });
+  const res = await fetch(`${s.base}/${TABLES.PAYMENTS}?report_token=eq.${encodeURIComponent(token)}&revoked_at=is.null&select=tier,amount_cents,addons,livemode,paid_at`, { headers: s.headers });
   if (!res.ok) throw new Error(`Supabase GET payments failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
   return res.json();
 }

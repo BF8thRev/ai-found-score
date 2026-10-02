@@ -295,12 +295,15 @@ async function runLivePreview(root, live) {
 // The header button. On a report page "Get my free report" is redundant: it becomes "Check another business".
 // The report page's header carries one button, by state (public/report.html): the $49 audit on a real
 // report that has the offer, "Get my free report" on an example, nothing otherwise (pending, paid, no
-// offer). After the top band scrolls away it also shows the business and score. Phones use the bottom
+// offer). Paid reports and samples also get Share and Save as PDF there (icons only on phones). After the top band scrolls away it also shows the business and score. Phones use the bottom
 // bar instead (CSS hides this button there).
 function setHeaderForReport(root, report) {
   const cta = document.querySelector('.site-header [data-hdr-cta]');
   const ctx = document.querySelector('.site-header [data-hdr-ctx]');
+  const tools = document.querySelector('.site-header [data-hdr-tools]');
   const band = root.querySelector('[data-offer-band]');
+  // Share and Save as PDF: on paid reports and samples (a free report's header keeps its one button).
+  if (tools) tools.hidden = !!report.locked || report.version !== 2;
   if (cta) {
     if (isDemoReport(report)) {
       cta.textContent = 'Get my free report';
@@ -577,6 +580,8 @@ function xrayOffer(lead = '', { breakdown = true } = {}) {
 // Be the Answer, offered on every paid report that isn't on the plan (the 30-day re-check is the
 // moment it lands best). Checkout prices it at $499 minus what this report has already paid.
 function recheckOffer(report) {
+  // Not on sale: no pitch at all (a "Tell me when it opens" box on a paid page reads like a paywall).
+  if (!tierOn('be_the_answer')) return '';
   const subject = encodeURIComponent('Be the Answer: ' + (report.business?.name || ''));
   return `
     <div class="r2-upsell">
@@ -587,15 +592,47 @@ function recheckOffer(report) {
     </div>`;
 }
 
-// The Fix Kit comes with every paid audit (src/lib/fix-kit.js FIX_KIT_TIERS): the owner confirms
-// their details on /fix-kit/<token> and downloads the files. Only on paid reports.
+// The free 30-day re-check that comes with the audit (src/lib/auto-scan.js 'recheck', emailed by
+// src/lib/email.js). The Worker sends `recheckOn` (first live audit payment + 30 days) when it knows it.
+// Not on a re-check report itself (it has a baseline), a sample, or a Be the Answer plan (monthly).
+function recheckCard(report) {
+  if (report.baseline || report.plan || isDemoReport(report)) return '';
+  const due = report.recheckOn ? new Date(report.recheckOn) : null;
+  const ok = due && !Number.isNaN(due.getTime());
+  const when = !ok
+    ? 'About 30 days after you bought your audit, we’ll ask AI the same questions again and email you what changed.'
+    : due.getTime() > Date.now()
+      ? `On ${escapeHtml(fmtDate(report.recheckOn))}, we’ll ask AI the same questions again and email you what changed.`
+      : 'It’s due now: we’re asking AI the same questions again and will email you what changed.';
+  return `
+    <div class="r2-recheck">
+      <h3>Your free re-check</h3>
+      <p>${when} It’s included with your audit; there’s nothing to buy or book.</p>
+    </div>`;
+}
+
+// The website files the Fix Kit holds for this business (src/lib/fix-kit.js buildKit): no robots.txt when
+// AI can already read the site, no llms.txt when the site has one.
+function kitFilesText(report) {
+  const sc = report.siteCheck || {};
+  const checked = sc.reachable === true;
+  const blocked = checked && sc.robots && Array.isArray(sc.robots.blocked) ? sc.robots.blocked.length : 0;
+  const parts = ['your Questions page, written from the questions AI was asked', 'the business code that tells AI your name and contact details'];
+  if (!checked || blocked) parts.push('a file that lets AI tools read your site (robots.txt)');
+  if (!(checked && sc.llmsTxt === true)) parts.push('a short summary written for AI tools (llms.txt, optional)');
+  parts.push('a one-page guide for whoever runs your website');
+  return listJoin(parts);
+}
+
+// The Fix Kit comes with every paid audit (src/lib/fix-kit.js FIX_KIT_TIERS): the owner checks the
+// files on /fix-kit/<token> and downloads them. Only on paid reports without an action plan.
 function fixKitIncluded(report) {
   // A Be the Answer town report shares its plan's Fix Kit.
   const kitUrl = '/fix-kit/' + encodeURIComponent(String((report.plan && report.plan.token) || report.id || ''));
   return `
     <div class="cta-band r2-xray-offer">
       <h2>Your Fix Kit is included.</h2>
-      <p>You check your business details, and we build the files for you: robots.txt, llms.txt, schema code, an FAQ page, your Google profile text and a review QR code, with a one-page guide for whoever runs your website.</p>
+      <p>The files are built for you from this report: ${kitFilesText(report)}, plus your Google profile text. Check them, then send them on.</p>
       <p><a class="btn big" href="${kitUrl}">Get my Fix Kit</a></p>
     </div>`;
 }
@@ -603,34 +640,62 @@ function fixKitIncluded(report) {
 // The paid report's first section: every fix as one ordered checklist, biggest impact first
 // (shared/action-plan.js, built by the Worker and sent only when paid). Each step says why it
 // matters and who does it; "How to do it" holds the steps and the text to paste. Ticks and the
-// progress count are saved in this browser. The Fix Kit link sits at the top: it's already paid for.
+// progress count are saved in this browser. "Do these this week" sits above the list; steps the Fix
+// Kit covers say so, and one card after the last step hands the website files to the web person.
 const AP_IMPACT = { high: 'Biggest impact', medium: 'Next', low: 'Quick extra' };
 const AP_WHO = { you: 'You can do this', web: 'For whoever runs your website', both: 'You, with your web person' };
-function actionPlanV2(report) {
+// The plan's steps, the ticks saved in this browser, and "Do these 3 this week" (the first steps, biggest
+// impact first, the owner can finish this week and hasn't ticked). Shared by the plan and the result box.
+function planState(report) {
   const plan = report.xray && report.xray.actionPlan;
   const items = ((plan && plan.items) || []).filter((i) => i && i.title && i.id);
-  if (!items.length) return '';
-  const name = (report.business && report.business.name) || 'your business';
   const key = 'afs_plan_' + String(report.id || '');
   let ticked = {};
   try { ticked = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { ticked = {}; }
+  const week = items.map((i, n) => ({ i, n })).filter((x) => x.i.week && !ticked[x.i.id]).slice(0, 3);
+  return { items, key, ticked, week };
+}
+
+function actionPlanV2(report) {
+  const { items, key, ticked, week } = planState(report);
+  if (!items.length) return '';
+  const name = (report.business && report.business.name) || 'your business';
   const done = items.filter((i) => ticked[i.id]).length;
   const firstOpen = items.findIndex((i) => !ticked[i.id]);
   const pct = (n) => Math.round((100 * n) / items.length);
   const kitUrl = '/fix-kit/' + encodeURIComponent(String((report.plan && report.plan.token) || report.id || ''));
-  const kit = isDemoReport(report) ? '' : `
-      <div class="ap-kit">
-        <p><strong>Your Fix Kit is ready, and it’s included.</strong> Confirm your details once and we build the files several steps below ask for (FAQ code, business code, llms.txt, your Google text), with a one-page guide for whoever runs your website.</p>
-        <a class="btn" href="${kitUrl}">Open my Fix Kit</a>
-      </div>`;
+  const demo = isDemoReport(report);
   const TYPE_LABEL = { award: 'Industry list', article: 'Article', unsure: 'Other' };
   const WHO_TAG = { web: 'Web person', both: 'You + web person' };
+  // Time and cost for one step: "Under half an hour per site · No cost for a basic profile".
+  const effort = (i) => [i.time, i.cost].filter((x) => typeof x === 'string' && x).map(escapeHtml).join(' · ');
+  const weekBlock = week.length ? `
+      <div class="ap-week" id="this-week">
+        <h3>Do ${week.length === 1 ? 'this' : `these ${week.length}`} this week</h3>
+        <ol>${week.map(({ i, n }) => `
+          <li><a href="#step-${n + 1}">${escapeHtml(i.title)}</a><span>${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}${effort(i) ? ` · ${effort(i)}` : ''}</span></li>`).join('')}
+        </ol>
+      </div>` : '';
+  // Each site's status from the scan's own read of the page: not on it (with the directory's "add your
+  // company" page when we know it), listed (with the profile we saw), or not checked (with why, when known).
+  const office = report.xray && report.xray.actionPlan && report.xray.actionPlan.kind === 'professional';
+  const SITE_BADGE = { missing: ['mismatch', 'You’re not on it'], listed: ['match', 'You’re listed — check the details'], check: ['low', 'Not checked yet'] };
+  const siteExtra = (s) => {
+    if (s.status === 'missing' && s.addUrl) return ` <a class="ap-add" href="${safeHref(s.addUrl)}" rel="nofollow noopener" target="_blank">Add your ${office ? 'company' : 'business'}</a>`;
+    if (s.status === 'check' && s.reason) return ` <span class="r2-muted">(${escapeHtml(s.reason)})</span>`;
+    return '';
+  };
   const sites = (list) => ((list || []).length ? `
-          <ul class="ap-sites">${list.map((s) => `<li><span class="badge ${s.status === 'missing' ? 'mismatch' : 'low'}">${s.status === 'missing' ? 'Not on it' : 'Check'}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`).join('')}</ul>` : '');
+          <ul class="ap-sites">${list.map((s) => { const [cls, label] = SITE_BADGE[s.status] || SITE_BADGE.check; const href = s.status === 'listed' && s.profileUrl ? s.profileUrl : s.url; return `<li><span class="badge ${cls}">${label}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(href)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${siteExtra(s)}${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`; }).join('')}</ul>` : '');
   // Wired once the page is in the DOM: save a tick, strike the step through, update the count.
   setTimeout(() => {
     const root = typeof document.getElementById === 'function' ? document.getElementById('action-plan') : null;
     if (!root) return;
+    // "Do these this week" links open the step they point to.
+    root.querySelectorAll('.ap-week a[href^="#step-"]').forEach((a) => a.addEventListener('click', () => {
+      const row = root.querySelector(`${a.getAttribute('href')} details`);
+      if (row) row.open = true;
+    }));
     root.querySelectorAll('input[data-ap]').forEach((box) => box.addEventListener('change', () => {
       let cur = {};
       try { cur = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { cur = {}; }
@@ -659,8 +724,8 @@ function actionPlanV2(report) {
     <section class="report-section ap" id="action-plan" aria-label="Your action plan">
       <h2>Your action plan</h2>
       <p class="sub">${items.length} ${plural(items.length, 'step', 'steps')} to get ${escapeHtml(name)} named by AI, biggest impact first. Tap a step to see why and how; tick it when it’s done.</p>
+      ${weekBlock}
       <div class="ap-progress"><span><b data-ap-count>${done}</b> of ${items.length} done</span><div class="ap-bar" aria-hidden="true"><i style="width:${pct(done)}%"></i></div></div>
-      ${kit}
       <ol class="ap-list">${items.map((i, n) => `
         <li class="ap-item${ticked[i.id] ? ' done' : ''}" id="step-${n + 1}">
           <label class="ap-tick"><input type="checkbox" data-ap="${escapeHtml(i.id)}"${ticked[i.id] ? ' checked' : ''} aria-label="Step ${n + 1} done"></label>
@@ -671,18 +736,45 @@ function actionPlanV2(report) {
               <span class="badge ${escapeHtml(i.impact)}">${escapeHtml(AP_IMPACT[i.impact] || AP_IMPACT.medium)}</span>
             </summary>
             <div class="ap-body">
-              <p class="ap-who">${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}</p>
+              <p class="ap-who">${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}${effort(i) ? `<span class="ap-effort"> · ${effort(i)}</span>` : ''}</p>
               ${i.why ? `<p class="ap-why"><b>Why it matters:</b> ${escapeHtml(i.why)}</p>` : ''}
               ${sites(i.sites)}
+              ${builtOn(i.platform)}
               ${(i.steps || []).length ? `<p class="ap-how-k">How to do it</p><ol class="r2-steps">${i.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}
               ${copyBlocksV2(i.copyText)}
-              ${i.kitNote && !isDemoReport(report) ? `<p class="ap-kitnote">${escapeHtml(i.kitNote)} <a href="${kitUrl}">Open my Fix Kit</a></p>` : ''}
+              ${i.kitNote && !demo ? `<p class="ap-kitnote">${escapeHtml(i.kitNote)} <a href="${kitUrl}">Open my Fix Kit</a></p>` : ''}
             </div>
           </details>
         </li>`).join('')}
       </ol>
+      ${demo ? '' : kitCard(report, kitUrl)}
       <p class="r2-muted ap-foot">Below this plan: the evidence behind it (what AI said, who it named, and what we found on your website).</p>
     </section>`;
+}
+
+// "Your site is built on Wix." with Wix's own help pages for the step (shared/platforms.js guideLinks).
+function builtOn(p) {
+  const guides = ((p && p.guides) || []).filter((g) => g && g.url && g.label);
+  if (!p || !p.name || !guides.length) return '';
+  return `<p class="ap-platform">Your site is built on ${escapeHtml(p.name)}, so the steps below are for ${escapeHtml(p.name)}. ${guides.map((g) => `<a href="${safeHref(g.url)}" rel="noopener" target="_blank">${escapeHtml(g.label)}</a>`).join(' · ')}</p>`;
+}
+
+// After the last step: the website work in one hand-off. The Fix Kit files are built for the owner to
+// check; "Email it to my web person" opens the owner's own mail app (a mailto: link, nothing is sent by
+// us, and no address of theirs goes in the link).
+function kitCard(report, kitUrl) {
+  const name = (report.business && report.business.name) || 'our business';
+  const link = 'https://aifoundscore.com' + kitUrl;
+  const subject = `Website files for ${name}`;
+  const built = report.xray && report.xray.actionPlan && report.xray.actionPlan.platform && report.xray.actionPlan.platform.name;
+  const body = `Hi,\n\nHere are the files for our website. Please add them as the one-page guide inside explains, so AI assistants can read who we are and what we do:\n\n${link}\n\n${built ? `Our site is built on ${built}, so the guide says where each one goes in ${built}.\n\n` : ''}Thanks!`;
+  const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return `
+      <div class="ap-kitcard">
+        <h3>Hand the website work to your web person</h3>
+        <p>Your Fix Kit has the website files built for you from this report: ${kitFilesText(report)}. Check them, then send them on. Your Google profile text is in there too; that one is for you to paste in.</p>
+        <p class="ap-kitcard-btns"><a class="btn" href="${kitUrl}">Open my Fix Kit</a> <a class="btn-secondary" href="${escapeHtml(mailto)}">Email it to my web person</a></p>
+      </div>`;
 }
 
 // Be the Answer: this report is on a plan. Link to the plan page (towns, directory checklist, Google posts).
@@ -719,12 +811,17 @@ function tierOn(tier) {
   return typeof window.tierOffered === 'function' ? window.tierOffered(tier) : false;
 }
 
-// Share + Save as PDF, and the copy buttons on fix steps. One delegated listener.
-function reportTools() {
+// Share + Save as PDF: in the header (public/report.html [data-hdr-tools], shown on paid reports and
+// samples), by the result (same reports) and at the bottom of every report. One delegated listener on the
+// document handles all of them and the copy buttons on fix steps.
+const ICON_SHARE = '<svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M12 15V3M7 8l5-5 5 5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_PDF = '<svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M12 11v6M9 14l3 3 3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function reportTools(where = 'bottom') {
+  const top = where === 'top';
   return `
-    <div class="r2-tools" role="group" aria-label="Share or save this report">
-      <button type="button" class="btn-secondary" data-action="share">Share this report</button>
-      <button type="button" class="btn-secondary" data-action="print">Save as PDF</button>
+    <div class="r2-tools${top ? ' r2-tools-top' : ''}" role="group" aria-label="Share or save this report" data-tools="${top ? 'top' : 'bottom'}">
+      <button type="button" class="btn-secondary" data-action="share" aria-haspopup="dialog">${top ? `${ICON_SHARE}<span>Share<span class="wide"> with your team</span></span>` : 'Share this report'}</button>
+      <button type="button" class="btn-secondary" data-action="print">${top ? `${ICON_PDF}<span>Save as PDF</span>` : 'Save as PDF'}</button>
       <span class="r2-tools-status" role="status"></span>
     </div>`;
 }
@@ -761,11 +858,146 @@ function restoreAfterPrint() {
   document.querySelectorAll('details[data-print-opened]').forEach((d) => { d.open = false; delete d.dataset.printOpened; });
 }
 
+// The PDF's file name: browsers name a saved PDF after the page title, so while printing the title is
+// "AI Found Score - Harbor Lane PR - Oct 1 2026" (no characters a file name can't hold).
+function printTitle(report) {
+  const clean = (x) => String(x).replace(/&/g, ' and ')
+    .replace(/[\\/:*?"<>|#%{}$!'`~^=+@;[\]\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ').trim().slice(0, 80).replace(/[. ]+$/, '');
+  const name = clean((report.business && report.business.name) || 'report') || 'report';
+  const date = clean(fmtDate(report.generatedAt).replace(/,/g, ''));
+  return `AI Found Score - ${name}${date ? ` - ${date}` : ''}`;
+}
+
+// The line at the foot of every printed page (CSS page-margin boxes; browsers without them skip it,
+// and the print-end line closes the report either way).
+function printFooterCss(report) {
+  const name = (report.business && report.business.name) || 'your business';
+  const date = fmtDate(report.generatedAt);
+  const q = (s) => '"' + String(s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  const font = 'font-family: Inter, Arial, sans-serif; font-size: 8pt; color: #555;';
+  return `@page { @bottom-left { content: ${q(`aifoundscore.com · Report for ${name}${date ? ` · checked ${date}` : ''}`)}; ${font} } `
+    + `@bottom-right { content: "Page " counter(page) " of " counter(pages); ${font} } }`;
+}
+
+// Shared by email: the report link and one line on what it is. Only the report link goes in it.
+function shareMailto(report, url) {
+  const name = (report.business && report.business.name) || 'our business';
+  const plan = !report.locked && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
+  const what = `what AI assistants like ChatGPT say when customers ask, who they mention, and ${plan ? 'our plan to get mentioned' : 'what to fix first'}`;
+  const body = `Hi,\n\nHere’s the AI Found Score report for ${name}: ${what}.\n\n${url}\n\nAnyone with this link can see the report, so please keep it within the team.`;
+  return `mailto:?subject=${encodeURIComponent(`AI Found Score report for ${name}`)}&body=${encodeURIComponent(body)}`;
+}
+
+// Analytics for the tools: where the button was and what kind of report. Never the report token.
+function trackTool(event, data) {
+  try { if (window.dataLayer) window.dataLayer.push({ event, ...data }); } catch { /* ignore */ }
+}
+
+// Phones and tablets get the system share sheet; computers get the small share box (copy link, email).
+function useShareSheet() {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return false;
+  try { return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches; } catch { return false; }
+}
+
+let sharePop = null;
+function closeSharePop(focusBack = true) {
+  if (!sharePop) return;
+  const { el, opener, off } = sharePop;
+  sharePop = null;
+  off();
+  el.remove();
+  opener.setAttribute('aria-expanded', 'false');
+  if (focusBack && typeof opener.focus === 'function') opener.focus();
+}
+function placeSharePop(el, btn) {
+  const r = btn.getBoundingClientRect();
+  const vw = (document.documentElement && document.documentElement.clientWidth) || window.innerWidth || 360;
+  const vh = window.innerHeight || 640;
+  const w = Math.min(360, vw - 32);
+  // From the sticky header the box stays with the header; elsewhere it scrolls with the page.
+  const fixed = !!btn.closest('.site-header');
+  const sx = fixed ? 0 : (window.scrollX || 0);
+  const sy = fixed ? 0 : (window.scrollY || 0);
+  el.style.position = fixed ? 'fixed' : 'absolute';
+  el.style.width = `${w}px`;
+  el.style.left = `${Math.max(16, Math.min(r.right - w, vw - w - 16)) + sx}px`;
+  const h = el.offsetHeight || 0;
+  const below = r.bottom + 8;
+  el.style.top = `${(below + h > vh && r.top - 8 - h > 0 ? r.top - 8 - h : below) + sy}px`;
+}
+function openSharePop(btn, report, track) {
+  const again = sharePop && sharePop.opener === btn;
+  closeSharePop(false);
+  if (again) return; // a second click on the same button closes it
+  const url = reportUrl();
+  const el = document.createElement('div');
+  el.className = 'share-pop';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Share this report');
+  el.innerHTML = `
+    <button type="button" class="share-pop-x" data-share="close" aria-label="Close">×</button>
+    <p class="share-pop-h">Share this report</p>
+    <p class="share-pop-note">Anyone with this link can see the report, so send it only to people you’d show it to.</p>
+    <input class="share-pop-url" type="text" readonly value="${escapeHtml(url)}" aria-label="Link to this report">
+    <div class="share-pop-btns">
+      <button type="button" class="btn" data-share="copy">Copy link</button>
+      <a class="btn-secondary" data-share="email" href="${escapeHtml(shareMailto(report, url))}">Email to a teammate</a>
+    </div>
+    <p class="share-pop-status" role="status"></p>`;
+  document.body.appendChild(el);
+  placeSharePop(el, btn);
+  el.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-share]');
+    if (!t) return;
+    if (t.dataset.share === 'close') { closeSharePop(); return; }
+    if (t.dataset.share === 'email') { track('email'); return; } // the mail app opens from the link itself
+    if (t.dataset.share === 'copy') {
+      const ok = await copyText(url);
+      track('copy_link');
+      const st = el.querySelector('.share-pop-status');
+      if (st) st.textContent = ok ? 'Link copied. Paste it into an email or a chat.' : 'Select the link above and copy it.';
+      if (!ok) el.querySelector('.share-pop-url')?.select?.();
+    }
+  });
+  const onKey = (e) => { if (e.key === 'Escape') closeSharePop(); };
+  const onDown = (e) => { if (!el.contains(e.target) && !btn.contains(e.target)) closeSharePop(false); };
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('mousedown', onDown);
+  document.addEventListener('touchstart', onDown, { passive: true });
+  const off = () => {
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('mousedown', onDown);
+    document.removeEventListener('touchstart', onDown);
+  };
+  sharePop = { el, opener: btn, off };
+  btn.setAttribute('aria-expanded', 'true');
+  el.querySelector('[data-share="copy"]')?.focus?.();
+  track('menu');
+}
+
 function wireReportTools(root, report) {
-  const status = root.querySelector('.r2-tools-status');
-  const say = (msg) => { if (status) status.textContent = msg; };
-  root.addEventListener('click', async (e) => {
-    const btn = e.target.closest('button[data-action], button[data-copy]');
+  const kind = isDemoReport(report) ? 'sample' : report.locked ? 'free' : 'paid';
+  const whereOf = (btn) => (btn.closest('[data-hdr-tools]') ? 'header' : (btn.closest('[data-tools]')?.dataset.tools || 'bottom'));
+  // While printing: every section open, and the title the PDF is named after.
+  let titleWas = null;
+  const beforePrint = () => {
+    openAllForPrint();
+    if (titleWas == null) { titleWas = document.title; document.title = printTitle(report); }
+  };
+  const afterPrint = () => {
+    restoreAfterPrint();
+    if (titleWas != null) { document.title = titleWas; titleWas = null; }
+  };
+  try {
+    const style = document.createElement('style');
+    style.setAttribute('media', 'print');
+    style.setAttribute('data-print-footer', '');
+    style.textContent = printFooterCss(report);
+    document.head.appendChild(style);
+  } catch { /* no footer line: the print-end line still closes the report */ }
+  document.addEventListener('click', async (e) => {
+    const btn = e.target && typeof e.target.closest === 'function' ? e.target.closest('button[data-action], button[data-copy]') : null;
     if (!btn) return;
     if (btn.dataset.copy != null) {
       const text = COPY_STORE[Number(btn.dataset.copy)];
@@ -776,22 +1008,29 @@ function wireReportTools(root, report) {
       setTimeout(() => { btn.textContent = was; }, 1800);
       return;
     }
+    const where = whereOf(btn);
     if (btn.dataset.action === 'print') {
-      openAllForPrint();
+      closeSharePop(false);
+      trackTool('report_print', { where, report_kind: kind });
+      beforePrint();
       window.print();
       return;
     }
     if (btn.dataset.action === 'share') {
-      const url = reportUrl();
-      const title = `AI Found Score — ${report.business?.name || 'report'}`;
-      if (navigator.share) {
-        try { await navigator.share({ title, url }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
+      const track = (method) => trackTool('report_share', { method, where, report_kind: kind });
+      if (useShareSheet()) {
+        const name = (report.business && report.business.name) || 'your business';
+        try {
+          track('native');
+          await navigator.share({ title: `AI Found Score report for ${name}`, text: `AI Found Score report for ${name}`, url: reportUrl() });
+          return;
+        } catch (err) { if (err && err.name === 'AbortError') return; }
       }
-      say((await copyText(url)) ? 'Link copied. Paste it anywhere to share.' : url);
+      openSharePop(btn, report, track);
     }
   });
-  window.addEventListener('beforeprint', openAllForPrint);
-  window.addEventListener('afterprint', restoreAfterPrint);
+  window.addEventListener('beforeprint', beforePrint);
+  window.addEventListener('afterprint', afterPrint);
 }
 
 // Text behind each copy button (kept out of HTML attributes, so nothing needs escaping twice).
@@ -911,9 +1150,21 @@ const TRADE_PEOPLE = { plumbing: 'plumbers', roofing: 'roofers', painting: 'pain
 function tradePlural(trade) {
   const t = String(trade || 'business').toLowerCase();
   if (TRADE_PEOPLE[t]) return TRADE_PEOPLE[t];
-  if (/(s|sh|ch|x)$/.test(t)) return t + 'es';
-  if (/[^aeiou]y$/.test(t)) return t.slice(0, -1) + 'ies';
-  return t + 's';
+  if (/(s|sh|ch|x)$/.test(t)) return caseKind(t + 'es');
+  if (/[^aeiou]y$/.test(t)) return caseKind(t.slice(0, -1) + 'ies');
+  return caseKind(t + 's');
+}
+
+// Acronyms in a kind of business stay upper case: "PR agencies", "HVAC company". Mirror of ACRONYMS
+// in scanner/questions.js (the browser can't import it).
+const ACRONYMS = ['pr', 'hvac', 'it', 'cpa', 'seo', 'ppc', 'ac', 'hr', 'cbd', 'rv', 'ev', 'tv', 'av', 'msp', 'saas', 'ui', 'ux', 'llc', 'pc', 'diy', 'emt', 'ems', 'iv', 'uv', 'led', 'cnc', '3d', 'b2b'];
+const ACRONYM_RE = new RegExp(`\\b(${ACRONYMS.join('|')})\\b`, 'g');
+function caseKind(kind) { return String(kind || '').replace(ACRONYM_RE, (m) => m.toUpperCase()); }
+
+// An office business (an agency, a firm): the action plan says so (shared/action-plan.js kind,
+// from kindClass). Its pages get no van or storefront wording ("towns you serve", "the call").
+function isOffice(report) {
+  return !!(report && report.xray && report.xray.actionPlan && report.xray.actionPlan.kind === 'professional');
 }
 
 function computeTotalsV2(answers) {
@@ -1035,18 +1286,22 @@ function renderV2(root, report) {
   const missingSources = (report.sources || []).filter((s) => s.youListed === false);
   const missingCount = report.sourcesSummary ? num(report.sourcesSummary.missingYou) : missingSources.length;
 
+  // A paid report (or a sample) with an action plan: the plan replaces the fix list (see `order` below).
+  const hasPlan = !locked && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
   const sec = {
-    verdict: verdictV2(report, { t, N, cw, proven, zero, allNamed, b, engineList }),
+    verdict: verdictV2(report, { t, N, cw, proven, zero, allNamed, b, engineList, next: hasPlan ? verdictNextV2(report, { zero, allNamed }) : '' }),
+    topTools: locked ? '' : reportTools('top'),
     hero: heroV2(report, { answers, aById, qById, t, cw, engineList, proven, provenIds, zero, b }),
     baseline: baselineV2(report, t),
     plan: report.plan ? planPanel(report) : '',
     recheck: paid && !report.plan && !isDemoReport(report) ? recheckOffer(report) : '',
+    recheckCard: paid ? recheckCard(report) : '',
     strip: offerStripV2({ report, severity, xrayOk, count: issues.length }),
     who: nobodyTwice ? '' : whoAiNamesV2({ report, b, t, N, cw, proven }),
     sources: sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }),
     facts: factsV2({ report, b, aById }),
     site: siteV2(report),
-    listings: listingsV2({ listings, badListings }),
+    listings: listingsV2({ listings, badListings, report }),
     issues: issuesV2({ issues, locked, xrayOk, name: b.name, specificCount: specificFixCount, where: xrayOk ? fixWhereV2({ report, b }) : '' }),
     xray: xrayV2({ report, aById, cw, N }),
     breakdown: report.breakdown ? breakdownV2(report) : '',
@@ -1061,22 +1316,23 @@ function renderV2(root, report) {
   // A paid report with an action plan is a to-do list: the score, then the plan (which replaces the
   // fix list, the checklist and the Fix Kit band), then the evidence, and anything for sale last.
   // Sample reports show it too: they show a buyer exactly what the audit gives them.
-  const hasPlan = !locked && !!(report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length);
   sec.actionPlan = hasPlan ? actionPlanV2(report) : '';
   sec.breakdownUpsell = hasPlan ? breakdownUpsell(report) : '';
   const order = xrayOk
     ? ['verdict', 'who', 'strip', 'hero', 'baseline', 'plan', 'recheck', 'facts', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method']
     : hasPlan
-      ? ['verdict', 'baseline', 'plan', 'actionPlan', 'hero', 'who', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'breakdownUpsell', 'recheck', 'offer']
-      : ['verdict', 'hero', 'baseline', 'plan', 'recheck', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method'];
+      ? ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'hero', 'who', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell']
+      : ['verdict', 'topTools', 'hero', 'baseline', 'plan', 'who', 'sources', 'facts', 'site', 'listings', 'issues', 'recheckCard', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method', 'recheck'];
 
   root.innerHTML = [
+    printHeadV2(report, b),
     headerV2(report, b, scoreV2(report)),
     '<div class="wrap r2">',
     report.fullScanPending ? fullScanNote() : '',
     ...order.map((k) => sec[k]),
     xrayOk ? '' : bottomLead(report),
-    reportTools(),
+    reportTools('bottom'),
+    '<p class="print-only print-end">End of report. AI answers change; this is a snapshot from the date above. aifoundscore.com</p>',
     xrayOk ? stickyCtaV2(report) : '',
     '</div>',
   ].join('');
@@ -1115,6 +1371,29 @@ function headerV2(report, b, scoreHtml = '') {
         </div>
       </div>
     </section>`;
+}
+
+// Printed only (Save as PDF): a plain first-page header in place of the navy band. The PDF's file name
+// and per-page footer are set in wireReportTools.
+function printHeadV2(report, b) {
+  const sc = report.score;
+  const has = sc && Number.isFinite(Number(sc.score));
+  const n = has ? Math.max(0, Math.min(100, Math.round(Number(sc.score)))) : 0;
+  const pill = n >= 70 ? 'Strong' : n >= 40 ? 'Fair' : 'Low';
+  const where = [b.town || b.city, b.state].filter(Boolean).join(', ');
+  return `
+    <div class="print-only print-head">
+      <img src="/img/logo.svg" alt="AI Found Score" width="187" height="30">
+      <div class="print-head-row">
+        <div>
+          <p class="print-head-k">AI Found Score report</p>
+          <p class="print-head-name">${escapeHtml(b.name)}</p>
+          <p class="print-head-meta">Checked ${escapeHtml(fmtDate(report.generatedAt))}${where ? ` · ${escapeHtml(where)}` : ''}</p>
+        </div>
+        ${has ? `<p class="print-head-score"><b>${n}</b>/100 <span>${pill}</span></p>` : ''}
+      </div>
+      ${report.sample ? '<p class="print-head-note">Sample report: a fictional business, fictional competitors and made-up answers.</p>' : ''}
+    </div>`;
 }
 
 // Paid, and the full scan (every question, every assistant we have) is still running.
@@ -1170,7 +1449,7 @@ function N_TIMES(n) { return n === 1 ? '1 time' : `${n} times`; }
 // The 5-second answer, first on the page: one literal verdict line next to the AI Found Score.
 // "Named" is a literal name match in the answer text, so the line only says what the answers did.
 // The top competitor is the most-named business with proof (named in 2+ answers, provenEntities).
-function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineList = '' }) {
+function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineList = '', next = '' }) {
   if (!N) return '';
   const asked = N === 1 ? 'We asked AI once.' : `We asked AI ${N} times.`;
   const answers = report.answers || [];
@@ -1203,8 +1482,20 @@ function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineLis
         ${ask}
         <div class="r2-boxes" role="img" aria-label="${N_TIMES(N)} we asked: ${t.namedYou} mentioned you">${boxes}</div>
         <p class="r2-verdict-key">One box per answer: <b class="y">✓ mentioned you</b> <b class="n">✕ didn’t</b>${allUnsure || answers.some((a) => a.ownerMatch === 'unsure') ? ' <b class="u">? not sure</b>' : ''}</p>
+        ${next}
       </div>
     </section>`;
+}
+
+// Paid reports with an action plan: one line in the result box that points at what to do about it,
+// "Do these 3 this week" when there are steps for this week, else the plan itself.
+function verdictNextV2(report, { zero, allNamed }) {
+  const { week } = planState(report);
+  const lead = allNamed ? 'Here’s how to stay on top' : zero ? 'Here’s how to fix it, starting today' : 'Here’s how to get mentioned more, starting today';
+  const what = week.length
+    ? `${week.length === 1 ? '1 thing' : `${week.length} things`} to do this week`
+    : 'your action plan, biggest impact first';
+  return `<p class="r2-verdict-next"><a href="${week.length ? '#this-week' : '#action-plan'}">${lead}: ${what} <span aria-hidden="true">↓</span></a></p>`;
 }
 
 // The AI Found Score: computed by the Worker from this report's own answers
@@ -1215,7 +1506,15 @@ function scoreV2(report) {
   const n = Math.max(0, Math.min(100, Math.round(Number(sc.score))));
   const band = n >= 70 ? 'strong' : n >= 40 ? 'mixed' : 'weak';
   const pill = { strong: 'Strong', mixed: 'Fair', weak: 'Low' }[band];
-  const bandText = { strong: 'AI recommends you often.', mixed: 'AI recommends you sometimes.', weak: 'AI almost never recommends you.' }[band];
+  // Named in none of the answers: say exactly that, not "almost never".
+  const ans = report.answers || [];
+  const sure = ans.filter((a) => a && a.ownerMatch !== 'unsure').length;
+  const none = sure > 0 && !ans.some((a) => a && a.namedYou === true);
+  const bandText = none
+    ? `AI didn’t recommend you in any of the ${num(sure)} ${plural(sure, 'answer', 'answers')}${sure < ans.length ? ' we could check' : ''}.`
+    : { strong: 'AI recommends you often.', mixed: 'AI recommends you sometimes.', weak: 'AI almost never recommends you.' }[band];
+  // What good looks like: the bands themselves (Fair from 40, Strong from 70).
+  const target = { weak: 'Fair starts at 40. Strong is 70 and up.', mixed: 'Strong is 70 and up.', strong: '' }[band];
   const rows = sc.parts.map((p) => `
         <li><span class="k">${escapeHtml(p.label)}</span><span class="v">${escapeHtml(p.detail)}</span><span class="w">${num(Math.round(p.weight * p.value))} / ${num(p.weight)}</span></li>`).join('');
   return `
@@ -1224,6 +1523,7 @@ function scoreV2(report) {
       <p class="r2-sc-num"><b>${n}</b><span>/100</span><em class="r2-sc-pill">${pill}</em></p>
       <div class="r2-sc-meter" style="--n:${n}" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="r2-sc-scale" aria-hidden="true"><span>Low</span><span>Fair</span><span>Strong</span></div>
+      ${target ? `<p class="r2-sc-target">${target}</p>` : ''}
       <p class="r2-sc-verdict">${bandText}</p>
       <details class="r2-score-how">
         <summary>How we score</summary>
@@ -1286,7 +1586,7 @@ function whoAiNamesV2({ report, b, t, N, cw, proven }) {
   const once = (report.entities || []).filter((e) => !e.isYou && !provenIds.has(e.id)).length;
   return `
     <section class="report-section" id="who">
-      <h2>Who got the call instead</h2>
+      <h2>${isOffice(report) ? 'Who AI recommended instead' : 'Who got the call instead'}</h2>
       <p class="sub">Businesses AI recommended more than once. The dark part of each bar is how often it was the first pick.</p>
       <div class="r2-bars">
         ${row(b.name, t.namedYou, t.firstYou, true)}
@@ -1339,6 +1639,16 @@ function citedDomainsV2(answers, ownDomain) {
       <ul class="r2-cited">${domains.slice(0, 4).map((d) => `<li>${escapeHtml(d)}</li>`).join('')}</ul>`;
 }
 
+// Why a cited page couldn't be read for the owner's name (sources[].checkReason, scanner/extract/sources.js
+// CHECK_REASON_TEXT: the same words).
+const SOURCE_UNREAD = {
+  robots: 'the site asks crawlers not to read this page',
+  blocked: 'the site blocks automated checks',
+  error: 'the page didn’t load when we checked',
+  not_html: 'it isn’t a web page we can read',
+  empty: 'its list loads in a way we can’t read',
+};
+
 function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
   // Locked: the cited sites are the audit's; only the tally is sent (src/lib/lock.js).
   const sum = report.sourcesSummary;
@@ -1365,8 +1675,9 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
       ? '<span class="badge mismatch">You’re not listed</span>'
       : s.youListed === true
         ? `<span class="badge match">You’re listed${num(s.youPosition) ? ` at #${num(s.youPosition)}` : ''}</span>`
-        : '<span class="badge low">Not checked</span>';
+        : SOURCE_UNREAD[s.checkReason] ? '<span class="badge low">Couldn’t check</span>' : '<span class="badge low">Not checked</span>';
     const facts = [`Cited in ${s.lostIn.length} ${s.lostIn.length === 1 ? cw.one : cw.unit} that didn’t name you (${escapeHtml(listJoin(engs))}).`];
+    if (s.youListed == null && SOURCE_UNREAD[s.checkReason]) facts.push(`We couldn’t check it for your name: ${SOURCE_UNREAD[s.checkReason]}.`);
     if (s.topListed && s.topListed !== b.name) facts.push(`<strong>${escapeHtml(s.topListed)}</strong> is listed first on that page.`);
     if (s.youListed === false) facts.push(`${escapeHtml(b.name)} isn’t on it.`);
     return `
@@ -1386,7 +1697,7 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
       <h2>Why they got named instead</h2>
       <p class="sub">The sites the AI cited in the ${cw.unit} that didn’t name you, and whether you’re on them.</p>
       ${shown.map(card).join('')}
-      ${folded.length ? `<details class="r2-fold"><summary>${num(folded.length)} ${plural(folded.length, 'site', 'sites')} AI cited that we couldn’t read for listings</summary>${folded.map(card).join('')}</details>` : ''}
+      ${folded.length ? `<details class="r2-fold"><summary>${num(folded.length)}${shown.length ? ' more' : ''} ${plural(folded.length, 'site', 'sites')} AI read for these answers</summary><p class="r2-muted r2-fold-note">We haven’t checked these pages for your name yet. Nothing here needs doing now: the ones that look like lists you can join are already in your action plan.</p>${folded.map(card).join('')}</details>` : ''}
     </section>`;
 }
 
@@ -1471,21 +1782,43 @@ function factsV2({ report, b, aById }) {
 }
 
 // 7. Your listings: a possible reason. Same cards as v1.
-function listingsV2({ listings, badListings }) {
+// A listing we couldn't find at all (scanner/owner-checks.js compareListing: diffs ['missing']; older
+// reports only say so in the details): nothing there to disagree with.
+function listingMissing(l) {
+  if (!l || l.status !== 'mismatch') return false;
+  if (Array.isArray(l.diffs)) return l.diffs.includes('missing');
+  return !l.url && !Object.values(l.fields || {}).some(Boolean) && /couldn.t find/i.test(String(l.details || ''));
+}
+
+function listingsV2({ listings, badListings, report = {} }) {
   if (!listings.length) return '';
+  const office = isOffice(report);
+  const name = (report.business && report.business.name) || 'your business';
+  const missing = badListings.filter(listingMissing);
+  const google = (l) => /^google/i.test(String(l.platform || ''));
+  const notFound = (l) => (google(l)
+    ? (office ? `We couldn’t find a Google Business Profile for ${name}.` : `We couldn’t find ${name} on Google Maps.`)
+    : `We couldn’t find ${name} on ${l.platform}.`);
   const sub = badListings.length === 0
     ? (listings.length === 1 ? 'We found 1 listing, and it matches your website.' : `All ${listings.length} listings agree.`)
-    : `${badListings.length} of ${listings.length} listings need a fix. When your listings disagree, AI can repeat the wrong one.`;
+    : missing.length === badListings.length && listings.length === 1
+      ? escapeHtml(notFound(missing[0]))
+      : missing.length === badListings.length
+        ? `We couldn’t find you on ${escapeHtml(listJoin(missing.map((l) => l.platform)))}.`
+        : `${badListings.length} of ${listings.length} listings need a fix. When your listings disagree, AI can repeat the wrong one.`;
   return `
     <section class="report-section">
       <h2>Your listings</h2>
       <p class="sub">${sub}</p>
-      ${listings.map((l) => `
+      ${listings.map((l) => {
+        const gone = listingMissing(l);
+        return `
         <div class="listing-card">
-          <span class="badge ${l.status === 'match' ? 'match' : l.status === 'unchecked' ? 'found' : 'mismatch'}">${l.status === 'match' ? '✓ Correct' : l.status === 'unchecked' ? 'Found' : '✗ Needs a fix'}</span>
+          <span class="badge ${l.status === 'match' ? 'match' : l.status === 'unchecked' ? 'found' : 'mismatch'}">${l.status === 'match' ? '✓ Correct' : l.status === 'unchecked' ? 'Found' : gone ? '✗ Not found' : '✗ Needs a fix'}</span>
           <h3>${escapeHtml(l.platform)}</h3>
-          ${l.locked ? '' : `${l.details ? `<p>${escapeHtml(l.details)}</p>` : ''}${fields(l.fields)}`}
-        </div>`).join('')}
+          ${l.locked || gone ? '' : `${l.details ? `<p>${escapeHtml(l.details)}</p>` : ''}${fields(l.fields)}`}
+        </div>`;
+      }).join('')}
     </section>`;
 }
 
@@ -1512,7 +1845,8 @@ function siteV2(report) {
       ${listingLineV2(report.listings)}
     </section>`;
   }
-  const row = (ok, text) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span> ${text}</li>`;
+  // `noise`: a pass that tells the owner nothing (a sitemap, a page title): left out of the short list.
+  const row = (ok, text, noise = false) => `<li class="${ok ? 'ok' : 'bad'}${ok && noise ? ' noise' : ''}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span> ${text}</li>`;
   const blocked = (sc.robots && sc.robots.blocked) || [];
   const rows = !sc.reachable
     ? [row(false, 'We couldn’t load your website. AI can’t read a site that doesn’t load.')]
@@ -1523,9 +1857,27 @@ function siteV2(report) {
       row(!!(sc.schema && sc.schema.found), sc.schema && sc.schema.found ? 'Business details are marked up for search engines and AI (schema).' : 'No business markup (schema) that tells AI your name, phone and address.'),
       row(!!(sc.onSite && sc.onSite.phone), sc.onSite && sc.onSite.phone ? `Your phone number is on the page: ${escapeHtml(sc.onSite.phone)}.` : 'We couldn’t find your phone number on the page.'),
       row(!!(sc.onSite && sc.onSite.address), sc.onSite && sc.onSite.address ? `Your address is on the page: ${escapeHtml(sc.onSite.address)}.` : 'We couldn’t find your street address on the page.'),
-      row(!!sc.sitemap, sc.sitemap ? 'A sitemap helps crawlers find every page.' : 'No sitemap, so crawlers may miss pages.'),
-      ...siteMoreRowsV2(sc, row),
+      row(!!sc.sitemap, sc.sitemap ? 'A sitemap helps crawlers find every page.' : 'No sitemap, so crawlers may miss pages.', true),
+      ...siteMoreRowsV2(sc, row, { office: isOffice(report) }),
     ];
+  // A paid report with an action plan: the fixes are in the plan, so the checklist is a closed box for
+  // the web person, with one line on top. Failed checks first; passes that say nothing left out.
+  const plan = report.xray && report.xray.actionPlan && (report.xray.actionPlan.items || []).length;
+  if (plan && sc.reachable) {
+    const isOk = (r) => r.startsWith('<li class="ok');
+    const okN = rows.filter(isOk).length;
+    const failedN = rows.length - okN;
+    const shown = [...rows.filter((r) => !isOk(r)), ...rows.filter((r) => isOk(r) && !r.includes(' noise"'))];
+    return `
+    <section class="report-section r2-site">
+      <h2>Can AI read your website?</h2>
+      <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI assistant would. <b>${num(okN)} of ${num(rows.length)} checks passed.</b>${failedN ? ' The fixes that matter are in your action plan above.' : ''}</p>
+      <details class="r2-site-more">
+        <summary>Technical details for your web person</summary>
+        <ul class="r2-site-list">${shown.join('')}</ul>
+      </details>
+    </section>`;
+  }
   return `
     <section class="report-section r2-site">
       <h2>Can AI read your website?</h2>
@@ -1537,7 +1889,7 @@ function siteV2(report) {
 // The newer website checks (https, llms.txt, title / description / heading, FAQ schema, service and
 // town pages, phone speed). Every field is optional: a missing one (an older report, or a locked
 // report that only carries pass/fail) renders no row. Text fields may be a string or just true/false.
-function siteMoreRowsV2(sc, row) {
+function siteMoreRowsV2(sc, row, { office = false } = {}) {
   const out = [];
   const isBool = (v) => typeof v === 'boolean';
   const h = sc.https && typeof sc.https === 'object' ? sc.https : null;
@@ -1545,7 +1897,7 @@ function siteMoreRowsV2(sc, row) {
   else if (h && h.loads === true) {
     out.push(h.redirects === false
       ? row(false, 'Your site loads over https://, but the plain http:// address doesn’t forward to it.')
-      : row(true, 'Your site loads over a secure https:// address.'));
+      : row(true, 'Your site loads over a secure https:// address.', true));
   }
   if (isBool(sc.llmsTxt)) {
     out.push(row(sc.llmsTxt, sc.llmsTxt
@@ -1556,13 +1908,13 @@ function siteMoreRowsV2(sc, row) {
   if (m) {
     if (typeof m.title === 'string' || isBool(m.title)) {
       out.push(m.title
-        ? row(true, typeof m.title === 'string' ? `Page title: “${escapeHtml(m.title)}”.` : 'Your homepage has a page title.')
+        ? row(true, typeof m.title === 'string' ? `Page title: “${escapeHtml(m.title)}”.` : 'Your homepage has a page title.', true)
         : row(false, 'Your homepage has no page title.'));
     }
     if (typeof m.description === 'string' || isBool(m.description)) {
       out.push(row(!!m.description, m.description
         ? 'Your homepage has a meta description (the summary under your link in search results).'
-        : 'No meta description (the summary under your link in search results).'));
+        : 'No meta description (the summary under your link in search results).', true));
     }
     if (isBool(m.mentionsTrade)) {
       out.push(row(m.mentionsTrade, m.mentionsTrade
@@ -1570,9 +1922,10 @@ function siteMoreRowsV2(sc, row) {
         : 'Your title, description and main heading don’t say what you do.'));
     }
     if (isBool(m.mentionsTown)) {
+      const where = office ? 'where you’re based' : 'where you work';
       out.push(row(m.mentionsTown, m.mentionsTown
-        ? 'Your title and main heading say where you work.'
-        : 'Your title, description and main heading don’t say where you work.'));
+        ? `Your title and main heading say ${where}.`
+        : `Your title, description and main heading don’t say ${where}.`));
     }
   }
   if (isBool(sc.faqSchema)) {
@@ -1592,7 +1945,7 @@ function siteMoreRowsV2(sc, row) {
       return '';
     };
     const a = pagesRow(p.servicePages, 'your services');
-    const b = pagesRow(p.townPages, 'the towns you serve');
+    const b = pagesRow(p.townPages, office ? 'the places and clients you serve' : 'the towns you serve');
     if (a) out.push(a);
     if (b) out.push(b);
   }
@@ -1756,9 +2109,11 @@ function xrayV2({ report, aById, cw, N }) {
 function breakdownUpsell(report) {
   const comps = ((report.xray && report.xray.gapSheet && report.xray.gapSheet.competitors) || []).filter((c) => c && c.name);
   if (!comps.length || report.breakdown || report.plan || isDemoReport(report)) return '';
+  // Short and optional, at the very end: the plan is what they paid for.
+  const what = isOffice(report) ? 'awards, reviews and the lists they’re on' : 'a page for your town, how they price, licenses, awards, reviews and directories';
   return `
-    <div class="r2-upsell">
-      <p><strong>Want to see what ${escapeHtml(listJoin(comps.slice(0, 3).map((c) => c.name)))} have that you don’t?</strong> The Competitor Breakdown ($25) is a scorecard of what the top 3 businesses AI names instead of you show that you don’t: a page for your town, how they price, licenses, awards, reviews and directories, with a “do these first” list in the order to copy them.</p>
+    <div class="r2-upsell r2-upsell-end">
+      <p><strong>Optional extra:</strong> the Competitor Breakdown ($25) compares you with ${escapeHtml(listJoin(comps.slice(0, 3).map((c) => c.name)))} (${what}) and lists what to copy first. You don’t need it to do your plan.</p>
       ${tierOn('competitor_breakdown')
         ? `<a class="btn-secondary" data-tier="competitor_breakdown" href="#">Get my Competitor Breakdown — $25</a>`
         : `<a class="btn-secondary" href="mailto:hello@aifoundscore.com?subject=${encodeURIComponent('Competitor Breakdown: ' + (report.business?.name || ''))}">Get my Competitor Breakdown — $25</a>`}
@@ -1850,7 +2205,7 @@ function offerV2({ report, b, aById, t, N, zero, lostIntents, intentLabel, prove
 
   // Headline: the outcome they want, in their words.
   const winning = !zero && !lostIntents.length && N > 0 && t.namedYou / N >= 0.6;
-  const trade = escapeHtml(String(b.trade || 'business').toLowerCase());
+  const trade = escapeHtml(caseKind(String(b.trade || 'business').toLowerCase()));
   const title = zero ? (top ? `Take the call back from <span class="ob-rival">${top}</span>.` : `Get AI to recommend ${name}.`)
     : winning ? `Stay the ${trade} AI recommends in ${town}.`
       : `Be the ${trade} AI recommends in ${town}.`;

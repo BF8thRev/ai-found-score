@@ -671,6 +671,20 @@ export const RECHECK_WINDOW_DAYS = 14;
 /** Most re-checks started per run: a brake on a burst of sales a month ago. */
 export const RECHECK_MAX_PER_RUN = 20;
 
+/**
+ * The day the 30-day re-check is due for a report, from its payments (db.js getPayments rows): the
+ * first live audit payment + RECHECK_DAYS, as an ISO string, or null. Same rule as readDuePayments
+ * (live payments only); a Be the Answer plan re-scans monthly instead, so it has none.
+ */
+export function recheckDueAt(payments) {
+  const paid = (payments || [])
+    .filter((p) => p && p.livemode === true && ['xray', 'fix_kit'].includes(p.tier) && p.paid_at)
+    .map((p) => Date.parse(p.paid_at))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  return paid.length ? new Date(paid[0] + RECHECK_DAYS * 86400_000).toISOString() : null;
+}
+
 /** Live payments for a full-scan plan made RECHECK_DAYS ago (within the window), oldest first. */
 export function readDuePayments(env, nowMs, { fetchImpl = fetch } = {}) {
   const until = new Date(nowMs - RECHECK_DAYS * 86400_000).toISOString();

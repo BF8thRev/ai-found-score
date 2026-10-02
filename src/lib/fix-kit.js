@@ -1,36 +1,46 @@
-// src/lib/fix-kit.js — the Fix Kit: ready-to-install files built from the owner's confirmed details.
+// src/lib/fix-kit.js — the Fix Kit: ready-to-install files, built for the owner from their report.
 //
 // Comes with the $49 AI Visibility Audit ('xray') and the $499 Be the Answer ('be_the_answer'); the retired
-// $149 standalone Fix Kit ('fix_kit') still opens it for anyone who bought it. Fully
-// automatic: the owner checks their details on /fix-kit/<token> (public/fix-kit.html), confirms them,
-// and downloads a zip. Nobody at AI Found Score touches it. Routes: src/lib/fix-kit-route.js.
+// $149 standalone Fix Kit ('fix_kit') still opens it for anyone who bought it. Fully automatic: when the
+// owner opens /fix-kit/<token> (public/fix-kit.html) the kit is ALREADY BUILT from what we know
+// (prefillDetails). They check the key details, fill in what only they know, tick "I own or manage this
+// business" and download a zip. Nobody at AI Found Score touches it. Routes: src/lib/fix-kit-route.js.
 //
-//   prefillDetails(report)          → the form's starting values, from the stored report: the business
-//                                     the scan was run for, facts read off their website, the phone and
-//                                     address their site shows (siteCheck.onSite), then their Google listing
-//   validateDetails(input)          → { ok, details, errors: [{ field, message }] }: trimmed, capped, checked
-//   buildFixKitFiles(details, report, opts) → [{ path, content }]: robots.txt, llms.txt,
-//                                     schema-localbusiness.html, faq-page.html, google-business-profile.txt,
-//                                     review-qr.svg (only with a review link) and README.txt
+//   prefillDetails(report)          → starting details from the stored report: the business the scan was run
+//                                     for, facts read off their website (siteCheck.onSite, meta description),
+//                                     then their Google listing
+//   validateDetails(input)          → { ok, details, errors: [{ field, message }] }: trimmed, capped, checked.
+//                                     A phone is not required: a kit without one flags it and leaves it out.
+//   buildKit(details, report, opts) → { jobs, done, faq, missing, files }: only the jobs that help THIS
+//                                     business, in order (siteStatus: no robots.txt when AI can already read
+//                                     the site, no llms.txt when it has one, business code optional when it
+//                                     already has some), the FAQ (shared/faq.js) as faq-page.html + .txt,
+//                                     google-business-profile.txt, review-qr.svg (with a review link), README.txt
+//                                     Site builder known (siteCheck.platform, shared/platforms.js): each website
+//                                     job also says where it goes on that builder, with its own guide, and a
+//                                     job the builder can't take (or does itself) is marked optional and says so
 //   zipFiles(files, opts)           → Uint8Array: a STORE-only (uncompressed) ZIP, CRC-32, no dependencies
 //
 // Truthful by construction, like scanner/extract/fixes.js: every file is a fixed template filled ONLY
-// with what the owner confirmed. No AI call, nothing guessed. A detail left blank is left out.
+// with what we read or the owner gave. No AI call, nothing guessed. A detail we don't have is left out
+// (or, in a text file meant for the owner, a clearly marked [Missing: …]); code never holds a placeholder.
 // Everything here is pure (no fetch, no Node APIs), so it runs in the Worker and in node --test.
 
 import { AI_BOTS, formatPhone } from '../../scanner/owner-checks.js';
-import { normalizeTrade, TRADES, buildQuestions } from '../../scanner/questions.js';
+import { normalizeTrade, TRADES, caseKind, buildQuestions } from '../../scanner/questions.js';
 import { US_STATES } from '../../scanner/config.js';
-import { SCHEMA_TYPES, GBP_DESCRIPTION_MAX, alwaysOpen } from '../../scanner/extract/fixes.js';
-import { phoneKey } from '../../scanner/extract/normalize.js';
+import { SCHEMA_TYPES, GBP_DESCRIPTION_MAX, alwaysOpen, siteSpelling } from '../../scanner/extract/fixes.js';
+import { phoneKey, squashName } from '../../scanner/extract/normalize.js';
 import { qrSvg } from './vendor/qrcode.js';
+import { buildFaq, faqPlainText, faqJsonLdScript, ownWords, ATTRIBUTES } from '../../shared/faq.js';
+import { platformFor, platformJob, platformStep, guideLinks } from '../../shared/platforms.js';
 
 /** Tiers whose buyers get the Fix Kit (tier keys from TIER_BY_CENTS in src/lib/stripe.js). */
 export const FIX_KIT_TIERS = Object.freeze(['xray', 'fix_kit', 'be_the_answer']);
 
 export const LIMITS = Object.freeze({
   name: 120, trade: 60, phone: 40, street: 160, town: 60, zip: 10, website: 300, hours: 300,
-  description: GBP_DESCRIPTION_MAX, url: 500, listItem: 80, listMax: 15,
+  description: GBP_DESCRIPTION_MAX, url: 500, listItem: 80, listMax: 15, price: 160, faqFact: 240,
 });
 
 /** schema.org type per trade: fixes.js's specific types, the other home trades as HomeAndConstructionBusiness. */
@@ -65,7 +75,12 @@ export const DEFAULT_SERVICES = Object.freeze({
 });
 
 const clean = (v) => (v == null ? '' : String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim());
-const article = (w) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
+// "a PR agency", "an HVAC company": an acronym takes the article of its first letter's sound.
+const article = (w) => {
+  const s = String(w || '');
+  if (/^[A-Z]{2,}\b/.test(s)) return /^[AEFHILMNORSX]/.test(s) ? 'an' : 'a';
+  return /^[aeiou]/i.test(s) ? 'an' : 'a';
+};
 const joinAnd = (list) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`);
 const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 /** Text for inside an HTML comment: escaped, and no "--" that could end it. */
@@ -120,12 +135,17 @@ export function prefillDetails(report) {
   const g = (google && google.fields) || {};
   const key = tradeKey(b.trade);
   const noun = tradeNoun(b.trade);
-  const name = clean(b.name || g.name);
+  // The website's spelling when it differs only in spacing and the site always writes it ("PR73", not "PR 73").
+  const spelling = siteSpelling(r);
+  const name = clean((spelling && spelling.use) || b.name || g.name);
   const town = clean(b.town || b.city);
   const state = clean(b.state).toUpperCase();
   const address = b.address || onSite.address || g.address || '';
   const services = splitList(facts.services);
   const where = [town, state].filter(Boolean).join(', ');
+  const lead = name ? `${name} is ${noun ? `${article(caseKind(noun))} ${caseKind(noun)}` : 'a local business'}${where ? ` in ${where}` : ''}.` : '';
+  // Their own homepage description after our one line, when the site has one (never the H1: a slogan).
+  const words = lead ? ownWords({ description: lead }, { siteCheck: { meta: { description: (r.siteCheck && r.siteCheck.meta && r.siteCheck.meta.description) || '' } } }, lead) : '';
   return {
     name,
     trade: noun,
@@ -138,9 +158,11 @@ export function prefillDetails(report) {
     hours: clean(facts.hours || g.hours),
     services: services.length ? services.slice(0, LIMITS.listMax) : [...(DEFAULT_SERVICES[key] || [])],
     serviceTowns: town ? [town] : [],
-    description: name ? `${name} is ${noun ? `${article(noun)} ${noun}` : 'a local business'}${where ? ` in ${where}` : ''}.` : '',
+    price: clean(facts.price).slice(0, LIMITS.price),
+    description: `${lead}${words ? ` ${words}` : ''}`.slice(0, LIMITS.description),
     googleMapsUrl: google && typeof google.url === 'string' && /^https:\/\//i.test(google.url) ? google.url : '',
     googleReviewUrl: '',
+    faqFacts: {},
   };
 }
 
@@ -161,7 +183,8 @@ export function normalizeUrl(v, { httpsOnly = false } = {}) {
 
 /**
  * Check and tidy the form. → { ok, details, errors: [{ field, message }] }.
- * Required: name, phone, town, state. Lists: at most 15 items of 80 characters.
+ * Required: name, town, state. The phone is checked when given; a kit without one flags it as missing.
+ * Lists: at most 15 items of 80 characters. faqFacts: the owner's sentence per FAQ detail type.
  */
 export function validateDetails(input) {
   const i = input && typeof input === 'object' ? input : {};
@@ -182,15 +205,17 @@ export function validateDetails(input) {
     zip: clean(i.zip),
     website: '',
     hours: text('hours'),
+    price: text('price'),
     services: [],
     serviceTowns: [],
     description: text('description'),
     googleMapsUrl: '',
     googleReviewUrl: '',
+    faqFacts: {},
   };
   if (!d.name) err('name', 'Enter your business name.');
-  if (!d.phone) err('phone', 'Enter your phone number.');
-  else if (!phoneKey(d.phone) || d.phone.replace(/\D/g, '').length > 11) err('phone', 'Enter a 10-digit phone number.');
+  // A phone is not required: without one it is flagged "Missing" on the kit page and left out of the files.
+  if (!d.phone) { /* left out */ } else if (!phoneKey(d.phone) || d.phone.replace(/\D/g, '').length > 11) err('phone', 'Enter a 10-digit phone number.');
   else d.phone = formatPhone(d.phone);
   if (!d.town) err('town', 'Enter your town.');
   if (!d.state) err('state', 'Enter your state.');
@@ -217,9 +242,17 @@ export function validateDetails(input) {
     d[field] = list.slice(0, LIMITS.listMax).map((s) => s.slice(0, LIMITS.listItem));
   }
   if (!d.serviceTowns.length && d.town) d.serviceTowns = [d.town];
+  // The owner's own sentences for the FAQ's [brackets], one per detail type.
+  const facts = i.faqFacts && typeof i.faqFacts === 'object' && !Array.isArray(i.faqFacts) ? i.faqFacts : {};
+  for (const { type } of ATTRIBUTES) {
+    const v = clean(facts[type]).replace(/[[\]]/g, '');
+    if (!v) continue;
+    if (v.length > LIMITS.faqFact) err(`faqFacts.${type}`, `Keep this under ${LIMITS.faqFact} characters.`);
+    d.faqFacts[type] = v.slice(0, LIMITS.faqFact);
+  }
   if (!d.description && d.name) {
     const noun = tradeNoun(d.trade);
-    d.description = `${d.name} is ${noun ? `${article(noun)} ${noun}` : 'a local business'} in ${[d.town, d.state].filter(Boolean).join(', ')}.`;
+    d.description = `${d.name} is ${noun ? `${article(caseKind(noun))} ${caseKind(noun)}` : 'a local business'} in ${[d.town, d.state].filter(Boolean).join(', ')}.`;
   }
   return { ok: errors.length === 0, details: d, errors };
 }
@@ -293,34 +326,19 @@ function townsText(d) {
   return plain && d.state ? `${joinAnd(d.serviceTowns)}, ${d.state}` : joinAnd(d.serviceTowns.map((t) => townLabel(d, t)));
 }
 
-/** The report's question when it is a question; search phrases ("Plumber with good reviews near X") become one. */
-function faqQuestion(d, q) {
-  const text = clean(q.text);
-  if (/^(who|what|where|which|how|is|are|can|do|does|should)\b/i.test(text)) return text[0].toUpperCase() + text.slice(1).replace(/[?.\s]*$/, '?');
-  const noun = tradeNoun(d.trade) || 'business';
-  const a = `${article(noun)} ${noun}`;
-  const near = d.town;
-  const byIntent = {
-    urgent: `Who can I call today for ${a} near ${near}?`,
-    trust: `Which ${noun} near ${near} has good reviews?`,
-    price: `How much does ${a} in ${near} charge?`,
-    best: `Who is a good ${noun} in ${near}?`,
-    job: `Who can I hire for ${noun} work in ${near}?`,
-  };
-  return byIntent[q.intent] || `${text[0].toUpperCase()}${text.slice(1).replace(/[?.\s]*$/, '')}?`;
-}
-
 function leadSentence(d) {
-  const noun = tradeNoun(d.trade);
+  const noun = caseKind(tradeNoun(d.trade));
   const others = d.serviceTowns.filter((t) => t.toLowerCase() !== d.town.toLowerCase());
   return `${d.name} is ${noun ? `${article(noun)} ${noun}` : 'a local business'} in ${where(d)}`
     + `${others.length ? `, serving ${joinAnd(others)}` : ''}.`;
 }
 
-export function robotsTxt(d) {
+export function robotsTxt(d, { blocked = [] } = {}) {
+  const who = blocked.map((b) => b && (b.who || b.agent)).filter(Boolean);
   const lines = [
     `# robots.txt${d.website ? ` for ${hostOf(d.website)}` : ''}, from your AI Found Score Fix Kit.`,
     '# It lets the crawlers that AI assistants and search engines use read your website.',
+    ...(who.length ? [`# Your robots.txt blocks ${joinAnd(who)} today. These lines let them back in.`] : []),
     '#',
     '# Already have a robots.txt? Do not replace it. Add the lines below to it, and delete any',
     '# "Disallow: /" line under these crawler names. Keep the rest of your file as it is.',
@@ -340,7 +358,7 @@ export function llmsTxt(d) {
   out.push('## Service area', '', ...d.serviceTowns.map((t) => `- ${townLabel(d, t)}`), '');
   out.push('## Contact', '');
   const tel = telHref(d.phone);
-  out.push(tel ? `- [Phone: ${d.phone}](${tel})` : `- Phone: ${d.phone}`);
+  if (d.phone) out.push(tel ? `- [Phone: ${d.phone}](${tel})` : `- Phone: ${d.phone}`);
   if (d.street) out.push(`- Address: ${fullAddress(d)}`);
   if (d.website) out.push(`- [Website](${d.website})`);
   if (d.hours) out.push(`- Hours: ${d.hours}`);
@@ -349,11 +367,11 @@ export function llmsTxt(d) {
   return out.join('\n') + '\n';
 }
 
-/** The LocalBusiness JSON-LD object (confirmed fields only). */
+/** The LocalBusiness JSON-LD object (known fields only: a missing phone is left out, never a placeholder). */
 export function localBusinessSchema(d) {
   const o = { '@context': 'https://schema.org', '@type': FIX_KIT_SCHEMA_TYPES[tradeKey(d.trade)] || 'LocalBusiness', name: d.name };
   if (d.description) o.description = d.description;
-  o.telephone = d.phone;
+  if (d.phone) o.telephone = d.phone;
   const addr = { '@type': 'PostalAddress' };
   if (d.street) addr.streetAddress = d.street;
   addr.addressLocality = d.town;
@@ -375,6 +393,7 @@ export function schemaHtml(d) {
     `<!-- ${inComment(d.name)}: business details for Google and AI assistants (schema.org ${localBusinessSchema(d)['@type']}).`,
     '     Paste all of this into the <head> section of your home page.',
     '     If your site already has LocalBusiness code, replace it instead of adding a second copy.',
+    ...(d.phone ? [] : ['     Your phone number is not in it yet: add it on your Fix Kit page and download the kit again.']),
     '     Check it afterwards at https://search.google.com/test/rich-results -->',
     '<script type="application/ld+json">',
     ldJson(localBusinessSchema(d)),
@@ -384,53 +403,67 @@ export function schemaHtml(d) {
 }
 
 /**
- * FAQ questions and answers. The questions are the ones the report asked the AI assistants (or the
- * scanner's questions for this trade and town); each answer states confirmed details only.
+ * The FAQ (shared/faq.js buildFaq): the report's own questions, answered in the style AI quotes.
+ * A report without questions (an old one) uses the scanner's questions for the trade and town.
  */
-export function faqItems(d, report) {
-  let qs = (Array.isArray(report?.questions) ? report.questions : []).filter((q) => q && clean(q.text));
-  if (!qs.length && d.town) qs = buildQuestions({ trade: d.trade, town: d.town, state: d.state, zip: d.zip });
-  const lead = leadSentence(d);
-  const call = `Call ${d.phone}.`;
-  const services = d.services.length ? `Services: ${joinAnd(d.services)}.` : '';
-  const hours = d.hours ? `Hours: ${d.hours.replace(/[.\s]+$/, '')}.` : '';
-  const byIntent = {
-    best: [lead, services, call],
-    urgent: [lead, hours, call],
-    job: [lead, services, call],
-    trust: [lead, d.googleMapsUrl ? 'You can read our reviews on Google.' : '', call],
-    price: [lead, `${call.slice(0, -1)} to ask about prices.`],
-  };
-  const items = qs.slice(0, 10).map((q) => {
-    return { question: faqQuestion(d, q), answer: (byIntent[q.intent] || byIntent.best).filter(Boolean).join(' ') };
-  });
-  items.push({ question: 'What areas do you serve?', answer: `We serve ${townsText(d)}. ${call}` });
-  if (d.hours) items.push({ question: 'What are your hours?', answer: `${hours} ${call}` });
-  items.push({
-    question: `How do I contact ${d.name}?`,
-    answer: [call, d.street ? `We're at ${fullAddress(d)}.` : '', d.website ? `Website: ${d.website}` : ''].filter(Boolean).join(' '),
-  });
-  return items;
+export function kitFaq(d, report) {
+  const r = report || {};
+  const has = Array.isArray(r.questions) && r.questions.some((q) => q && clean(q.text));
+  const qs = has || !d.town ? r.questions : buildQuestions({ trade: d.trade, town: d.town, state: d.state, zip: d.zip });
+  return buildFaq({ ...r, questions: qs || [] }, d);
 }
 
-export function faqHtml(d, report) {
-  const items = faqItems(d, report);
-  const ld = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: items.map((it) => ({ '@type': 'Question', name: it.question, acceptedAnswer: { '@type': 'Answer', text: it.answer } })),
-  };
+/** The FAQ the report's action plan shows: the same one the kit is built with before the owner edits anything. */
+export function reportFaq(report) {
+  return kitFaq(validateDetails(prefillDetails(report)).details, report);
+}
+
+export function faqItems(d, report) {
+  return kitFaq(d, report).items;
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+export function faqHtml(d, report, faq = kitFaq(d, report)) {
+  const open = faq.items.filter((i) => !i.complete).length;
   return [
-    `<!-- ${inComment(d.name)}: questions and answers. Paste all of this into a page on your site called "FAQ"`,
-    '     (or into the page you already have). Change the wording if you like, but keep it true.',
-    '     If you change an answer, change it in the <script> part at the bottom too. -->',
-    '<section class="faq">',
+    `<!-- ${inComment(d.name)}: a Questions section AI assistants can quote. Paste all of it into a page on your`,
+    '     site called "FAQ" or "Questions", or at the bottom of your home page.',
+    ...(open
+      ? [
+        `     ${plural(open, 'answer still has', 'answers still have')} a part in [brackets]. Fill it in on your Fix Kit page and download`,
+        '     again, or replace it here with something true and delete the brackets. Until then, the code at',
+        '     the bottom leaves those answers out, so it never says anything the page does not.',
+      ]
+      : ['     The code at the bottom says exactly what the questions and answers say. If you change an answer, change it there too.']),
+    ' -->',
+    '<section class="faq" id="faq">',
     '  <h2>Frequently asked questions</h2>',
-    ...items.flatMap((it) => [`  <h3>${escHtml(it.question)}</h3>`, `  <p>${escHtml(it.answer)}</p>`]),
+    ...faq.items.flatMap((it) => [
+      ...(it.complete ? [] : ['  <!-- Fill in the [bracket] below before this goes live. -->']),
+      '  <div class="faq-item">',
+      `    <h3>${escHtml(it.question)}</h3>`,
+      `    <p>${escHtml(it.answer)}</p>`,
+      '  </div>',
+    ]),
     '</section>',
-    '<script type="application/ld+json">',
-    ldJson(ld),
-    '</script>',
+    faqJsonLdScript(faq.items),
+    '',
+  ].join('\n');
+}
+
+/** The same questions and answers as plain text, for a Wix, Squarespace or WordPress text block. */
+export function faqTxt(d, report, faq = kitFaq(d, report)) {
+  const open = faq.items.filter((i) => !i.complete).length;
+  return [
+    `QUESTIONS AND ANSWERS: ${d.name}`,
+    '',
+    'Paste these into a text block on a page called "FAQ" or "Questions" (Wix, Squarespace, WordPress, any site builder).',
+    'Make each question a heading if your site builder lets you.',
+    ...(open ? [`${plural(open, 'answer has', 'answers have')} a part in [brackets]: replace it with something true and delete the brackets before you publish.`] : []),
+    'Then ask whoever runs your website to add the code from faq-page.html, so AI reads the same answers.',
+    '',
+    faqPlainText(faq.items),
     '',
   ].join('\n');
 }
@@ -475,7 +508,7 @@ export function gbpTxt(d) {
   out.push(`DESCRIPTION (${desc.length} of ${GBP_DESCRIPTION_MAX} characters)`, desc, '');
   if (d.services.length) out.push('SERVICES', ...d.services.map((s) => `- ${s}`), '');
   out.push('SERVICE AREAS', ...d.serviceTowns.map((t) => `- ${townLabel(d, t)}`), '');
-  out.push('PHONE', d.phone, '');
+  out.push('PHONE', d.phone || '[Missing: add your phone number here and on your Fix Kit page]', '');
   if (d.street) out.push('ADDRESS', fullAddress(d), '');
   if (d.website) out.push('WEBSITE', d.website, '');
   if (d.hours) out.push('HOURS (enter them in the Hours section, day by day)', d.hours, '');
@@ -489,56 +522,258 @@ export function slugify(s) {
 
 export const zipName = (d) => `${slugify(d.name)}-fix-kit.zip`;
 
-export function readmeTxt(d, files, { origin = 'https://aifoundscore.com', token = '', date = new Date() } = {}) {
-  const has = (p) => files.some((f) => f.path === p);
-  const site = d.website ? new URL(d.website).origin : 'https://yourwebsite.com';
+// ---------------------------------------------------------------------------
+// the kit: only the jobs that help this business, in order
+// ---------------------------------------------------------------------------
+
+/** schema.org types that say nothing about the business itself (a page, a search box, an article). */
+const PAGE_SCHEMA_RE = /^(WebSite|WebPage|BreadcrumbList|FAQPage|ImageObject|SiteNavigationElement|SearchAction|Article|BlogPosting|NewsArticle|Person|ItemList|ListItem|CollectionPage|AboutPage|ContactPage|Offer|Product|Review|AggregateRating|VideoObject|Thing|WPHeader|WPFooter|ReadAction|EntryPoint)$/;
+
+/**
+ * What the report's website check found (report.siteCheck): whether AI is blocked, and which of the
+ * kit's website files the site already has. `checked` false (no check, or the site didn't load): we
+ * can't tell, so nothing is skipped.
+ */
+export function siteStatus(report) {
+  const sc = report && report.siteCheck;
+  const checked = !!(sc && typeof sc === 'object' && sc.reachable === true);
+  const robots = (checked && sc.robots) || {};
+  const types = checked && sc.schema && sc.schema.found && Array.isArray(sc.schema.types) ? sc.schema.types.filter((t) => typeof t === 'string') : [];
+  return {
+    checked,
+    robotsFound: robots.found === true,
+    blocked: Array.isArray(robots.blocked) ? robots.blocked.filter(Boolean) : [],
+    businessSchema: types.filter((t) => !PAGE_SCHEMA_RE.test(t)),
+    llmsTxt: checked && sc.llmsTxt === true,
+    faqSchema: checked && sc.faqSchema === true,
+  };
+}
+
+/** Details the files need that we don't have: flagged "Missing — add it" on the kit page, left out of the files. */
+export function missingDetails(d) {
+  const out = [];
+  if (!d.phone) out.push({ field: 'phone', label: 'Phone number', note: 'We don’t have it: it wasn’t on your website or Google listing where we looked. It’s left out of your files until you add it.' });
+  if (!d.website) out.push({ field: 'website', label: 'Website', note: 'Add it so your files can point people to your site.' });
+  if (!d.services.length) out.push({ field: 'services', label: 'Services', note: 'We couldn’t read them off your website. List the work you do so AI can match you to it.' });
+  return out;
+}
+
+/**
+ * Details we have but the owner should look at before the kit goes out → [{ field, label, note }]:
+ * the name written two ways (the website's spelling vs the report request's), while the kit still uses
+ * one of the two. Shown on the kit page's "Check these details" list and in README.txt.
+ */
+export function detailNotes(d, report) {
+  const out = [];
+  const sp = siteSpelling(report);
+  if (sp && d && d.name && squashName(d.name) === squashName(sp.typed)) {
+    out.push({
+      field: 'name', label: 'Business name',
+      note: `Your website writes “${sp.site}” and your report request said “${sp.typed}” — pick one and use it everywhere. ${sp.consistent && d.name === sp.site ? `We used “${sp.site}”, as your website does.` : `These files say “${d.name}”.`} If you use the other one, change it on your Fix Kit page.`,
+    });
+  }
+  return out;
+}
+
+/**
+ * buildKit(details, report, opts) → { jobs, done, faq, missing, files, platform? }
+ *   jobs: [{ id, title, tech, what, where, who, optional, note?, platform?, files: [path] }] — only what is
+ *         left to do for this business, most useful first. platform: { name, steps: [line], guides: [{ label, url }] }
+ *         when the site builder is known; the kit's `platform` is then { id, name }.
+ *   done: [{ id, title, note }] — what the website check found already in place (nothing to do).
+ *   faq:  shared/faq.js buildFaq result; missing: missingDetails(d); notes: detailNotes(d, report); files: [{ path, content }], README first.
+ * opts: { origin, token, date } for README.txt.
+ */
+export function buildKit(details, report, opts = {}) {
+  const d = details;
+  const site = siteStatus(report);
+  const faq = kitFaq(d, report);
+  const jobs = [];
+  const done = [];
+  const files = [];
+  const add = (path, content) => { files.push({ path, content }); return path; };
+  const blockedWho = site.blocked.map((b) => b.who || b.agent).filter(Boolean);
+  // The site builder, when known: "In Wix: …" for each website job, with the builder's own guide.
+  const pf = platformFor(report);
+  const onBuilder = (jobIds, { page = false } = {}) => {
+    if (!pf) return {};
+    const entries = jobIds.map((j) => [j, platformJob(pf, j)]).filter(([, e]) => e);
+    if (!entries.length) return {};
+    const steps = entries
+      // The FAQ block that writes its own code: the code step is not needed.
+      .filter(([j]) => !(j === 'headCode' && jobIds.includes('faq') && platformJob(pf, 'faq')?.schema === true))
+      .map(([j, e]) => (j === 'headCode' && jobIds.includes('faq') && e.can !== false
+        ? `For the code from faq-page.html, ${platformStep(pf, e, { page }).replace(/^In /, 'in ')}`
+        : platformStep(pf, e, { page })));
+    return { platform: { name: pf.name, steps, guides: guideLinks(pf, entries.map(([j]) => j)) } };
+  };
+
+  if (!site.checked || site.blocked.length) {
+    jobs.push({
+      id: 'robots',
+      // Blocked: the first job (nothing else works until AI can read the site). Unchecked: after the others.
+      order: site.blocked.length ? 0 : 5,
+      title: 'Let AI read your website',
+      tech: 'robots.txt',
+      what: site.blocked.length
+        ? `Your website tells ${joinAnd(blockedWho)} to stay out. This file lets them back in.`
+        : 'We couldn’t load your website to check it, so this file is here in case: it lets AI assistants read your site.',
+      where: 'The top folder of your website. If you already have a robots.txt, add these lines to it instead of replacing it.',
+      who: 'web',
+      optional: false,
+      files: [add('robots.txt', robotsTxt(d, { blocked: site.blocked }))],
+      ...onBuilder(['aiCrawlers', 'robots']),
+    });
+  } else {
+    done.push({
+      id: 'robots',
+      title: 'AI can read your website',
+      note: site.robotsFound
+        ? 'Your robots.txt already lets AI read your site. Nothing to do.'
+        : 'Nothing on your website blocks AI from reading it. Nothing to do.',
+    });
+  }
+
+  const lost = faq.items.filter((i) => i.lost).length;
+  jobs.push({
+    id: 'faq',
+    title: 'A Questions page AI can quote',
+    tech: 'FAQ page with FAQPage code (schema.org)',
+    what: `${plural(faq.items.length, 'question', 'questions')} customers ask${lost ? `, starting with the ${lost === 1 ? 'one' : lost} AI didn’t name you for` : ''}, each answered with your details in the plain style AI repeats.`,
+    where: 'A page on your website called “FAQ” or “Questions”. On Wix or Squarespace, paste faq-page.txt into a text block; your web person adds the code from faq-page.html.',
+    who: 'both',
+    optional: false,
+    ...(site.faqSchema ? { note: 'Your website already has some FAQ code. Add these questions to that page rather than making a second one.' } : {}),
+    files: [add('faq-page.html', faqHtml(d, report, faq)), add('faq-page.txt', faqTxt(d, report, faq))],
+    ...onBuilder(['faq', 'headCode'], { page: true }),
+  });
+
+  jobs.push({
+    id: 'google',
+    title: 'Your Google Business Profile text',
+    tech: 'Google Business Profile',
+    what: 'Your description, categories, services and service area, ready to paste.',
+    where: 'Sign in at business.google.com and copy each part into the box with the same name.',
+    who: 'you',
+    optional: false,
+    files: [add('google-business-profile.txt', gbpTxt(d))],
+  });
+
+  const hasSchema = site.businessSchema.length > 0;
+  jobs.push({
+    id: 'schema',
+    title: 'Your business details in the format Google and AI read',
+    tech: 'LocalBusiness schema (JSON-LD)',
+    what: 'Your name, phone, address and service area as a small block of code search engines and AI read directly.',
+    where: 'Pasted into the <head> section of your home page by whoever runs your website.',
+    who: 'web',
+    optional: hasSchema,
+    ...(hasSchema ? { note: `Your website already has business code (${site.businessSchema.slice(0, 2).join(', ')}). Use ours only if yours is missing your phone, address or hours.` } : {}),
+    files: [add('schema-localbusiness.html', schemaHtml(d))],
+    ...onBuilder(['headCode']),
+  });
+
+  if (site.llmsTxt) {
+    done.push({ id: 'llms', title: 'Your summary for AI tools', note: 'You already have an llms.txt file. Nothing to do.' });
+  } else {
+    jobs.push({
+      id: 'llms',
+      title: 'A short summary for AI tools',
+      tech: 'llms.txt',
+      what: 'A plain summary of your business written for AI assistants. Newer and optional: helpful, not essential.',
+      where: 'The top folder of your website. If your site builder won’t let you add files, skip it.',
+      who: 'web',
+      optional: true,
+      files: [add('llms.txt', llmsTxt(d))],
+      ...onBuilder(['llms']),
+    });
+  }
+
+  if (d.googleReviewUrl) {
+    jobs.push({
+      id: 'qr',
+      title: 'A QR code for Google reviews',
+      tech: 'QR code (SVG)',
+      what: 'Opens your Google review page on a customer’s phone.',
+      where: 'Print it on invoices, receipts or a card you leave after a job.',
+      who: 'you',
+      optional: false,
+      files: [add('review-qr.svg', qrSvg(d.googleReviewUrl, { ecl: 'M', title: `Leave ${d.name} a Google review` }))],
+    });
+  }
+
+  // On a builder that can't take a job's file, or makes the file itself: say so, and make it optional.
+  if (pf) {
+    for (const j of jobs) {
+      const own = { schema: platformJob(pf, 'headCode'), llms: platformJob(pf, 'llms'), robots: platformJob(pf, 'robots') }[j.id];
+      if (!own) continue;
+      if (own.can === false) {
+        j.optional = true;
+        // Said once, in "Where it goes", not again as a step.
+        if (j.platform) j.platform.steps = j.platform.steps.filter((x) => x !== platformStep(pf, own));
+        j.where = j.id === 'robots' && platformJob(pf, 'aiCrawlers')
+          ? `${pf.name} doesn’t let you edit robots.txt, so this file can’t be used there. Use ${pf.name}’s setting below instead.`
+          : `${pf.name} can’t take this file, so skip it. ${own.steps}`;
+      } else if (own.auto === true) {
+        j.optional = true;
+        j.where = `${pf.name} makes this file for you, so you don’t need ours. Use ours only if you’d rather write your own.`;
+      }
+    }
+  }
+
+  // Required jobs first (in the order above), the optional ones after.
+  const rank = (j) => (j.optional ? 10 : j.order ?? ({ faq: 1, google: 2, schema: 3 }[j.id] || 6));
+  const ordered = jobs.map((j, n) => ({ j, n })).sort((a, b) => rank(a.j) - rank(b.j) || a.n - b.n).map(({ j }) => { const { order, ...rest } = j; return rest; });
+  const missing = missingDetails(d);
+  const notes = detailNotes(d, report);
+  const platform = pf ? { id: pf.id, name: pf.name } : null;
+  const readme = { path: 'README.txt', content: readmeTxt(d, { jobs: ordered, done, faq, missing, notes, platform }, opts) };
+  const byPath = new Map(files.map((f) => [f.path, f]));
+  const out = [readme, ...ordered.flatMap((j) => j.files.map((p) => byPath.get(p)))];
+  return { jobs: ordered, done, faq, missing, notes, files: out, ...(platform ? { platform } : {}) };
+}
+
+export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token = '', date = new Date() } = {}) {
+  const { jobs = [], done = [], faq = { items: [], needs: 0 }, missing = [], notes = [], platform = null } = kit || {};
   const out = [
     `YOUR FIX KIT: ${d.name}`,
-    `Made ${date.toISOString().slice(0, 10)} by AI Found Score from the details you confirmed.`,
+    `Made ${date.toISOString().slice(0, 10)} by AI Found Score, from your website, your report and the details you checked.`,
     '',
-    'These files help AI assistants and Google read your business correctly.',
-    'Give this folder to whoever looks after your website. Each file below says where it goes.',
+    'These files help AI assistants and Google describe your business correctly.',
+    'Give this folder to whoever looks after your website. Each job below says what it does and where it goes.',
     'Nothing changes on your website until someone puts these files in place.',
     '',
-    '1. robots.txt',
-    '   What it does: lets the crawlers used by ChatGPT, Claude, Perplexity, Gemini, Google and Bing read your site.',
-    `   Where it goes: the top folder of your website, so it opens at ${site}/robots.txt`,
-    '   Already have one? Don\'t replace it. Add our lines to it, and delete any "Disallow: /" line',
-    '   under those crawler names. Some site builders have a robots.txt box in their SEO settings.',
-    '',
-    '2. llms.txt',
-    '   What it does: a short, plain summary of your business written for AI assistants.',
-    `   Where it goes: the top folder of your website, so it opens at ${site}/llms.txt`,
-    '   If your site builder won\'t let you add files, skip this one.',
-    '',
-    '3. schema-localbusiness.html',
-    '   What it does: your name, phone, address and service area in the code format Google and AI read.',
-    '   Where it goes: paste all of it into the <head> section of your home page.',
-    '   If your site already has LocalBusiness code, replace it. Don\'t add a second copy.',
-    '   Check it: https://search.google.com/test/rich-results (enter your home page address).',
-    '',
-    '4. faq-page.html',
-    '   What it does: answers the questions people ask AI about businesses like yours, using your details.',
-    '   Where it goes: a page on your site called "FAQ". Paste all of it in, including the <script> part.',
-    '',
-    '5. google-business-profile.txt',
-    '   What it does: the text for your Google Business Profile: description, categories, services and areas.',
-    '   Where it goes: sign in at business.google.com and copy each part into the matching box.',
-    '',
+    ...(platform ? [`Your website is built on ${platform.name}. Where a job can be done in ${platform.name}, it says exactly where to click, with ${platform.name}’s own guide.`, ''] : []),
   ];
-  if (has('review-qr.svg')) {
+  if (missing.length || notes.length || faq.needs) {
+    out.push('BEFORE YOU SEND IT ON');
+    for (const n of notes) out.push(`- Check: ${n.label}. ${n.note}`);
+    for (const m of missing) out.push(`- Missing: ${m.label}. ${m.note}`);
+    if (faq.needs) out.push(`- ${plural(faq.needs, 'answer', 'answers')} in your Questions page ${faq.needs === 1 ? 'needs' : 'need'} one detail from you (the part in [brackets]). Fill ${faq.needs === 1 ? 'it' : 'them'} in on your Fix Kit page and download again.`);
+    out.push('');
+  }
+  out.push('WHAT’S LEFT TO DO, IN ORDER');
+  jobs.forEach((j, n) => {
     out.push(
-      '6. review-qr.svg',
-      '   What it does: a QR code that opens your Google review page on a customer\'s phone.',
-      '   Where it goes: print it on invoices, receipts or a card you leave after a job. It stays sharp at any size.',
-      '   Scan it with your own phone first to check it opens the right page.',
+      `${n + 1}. ${j.title}${j.optional ? ' (optional)' : ''}`,
+      `   ${j.files.length > 1 ? 'Files' : 'File'}: ${j.files.join(', ')}`,
+      `   What it does: ${j.what}`,
+      `   Where it goes: ${j.where}`,
+      ...(j.platform ? j.platform.steps.map((x) => `   ${x}`) : []),
+      ...(j.platform ? j.platform.guides.map((g) => `   ${g.label}: ${g.url}`) : []),
+      ...(j.note ? [`   Note: ${j.note}`] : []),
       '',
     );
+  });
+  if (done.length) {
+    out.push('ALREADY DONE ON YOUR WEBSITE');
+    for (const x of done) out.push(`- ${x.title}: ${x.note}`);
+    out.push('');
   }
   out.push(
-    'YOUR DETAILS, AS YOU CONFIRMED THEM',
+    'YOUR DETAILS, AS YOU CHECKED THEM',
     `Name: ${d.name}`,
-    `Phone: ${d.phone}`,
+    `Phone: ${d.phone || 'Missing (add it on your Fix Kit page)'}`,
     ...(d.street ? [`Address: ${fullAddress(d)}`] : [`Town: ${where(d)}`]),
     ...(d.website ? [`Website: ${d.website}`] : []),
     ...(d.hours ? [`Hours: ${d.hours}`] : []),
@@ -548,7 +783,7 @@ export function readmeTxt(d, files, { origin = 'https://aifoundscore.com', token
     'Use these exact details everywhere: your website, Google, Yelp, Facebook, Bing and Apple Maps.',
     'When they match everywhere, AI assistants trust them more.',
     '',
-    'Something wrong? Fix it, confirm again and download a new kit:',
+    'Something wrong? Fix it on your Fix Kit page and download a new kit:',
     `${origin}/fix-kit/${encodeURIComponent(token)}`,
     'Questions: hello@aifoundscore.com',
     '',
@@ -556,24 +791,9 @@ export function readmeTxt(d, files, { origin = 'https://aifoundscore.com', token
   return out.join('\n');
 }
 
-/**
- * Every file in the kit, from validated details. opts: { origin, token, date } for README.txt.
- * → [{ path, content }] (content is a string; zipFiles encodes it as UTF-8).
- */
+/** Every file in the kit (buildKit), README first. → [{ path, content }] */
 export function buildFixKitFiles(details, report, opts = {}) {
-  const d = details;
-  const files = [
-    { path: 'robots.txt', content: robotsTxt(d) },
-    { path: 'llms.txt', content: llmsTxt(d) },
-    { path: 'schema-localbusiness.html', content: schemaHtml(d) },
-    { path: 'faq-page.html', content: faqHtml(d, report) },
-    { path: 'google-business-profile.txt', content: gbpTxt(d) },
-  ];
-  if (d.googleReviewUrl) {
-    files.push({ path: 'review-qr.svg', content: qrSvg(d.googleReviewUrl, { ecl: 'M', title: `Leave ${d.name} a Google review` }) });
-  }
-  files.unshift({ path: 'README.txt', content: readmeTxt(d, files, opts) });
-  return files;
+  return buildKit(details, report, opts).files;
 }
 
 // ---------------------------------------------------------------------------

@@ -21,7 +21,7 @@ import { proposeForAnswer } from './propose.js';
 import { verifyAnswer, factStatus, ownerFact, descriptorKey } from './verify.js';
 import { groupEntities } from './entities.js';
 import { normalizeName } from './normalize.js';
-import { buildSources } from './sources.js';
+import { buildSources, MAX_LIST_READS } from './sources.js';
 import { buildIssues } from './issues.js';
 import { runOwnerChecks, lookupCompetitorReviews, reviewsIssue, MAX_REVIEW_LOOKUPS } from '../owner-checks.js';
 
@@ -174,7 +174,7 @@ export function applyHeadlineConfirmation(report, c) {
  */
 export async function buildReport({
   scan, business, listings = [], issues = [], baseline = null, proposalsByAnswer = {},
-  env = {}, fetchImpl, id, now, maxFetch = 5, onExtract, headlineConfirmation = null,
+  env = {}, fetchImpl, id, now, maxFetch = MAX_LIST_READS, onExtract, headlineConfirmation = null,
 }) {
   // The owner's website (robots.txt, schema, phone and address) and Google listing (scanner/owner-checks.js).
   // Skipped on a pre-build (maxFetch 0) and when the caller already supplies listings.
@@ -322,7 +322,9 @@ export async function buildReport({
   }
 
   // Sources (citations from the APIs only) + directory page checks.
-  const sources = await buildSources({ answers, business, fetchImpl, maxFetch });
+  // The website's own spelling of the name ("PR73" for "PR 73") is looked for too.
+  const brand = siteCheck && siteCheck.brand;
+  const sources = await buildSources({ answers, business, fetchImpl, maxFetch, names: brand && brand.related && brand.name ? [brand.name] : [] });
 
   // AI facts vs the owner's own website/listings.
   const engineOf = new Map(answers.map((a) => [a.id, a.engine]));

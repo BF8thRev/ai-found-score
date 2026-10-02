@@ -522,8 +522,30 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-progress b { color: var(--navy); }
 .ap-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--wash-2); overflow: hidden; }
 .ap-bar i { display: block; height: 100%; background: var(--green); border-radius: 999px; transition: width .2s; }
-.ap-kit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; background: var(--wash-2); }
-.ap-kit p { margin: 0; flex: 1 1 280px; font-size: 15px; }
+/* Do these 3 this week: above the full list. */
+.ap-week { margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; background: var(--wash-2); }
+.ap-week h3 { margin: 0 0 8px; font-size: 17px; color: var(--navy); }
+.ap-week ol { margin: 0; padding-left: 22px; }
+.ap-week li { margin: 0 0 8px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.ap-week li:last-child { margin-bottom: 0; }
+.ap-week li a { display: block; font-weight: 700; color: var(--navy); }
+.ap-week li span { display: block; font-size: 14px; color: var(--muted); }
+.ap-effort { font-weight: 400; }
+/* After the last step: hand the website files to the web person. */
+.ap-kitcard { margin: 14px 0 8px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+.ap-kitcard h3 { margin: 0 0 6px; font-size: 17px; color: var(--navy); }
+.ap-kitcard p { margin: 0 0 10px; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.ap-kitcard-btns { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 !important; }
+/* The free 30-day re-check, right after the plan. */
+.r2-recheck { margin: 0 0 24px; padding: 14px 16px; border-radius: 12px; background: var(--wash); border: 1px solid var(--line); }
+.r2-recheck h3 { margin: 0 0 4px; font-size: 16px; color: var(--navy); }
+.r2-recheck p { margin: 0; font-size: 15px; line-height: 1.5; }
+/* The website checklist on a paid report: a closed box for the web person. */
+.r2-site-more summary { cursor: pointer; font-weight: 700; color: var(--navy); }
+.r2-site-more .r2-site-list { margin-top: 10px; }
+.r2-site-list li { overflow-wrap: anywhere; }
+.r2-sc-target { margin: 4px 0 0; font-size: 13px; color: #3D4858; }
+.r2-fold-note { margin: 0 0 10px; font-size: 14px; }
 .ap-list { list-style: none; margin: 0; padding: 0; }
 .ap-item { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 0 0 0 12px; margin: 0 0 8px; }
 .ap-tick { flex: none; display: flex; align-items: center; justify-content: center; min-width: 32px; min-height: 52px; cursor: pointer; }
@@ -547,6 +569,7 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-sites .badge { margin: 0; }
 .ap-type { font-size: 13px; color: var(--muted); }
 .ap-kitnote { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.ap-platform { margin: 10px 0 0; font-size: 14px; overflow-wrap: anywhere; }
 .ap-item.done { background: var(--wash); }
 .ap-item.done .ap-title { text-decoration: line-through; color: var(--muted); }
 .ap-item.done .ap-whotag { text-decoration: none; display: none; }
@@ -561,4 +584,48 @@ details.r2-allans[open] > summary::after { content: "–"; }
   .ap-row summary .badge { margin-left: 34px; }
   /* The open step uses the full card width: its body slides under the tick column. */
   .ap-body { padding: 0 12px 14px 0; margin-left: -38px; }
+}
+
+/* Share and Save as PDF in the header (paid reports and samples; report.js setHeaderForReport).
+   Icon + label on computers, icons only on phones. */
+.print-only { display: none; }
+.hdr-tools { display: flex; gap: 6px; margin-left: auto; flex: none; }
+.hdr-tools[hidden] { display: none; }
+.hdr-tool { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--navy); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.hdr-tool:hover { border-color: var(--navy); }
+.hdr-tool svg { flex: none; }
+.hdr-ctx:not([hidden]) + .hdr-tools { margin-left: 0; }
+/* Name + score, Share, Save as PDF and the buy button don't fit together below ~1000px: the tools win. */
+@media (max-width: 1000px) { .hdr-ctx:has(+ .hdr-tools:not([hidden])) { display: none !important; } }
+@media (max-width: 820px) {
+  .hdr-tool { width: 44px; min-height: 44px; padding: 0; justify-content: center; }
+  .hdr-tool span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+/* The same two buttons right under the result box. */
+.r2 > .r2-tools-top { margin: 12px 0 8px; }
+.r2-tools-top .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; font-size: 15px; }
+.r2-tools-top .ico { flex: none; }
+
+/* The result box's line forward: "Here's how to fix it, starting today: 3 things to do this week". */
+.r2-verdict-next { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 18px; line-height: 1.35; }
+.r2-verdict-next a { color: #1A5FD0; font-weight: 700; text-decoration: none; }
+.r2-verdict-next a:hover { text-decoration: underline; }
+.ap-week { scroll-margin-top: 84px; }
+
+/* Share box: copy the link or email it to a teammate. */
+.share-pop { z-index: 40; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 16px; color: var(--ink); text-align: left; }
+.share-pop-h { margin: 0 28px 6px 0; font-size: 17px; font-weight: 800; color: var(--navy); }
+.share-pop-note { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+.share-pop-url { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 14px; color: var(--ink); background: var(--wash); }
+.share-pop-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.share-pop-btns .btn, .share-pop-btns .btn-secondary { flex: 1 1 auto; text-align: center; padding: 9px 14px; font-size: 15px; }
+.share-pop-status { margin: 8px 0 0; font-size: 14px; color: var(--green); min-height: 0; }
+.share-pop-status:empty { display: none; }
+.share-pop-x { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: 0; background: none; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; border-radius: 8px; }
+.share-pop-x:hover { background: var(--wash); }
+@media (max-width: 520px) {
+  .r2 > .r2-tools-top { flex-wrap: nowrap; }
+  .r2-tools-top .btn-secondary { flex: 1 1 0; min-width: 0; padding: 10px 8px; }
+  .r2-tools-top .wide { display: none; }
 }
