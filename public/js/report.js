@@ -676,8 +676,17 @@ function actionPlanV2(report) {
           <li><a href="#step-${n + 1}">${escapeHtml(i.title)}</a><span>${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}${effort(i) ? ` · ${effort(i)}` : ''}</span></li>`).join('')}
         </ol>
       </div>` : '';
+  // Each site's status from the scan's own read of the page: not on it (with the directory's "add your
+  // company" page when we know it), listed (with the profile we saw), or not checked (with why, when known).
+  const office = report.xray && report.xray.actionPlan && report.xray.actionPlan.kind === 'professional';
+  const SITE_BADGE = { missing: ['mismatch', 'You’re not on it'], listed: ['match', 'You’re listed — check the details'], check: ['low', 'Not checked yet'] };
+  const siteExtra = (s) => {
+    if (s.status === 'missing' && s.addUrl) return ` <a class="ap-add" href="${safeHref(s.addUrl)}" rel="nofollow noopener" target="_blank">Add your ${office ? 'company' : 'business'}</a>`;
+    if (s.status === 'check' && s.reason) return ` <span class="r2-muted">(${escapeHtml(s.reason)})</span>`;
+    return '';
+  };
   const sites = (list) => ((list || []).length ? `
-          <ul class="ap-sites">${list.map((s) => `<li><span class="badge ${s.status === 'missing' ? 'mismatch' : 'low'}">${s.status === 'missing' ? 'Not on it' : 'Not checked yet'}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`).join('')}</ul>` : '');
+          <ul class="ap-sites">${list.map((s) => { const [cls, label] = SITE_BADGE[s.status] || SITE_BADGE.check; const href = s.status === 'listed' && s.profileUrl ? s.profileUrl : s.url; return `<li><span class="badge ${cls}">${label}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(href)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${siteExtra(s)}${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`; }).join('')}</ul>` : '');
   // Wired once the page is in the DOM: save a tick, strike the step through, update the count.
   setTimeout(() => {
     const root = typeof document.getElementById === 'function' ? document.getElementById('action-plan') : null;
@@ -1630,6 +1639,16 @@ function citedDomainsV2(answers, ownDomain) {
       <ul class="r2-cited">${domains.slice(0, 4).map((d) => `<li>${escapeHtml(d)}</li>`).join('')}</ul>`;
 }
 
+// Why a cited page couldn't be read for the owner's name (sources[].checkReason, scanner/extract/sources.js
+// CHECK_REASON_TEXT: the same words).
+const SOURCE_UNREAD = {
+  robots: 'the site asks crawlers not to read this page',
+  blocked: 'the site blocks automated checks',
+  error: 'the page didn’t load when we checked',
+  not_html: 'it isn’t a web page we can read',
+  empty: 'its list loads in a way we can’t read',
+};
+
 function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
   // Locked: the cited sites are the audit's; only the tally is sent (src/lib/lock.js).
   const sum = report.sourcesSummary;
@@ -1656,8 +1675,9 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
       ? '<span class="badge mismatch">You’re not listed</span>'
       : s.youListed === true
         ? `<span class="badge match">You’re listed${num(s.youPosition) ? ` at #${num(s.youPosition)}` : ''}</span>`
-        : '<span class="badge low">Not checked</span>';
+        : SOURCE_UNREAD[s.checkReason] ? '<span class="badge low">Couldn’t check</span>' : '<span class="badge low">Not checked</span>';
     const facts = [`Cited in ${s.lostIn.length} ${s.lostIn.length === 1 ? cw.one : cw.unit} that didn’t name you (${escapeHtml(listJoin(engs))}).`];
+    if (s.youListed == null && SOURCE_UNREAD[s.checkReason]) facts.push(`We couldn’t check it for your name: ${SOURCE_UNREAD[s.checkReason]}.`);
     if (s.topListed && s.topListed !== b.name) facts.push(`<strong>${escapeHtml(s.topListed)}</strong> is listed first on that page.`);
     if (s.youListed === false) facts.push(`${escapeHtml(b.name)} isn’t on it.`);
     return `

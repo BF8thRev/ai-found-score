@@ -12,6 +12,7 @@
 import { normalizeTrade, TRADES, INTENTS, kindClass } from '../questions.js';
 import { US_STATES, stateAbbr } from '../config.js';
 import { is24 } from './verify.js';
+import { spellingOnSite, titleParts, squashName } from './normalize.js';
 
 /** Google Business Profile descriptions are capped at 750 characters. */
 export const GBP_DESCRIPTION_MAX = 750;
@@ -69,6 +70,39 @@ export function businessDetails(business = {}) {
     price: noEndPunct(facts.price),
     services: noEndPunct(facts.services),
   };
+}
+
+/**
+ * The business name written two ways: on the owner's website ("PR73") and in the report request
+ * ("PR 73"). From siteCheck.brand (scans from Oct 2 2026), else read off the stored homepage title,
+ * description and heading (siteCheck.meta), so reports already stored get it too. Only a spacing or
+ * "&"/"and" difference counts: a different name is never treated as theirs.
+ * → { typed, site, consistent, use } | null   (use: the site's spelling when the site only ever writes
+ *   that one, else the name as typed)
+ */
+export function siteSpelling(report) {
+  const r = report || {};
+  const typed = clean(r.business && r.business.name);
+  if (!typed) return null;
+  const sc = (r.siteCheck && typeof r.siteCheck === 'object') ? r.siteCheck : {};
+  let s = sc.brand && typeof sc.brand === 'object' ? sc.brand : null;
+  const m = sc.meta && typeof sc.meta === 'object' ? sc.meta : null;
+  if (!s && m && typeof m.title === 'string') {
+    const parts = titleParts(m.title);
+    const cands = (parts.length > 1 ? [parts[parts.length - 1], ...parts.slice(0, -1)] : parts).map((name) => ({ name, from: 'title' }));
+    s = spellingOnSite(cands, typed, [m.description, m.h1].filter((x) => typeof x === 'string').join(' \n '));
+  }
+  if (!s || s.related !== true || s.differs !== true || typeof s.name !== 'string' || !s.name.trim()) return null;
+  if (squashName(s.name) !== squashName(typed)) return null;
+  const site = clean(s.name);
+  const consistent = s.consistent === true;
+  return { typed, site, consistent, use: consistent ? site : typed };
+}
+
+/** The plain line that asks the owner to pick one spelling ('' when there's only one). */
+export function spellingLine(sp) {
+  if (!sp) return '';
+  return `Your website writes “${sp.site}” and your report request said “${sp.typed}” — pick one and use it everywhere.${sp.consistent ? ` We’ve used “${sp.site}” here, as your website does.` : ''}`;
 }
 
 /** "Name: …\nAddress: …" — the listing details, known fields only. */

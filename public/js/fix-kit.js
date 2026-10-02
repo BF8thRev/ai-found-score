@@ -93,6 +93,9 @@
     list.textContent = '';
     var missing = {};
     (kit.missing || []).forEach(function (m) { missing[m.field] = m; });
+    // Details to look at (the name written two ways): shown under the value.
+    var notes = {};
+    (kit.notes || []).forEach(function (n) { if (n && n.field && n.note) notes[n.field] = n; });
     var towns = (d.serviceTowns || []).filter(function (t) { return t && t.toLowerCase() !== String(d.town || '').toLowerCase(); });
     var rows = [
       ['name', 'Business name', d.name],
@@ -113,6 +116,7 @@
       } else {
         v.appendChild(document.createTextNode(r[2]));
         if (r[3]) v.appendChild(el('span', 'note', r[3]));
+        if (notes[r[0]]) v.appendChild(el('span', 'note fk-check', notes[r[0]].note));
       }
       li.appendChild(v);
       list.appendChild(li);

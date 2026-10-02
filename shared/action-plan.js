@@ -18,7 +18,8 @@
 
 import { kindClass, ACRONYMS } from '../scanner/questions.js';
 import { tradeWords, mentionsAny } from '../scanner/owner-checks.js';
-import { businessDetails, napBlock, GBP_DESCRIPTION_MAX } from '../scanner/extract/fixes.js';
+import { businessDetails, napBlock, GBP_DESCRIPTION_MAX, siteSpelling, spellingLine } from '../scanner/extract/fixes.js';
+import { LIST_SITE_RE, NOT_A_LIST_RE, LIST_PATH_RE, CHECK_REASON_TEXT } from '../scanner/extract/sources.js';
 import { isDirectoryName } from './report-v2.js';
 import { faqPlainText, faqJsonLdScript } from './faq.js';
 import { reportFaq } from '../src/lib/fix-kit.js';
@@ -43,11 +44,6 @@ const article = (w) => {
 const listJoin = (xs) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 const plural = (n, one, many) => (n === 1 ? one : many);
 const ENGINE = { chatgpt: 'ChatGPT', claude: 'Claude', gemini: 'Gemini', perplexity: 'Perplexity', google_ai_mode: 'Google AI Mode' };
-
-/** Sites that list businesses: a cited page here is a list the owner can get onto. */
-const LIST_SITE_RE = /(^|\.)(yelp|angi|angieslist|bbb|homeadvisor|thumbtack|yellowpages|mapquest|porch|networx|manta|superpages|foursquare|buildzoom|houzz|birdeye|clutch|themanifest|goodfirms|upcity|designrush|expertise|sortlist|agencyspotter|odwyerpr|provokemedia|prweek|publicrelationsdatabase|communicationsmatch|tripadvisor|nextdoor|avvo|justia|martindale|findlaw|lawyers|healthgrades|zocdoc|vitals|opentable|theknot|weddingwire)\.(com|org|net|co)$/i;
-/** Never something to get "listed" on: social threads, job boards, press-release wires, encyclopedias. */
-const NOT_A_LIST_RE = /(^|\.)(aaaa|ana|iabc|prsa|reddit|quora|facebook|instagram|linkedin|x|twitter|tiktok|youtube|wikipedia|glassdoor|indeed|4dayweek|ziprecruiter|publicnow|prnewswire|businesswire|globenewswire|einpresswire|google|apple|bing)\.(com|org|io|net)$/i;
 
 // A short, stable id from text: a saved tick stays on its step even when other steps come and go.
 function hashId(prefix, text) {
@@ -130,6 +126,9 @@ export function buildActionPlan(report) {
   const kind = kindClass(b.trade);
   const office = kind === 'professional';
   const d = businessDetails(b);
+  // "PR73" on the website, "PR 73" in the request: one name in every block below, and a plain ask to pick one.
+  const spelling = siteSpelling(r);
+  if (spelling) d.name = spelling.use;
   const rawNoun = d.tradeNoun;
   d.tradeNoun = kindText(d.tradeNoun);
   const name = d.name || 'your business';
@@ -163,27 +162,39 @@ export function buildActionPlan(report) {
   }
 
   // 2. The lists AI read when it named someone else. Checked "not listed" first, then cited lists we
-  //    couldn't read (the owner checks those). Competitors' own sites, job boards and wires are left out.
+  //    couldn't read (the owner checks those, with the reason), then directories that already list
+  //    them (check the details). Competitors' own sites, job boards and wires are left out.
   const notListed = take((x) => x.kind === 'not_listed');
   const lostIds = new Set(lostAnswers.map((a) => a.id));
   const sites = [];
+  const httpsUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
   for (const s of r.sources || []) {
-    if (!s || !s.domain || s.youListed === true) continue;
+    if (!s || !s.domain) continue;
     const dom = String(s.domain).toLowerCase().replace(/^www\./, '');
     if (dom === own || NOT_A_LIST_RE.test(dom) || isCompetitorSite(dom, entities)) continue;
     const lostIn = (s.citedIn || []).filter((id) => lostIds.has(id));
     if (!lostIn.length) continue;
-    if (s.youListed !== false && !LIST_SITE_RE.test(dom) && !/rank|best|top|list|director|agencies|firms|companies/i.test(String(s.url || ''))) continue;
+    if (s.youListed !== false && !LIST_SITE_RE.test(dom) && !LIST_PATH_RE.test(String(s.url || ''))) continue;
+    const type = siteType(dom, s.url, { trade: b.trade });
+    // Already on a list or article: nothing to do there. Already on a directory: check the profile.
+    if (s.youListed === true && type !== 'directory') continue;
     if (sites.some((x) => x.domain === dom)) continue;
     const engines = [...new Set(lostIn.map((id) => (answers.find((a) => a.id === id) || {}).engine).filter(Boolean))].map((e) => ENGINE[e] || e);
     // A rival's profile page on a directory (aaaa.org/agency-profile/…/edelman-new-york): send the owner
     // to the site itself, not to the rival's page.
     const path = squash(String(s.url || '').replace(/^https?:\/\/[^/]+/i, ''));
     const rivalPage = entities.some((e) => { const n = squash(e.name); return n.length >= 4 && !isDirectoryName(e.name) && path.includes(n); });
-    const type = siteType(dom, s.url, { trade: b.trade });
-    sites.push({ domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, type, status: s.youListed === false ? 'missing' : 'check', engines, count: lostIn.length, topListed: s.topListed || null });
+    const status = s.youListed === true ? 'listed' : s.youListed === false ? 'missing' : 'check';
+    const reason = status === 'check' && CHECK_REASON_TEXT[s.checkReason];
+    sites.push({
+      domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, type, status, engines, count: lostIn.length, topListed: s.topListed || null,
+      ...(status === 'listed' && httpsUrl(s.profileUrl) ? { profileUrl: s.profileUrl } : {}),
+      ...(status !== 'listed' && httpsUrl(s.addUrl) ? { addUrl: s.addUrl } : {}),
+      ...(reason ? { reason } : {}),
+    });
   }
-  sites.sort((x, y) => (x.status === 'missing' ? 0 : 1) - (y.status === 'missing' ? 0 : 1) || y.count - x.count);
+  const order = { missing: 0, check: 1, listed: 2 };
+  sites.sort((x, y) => order[x.status] - order[y.status] || y.count - x.count);
   // Directories (a free profile, this week) and industry lists/awards (entries, often yearly, fees,
   // size rules) are different jobs: two steps.
   const shown = sites.filter((x) => x.type !== 'award').slice(0, 8);
@@ -191,14 +202,24 @@ export function buildActionPlan(report) {
   const rivalsText = topRivals.length ? listJoin(topRivals) : `other ${office ? 'firms' : 'businesses'}`;
   if (shown.length) {
     const missing = shown.filter((s) => s.status === 'missing').length;
+    const listed = shown.filter((s) => s.status === 'listed').length;
+    const todo = shown.length - listed;
+    const unread = shown.some((s) => s.status === 'check');
+    // Both spellings when the website and the request differ: a list may use either.
+    const lookFor = spelling ? `“${spelling.site}” or “${spelling.typed}”` : name;
+    const listWord = (n) => (shown.some((x) => x.type === 'directory' || x.type === 'unsure') ? plural(n, 'list', 'lists') : plural(n, 'page', 'pages'));
     items.push({
       id: 'lists',
       impact: 'high',
-      title: `Get on the ${shown.length} ${shown.some((x) => x.type === 'directory' || x.type === 'unsure') ? plural(shown.length, 'list', 'lists') : plural(shown.length, 'page', 'pages')} AI read when it picked other ${office ? 'firms' : 'businesses'}`,
-      why: `When AI named ${rivalsText} instead of you, it read ${plural(shown.length, 'this page', 'these pages')}. ${missing ? `You’re not on ${missing === shown.length ? (missing === 1 ? 'it' : 'any of them') : `${missing} of them`}. ` : ''}Being on the pages AI reads gives it a reason to include you.`,
+      title: todo
+        ? `Get on the ${todo} ${listWord(todo)} AI read when it picked other ${office ? 'firms' : 'businesses'}`
+        : `Check your ${plural(listed, 'profile', 'profiles')} on the ${listWord(listed)} AI read`,
+      why: `When AI named ${rivalsText} instead of you, it read ${plural(shown.length, 'this page', 'these pages')}. ${missing ? `You’re not on ${missing === shown.length ? (missing === 1 ? 'it' : 'any of them') : `${missing} of them`}. ` : ''}${listed ? `You’re already on ${listed === shown.length ? (listed === 1 ? 'it' : 'all of them') : `${listed} of them`}: check the details match. ` : ''}Being on the pages AI reads gives it a reason to include you.`,
       who: 'you',
       steps: [
-        `Open each page below and search it for ${name}.${shown.some((s) => s.status === 'check') ? ' Pages marked “Not checked yet” we couldn’t read, so look for yourself.' : ''}`,
+        ...(missing ? [`Pages marked “You’re not on it”: we read the page and didn’t find ${lookFor} or a link to your website.${shown.some((s) => s.status === 'missing' && s.addUrl) ? ` Use the “Add your ${office ? 'company' : 'business'}” link next to it.` : ''}`] : []),
+        ...(unread ? [`Pages marked “Not checked yet”: we couldn’t check ${shown.filter((s) => s.status === 'check').length === 1 ? 'it' : 'them'} ourselves${shown.some((s) => s.reason) ? ' (the reason is next to each)' : ''}, so open each one and search it for ${lookFor}.`] : []),
+        ...(listed ? [`Pages marked “You’re listed”: open your profile and make every detail match the block below.`] : []),
         ...(shown.some((x) => x.type === 'directory')
           ? [`Directories: if you’re listed, claim the profile (look for “claim this profile” or similar) and make every detail match the block below; if you’re not, use “add your ${office ? 'company' : 'business'}” or “get listed”. A basic profile costs nothing; you don’t need the paid upgrades. Then ask two or three happy ${office ? 'clients' : 'customers'} to leave a review there.`]
           : []),
@@ -208,7 +229,7 @@ export function buildActionPlan(report) {
         ...(shown.some((x) => x.type === 'article' || x.type === 'unsure')
           ? [`Articles and “best of” posts: find the writer or the site’s contact page and send a short note: who you are, what makes you a fit, and one ${office ? 'client result' : 'happy customer'}. Ask to be considered when they update it.`]
           : []),
-        'Use the same name, website and description everywhere, word for word.',
+        spelling ? `${spellingLine(spelling)} Then use the same name, website and description everywhere, word for word.` : 'Use the same name, website and description everywhere, word for word.',
       ],
       copyText: listingCopy(d, noun, where, words),
       sites: shown,
@@ -378,6 +399,8 @@ export function buildActionPlan(report) {
       who: 'you',
       steps: [
         `Search Google for “${[name, d.town].filter(Boolean).join(' ')}”. If a profile shows that you don’t manage, use “Claim this business” on it.`,
+        ...(spelling && !missingG ? [spellingLine(spelling)] : []),
+        ...(spelling && missingG ? [`Search for “${[spelling.use === spelling.site ? spelling.typed : spelling.site, d.town].filter(Boolean).join(' ')}” too: Google may list you under either spelling. ${spellingLine(spelling)}`] : []),
         'If there is none, create one at business.google.com with your exact name, website and phone.',
         office
           ? 'If clients don’t visit your office, choose to hide your address and set the area you serve instead.'

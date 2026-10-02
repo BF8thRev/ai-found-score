@@ -141,6 +141,7 @@ export function kitView(details, report, opts) {
     done: kit.done,
     faq: { items: kit.faq.items, attributes: kit.faq.attributes, needs: kit.faq.needs },
     missing: kit.missing,
+    notes: kit.notes || [],
     readme: content.get('README.txt'),
     ...(kit.platform ? { platform: kit.platform } : {}),
   };

@@ -29,8 +29,8 @@
 import { AI_BOTS, formatPhone } from '../../scanner/owner-checks.js';
 import { normalizeTrade, TRADES, caseKind, buildQuestions } from '../../scanner/questions.js';
 import { US_STATES } from '../../scanner/config.js';
-import { SCHEMA_TYPES, GBP_DESCRIPTION_MAX, alwaysOpen } from '../../scanner/extract/fixes.js';
-import { phoneKey } from '../../scanner/extract/normalize.js';
+import { SCHEMA_TYPES, GBP_DESCRIPTION_MAX, alwaysOpen, siteSpelling } from '../../scanner/extract/fixes.js';
+import { phoneKey, squashName } from '../../scanner/extract/normalize.js';
 import { qrSvg } from './vendor/qrcode.js';
 import { buildFaq, faqPlainText, faqJsonLdScript, ownWords, ATTRIBUTES } from '../../shared/faq.js';
 import { platformFor, platformJob, platformStep, guideLinks } from '../../shared/platforms.js';
@@ -135,7 +135,9 @@ export function prefillDetails(report) {
   const g = (google && google.fields) || {};
   const key = tradeKey(b.trade);
   const noun = tradeNoun(b.trade);
-  const name = clean(b.name || g.name);
+  // The website's spelling when it differs only in spacing and the site always writes it ("PR73", not "PR 73").
+  const spelling = siteSpelling(r);
+  const name = clean((spelling && spelling.use) || b.name || g.name);
   const town = clean(b.town || b.city);
   const state = clean(b.state).toUpperCase();
   const address = b.address || onSite.address || g.address || '';
@@ -557,12 +559,29 @@ export function missingDetails(d) {
 }
 
 /**
+ * Details we have but the owner should look at before the kit goes out → [{ field, label, note }]:
+ * the name written two ways (the website's spelling vs the report request's), while the kit still uses
+ * one of the two. Shown on the kit page's "Check these details" list and in README.txt.
+ */
+export function detailNotes(d, report) {
+  const out = [];
+  const sp = siteSpelling(report);
+  if (sp && d && d.name && squashName(d.name) === squashName(sp.typed)) {
+    out.push({
+      field: 'name', label: 'Business name',
+      note: `Your website writes “${sp.site}” and your report request said “${sp.typed}” — pick one and use it everywhere. ${sp.consistent && d.name === sp.site ? `We used “${sp.site}”, as your website does.` : `These files say “${d.name}”.`} If you use the other one, change it on your Fix Kit page.`,
+    });
+  }
+  return out;
+}
+
+/**
  * buildKit(details, report, opts) → { jobs, done, faq, missing, files, platform? }
  *   jobs: [{ id, title, tech, what, where, who, optional, note?, platform?, files: [path] }] — only what is
  *         left to do for this business, most useful first. platform: { name, steps: [line], guides: [{ label, url }] }
  *         when the site builder is known; the kit's `platform` is then { id, name }.
  *   done: [{ id, title, note }] — what the website check found already in place (nothing to do).
- *   faq:  shared/faq.js buildFaq result; missing: missingDetails(d); files: [{ path, content }], README first.
+ *   faq:  shared/faq.js buildFaq result; missing: missingDetails(d); notes: detailNotes(d, report); files: [{ path, content }], README first.
  * opts: { origin, token, date } for README.txt.
  */
 export function buildKit(details, report, opts = {}) {
@@ -706,15 +725,16 @@ export function buildKit(details, report, opts = {}) {
   const rank = (j) => (j.optional ? 10 : j.order ?? ({ faq: 1, google: 2, schema: 3 }[j.id] || 6));
   const ordered = jobs.map((j, n) => ({ j, n })).sort((a, b) => rank(a.j) - rank(b.j) || a.n - b.n).map(({ j }) => { const { order, ...rest } = j; return rest; });
   const missing = missingDetails(d);
+  const notes = detailNotes(d, report);
   const platform = pf ? { id: pf.id, name: pf.name } : null;
-  const readme = { path: 'README.txt', content: readmeTxt(d, { jobs: ordered, done, faq, missing, platform }, opts) };
+  const readme = { path: 'README.txt', content: readmeTxt(d, { jobs: ordered, done, faq, missing, notes, platform }, opts) };
   const byPath = new Map(files.map((f) => [f.path, f]));
   const out = [readme, ...ordered.flatMap((j) => j.files.map((p) => byPath.get(p)))];
-  return { jobs: ordered, done, faq, missing, files: out, ...(platform ? { platform } : {}) };
+  return { jobs: ordered, done, faq, missing, notes, files: out, ...(platform ? { platform } : {}) };
 }
 
 export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token = '', date = new Date() } = {}) {
-  const { jobs = [], done = [], faq = { items: [], needs: 0 }, missing = [], platform = null } = kit || {};
+  const { jobs = [], done = [], faq = { items: [], needs: 0 }, missing = [], notes = [], platform = null } = kit || {};
   const out = [
     `YOUR FIX KIT: ${d.name}`,
     `Made ${date.toISOString().slice(0, 10)} by AI Found Score, from your website, your report and the details you checked.`,
@@ -725,8 +745,9 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
     '',
     ...(platform ? [`Your website is built on ${platform.name}. Where a job can be done in ${platform.name}, it says exactly where to click, with ${platform.name}’s own guide.`, ''] : []),
   ];
-  if (missing.length || faq.needs) {
+  if (missing.length || notes.length || faq.needs) {
     out.push('BEFORE YOU SEND IT ON');
+    for (const n of notes) out.push(`- Check: ${n.label}. ${n.note}`);
     for (const m of missing) out.push(`- Missing: ${m.label}. ${m.note}`);
     if (faq.needs) out.push(`- ${plural(faq.needs, 'answer', 'answers')} in your Questions page ${faq.needs === 1 ? 'needs' : 'need'} one detail from you (the part in [brackets]). Fill ${faq.needs === 1 ? 'it' : 'them'} in on your Fix Kit page and download again.`);
     out.push('');

@@ -44,9 +44,14 @@ Source of truth: `docs/BUILD_PLAN.md` ("Report data model v2") and `docs/CONTRAC
   "headline": { "answerId": "a1", "rule": "most_others_named_not_you" },  // or "best_named_you"
   "sources": [ {
     "domain": "localpages.example.com", "url": "https://...", "citedIn": ["a1", "a7"],
-    "youListed": false,                 // true | false | null (not checked)
+    "youListed": false,                 // true | false (we read the page) | null (not checked)
     "youPosition": null,                // null or a positive integer (1 = listed first)
-    "topListed": "Tidewater Plumbing Co."
+    "topListed": "Tidewater Plumbing Co.",
+    // Scans from Oct 2 2026 (scanner/extract/sources.js), each only when known:
+    "checkReason": "blocked",           // why youListed is null: robots | blocked | error | not_html | empty
+    "listedBy": "website",              // youListed true: website (a link to their domain) | name | phone
+    "profileUrl": "https://...",        // youListed true: where we saw them
+    "addUrl": "https://..."             // the directory's "add your business" page, when we've checked it
   } ],
   "aiFacts": [ {                        // aiSays is a literal substring of the answer
     "answerId": "a11", "field": "phone", "aiSays": "(516) 555-0119", "sourceSays": "(516) 555-0148",
