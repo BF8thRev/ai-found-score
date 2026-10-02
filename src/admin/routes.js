@@ -6,6 +6,9 @@
 //   POST /admin/expenses        add a manual expense
 //   POST /admin/scan            start a background scan from the form
 //   POST /admin/scan/run        "Run now" for a queued (or failed) free-report request scan (src/lib/auto-scan.js)
+//   GET  /admin?report=<link>   "Find a report": who it's for, locked or not, payments, every scan's cost
+//   POST /admin/report/unlock   unlock a report without Stripe; the full audit only if ticked (src/admin/unlock.js)
+//   POST /admin/report/breakdown add the Competitor Breakdown to an unlocked report (no API calls)
 //   POST /admin/email/sent      log a hand-sent cold email → 303 /admin?sent=<token> (shows the links to paste; sends nothing)
 //   POST /admin/prospects       add a business to email (src/admin/outreach.js)
 //   POST /admin/gmail/pause     the Gmail sender's Pause switch (src/lib/gmail-sender.js) → 303 /admin?gmail=paused
@@ -19,7 +22,8 @@
 // same-origin Origin header (with SameSite=Strict, that is the CSRF defence).
 
 import { adminAuth, tokenMatches, signSession, sessionCookie, clearSessionCookie, sameOrigin } from './session.js';
-import { loadDashboard, insertExpense, insertProspect, prospectDetails } from './data.js';
+import { loadDashboard, insertExpense, insertProspect, prospectDetails, reportLookup, reportTokenFrom } from './data.js';
+import { parseUnlockForm, adminUnlock, adminAddBreakdown, hasBreakdown } from './unlock.js';
 import { renderLogin, renderDashboard, ADMIN_JS } from './page.js';
 import { parseExpenseForm, scanFormToBody } from './metrics.js';
 import { handleAdminPing, handleAdminScanStart, handleAdminScanStatus, startScan, ALL_ENGINES, NO_STORE } from './api.js';
@@ -116,7 +120,7 @@ export async function handleAdminRequest(request, url, env) {
     return redirect(url, '/admin', { 'Set-Cookie': clearSessionCookie() });
   }
 
-  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/cancel' && path !== '/admin/scan/paid'
+  if (path !== '/admin' && path !== '/admin/' && path !== '/admin/expenses' && path !== '/admin/scan' && path !== '/admin/scan/run' && path !== '/admin/scan/cancel' && path !== '/admin/scan/paid' && path !== '/admin/report/unlock' && path !== '/admin/report/breakdown'
     && path !== '/admin/email/sent' && path !== '/admin/prospects'
     && path !== '/admin/gmail/pause' && path !== '/admin/gmail/resume' && path !== '/admin/gmail/test') return notFound();
 
@@ -130,11 +134,23 @@ export async function handleAdminRequest(request, url, env) {
     return new Response('Cross-origin request refused', { status: 403, headers: NO_STORE });
   }
 
-  const render = async ({ flash = {}, watch = [], status = 200, sent = null } = {}) => {
+  // "Find a report" (?report=<link or token>): looked up next to the dashboard; a failed read shows in the box.
+  const lookupFor = async (input) => {
+    if (input == null || input === '') return null;
+    const token = reportTokenFrom(input);
+    if (!token) return { input, error: 'Paste a report link (…/report/…) or its token.' };
+    try {
+      const found = await reportLookup(env, token);
+      return found ? { input, ...found } : { input, token, error: 'No report with that link.' };
+    } catch (e) {
+      return { input, token, error: `Could not look it up: ${redact(env, e?.message || e, 200)}` };
+    }
+  };
+  const render = async ({ flash = {}, watch = [], status = 200, sent = null, report = null } = {}) => {
     const n = nonce();
-    const dash = await loadDashboard(env);
+    const [dash, lookup] = await Promise.all([loadDashboard(env), lookupFor(report)]);
     const dryRun = dryRunEnabled(env) && isLocalRequest(url);
-    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env), sent, siteOrigin: url.origin, gmail: gmailStatus(env) }), { status, nonce: n });
+    return html(renderDashboard(dash, { nonce: n, engineIds: ALL_ENGINES, flash, watch, dryRun, activeIds: defaultScanEngines(env), sent, siteOrigin: url.origin, gmail: gmailStatus(env), lookup }), { status, nonce: n });
   };
 
   // Log a cold email sent by hand. Writes the 'sent' row only; the redirect shows what to paste.
@@ -253,6 +269,46 @@ export async function handleAdminRequest(request, url, env) {
     return redirect(url, `/admin?started=${r.scanId}#run`);
   }
 
+  // Unlock a report from /admin (src/admin/unlock.js): the same payments row a Stripe checkout writes.
+  // Only a real report that isn't unlocked yet; a paid audit that didn't start is retried with /admin/scan/paid.
+  if (path === '/admin/report/unlock') {
+    if (method !== 'POST') return redirect(url, '/admin#report');
+    const f = await form(request);
+    const fields = f ? Object.fromEntries(f.entries()) : {};
+    const token = reportTokenFrom(fields.token);
+    const fail = (text, status) => render({ flash: { report: { ok: false, text } }, status, report: token || '' });
+    if (!token) return fail('Bad report token.', 422);
+    const parsed = parseUnlockForm(fields);
+    if (!parsed.ok) return fail(parsed.error, 422);
+    let found;
+    try { found = await reportLookup(env, token); } catch (e) { return fail(`Could not check the report: ${redact(env, e?.message || e, 200)}`, 503); }
+    if (!found || !found.hasReport) return fail('There is no finished report on that link to unlock.', 422);
+    if (found.unlocked) return fail('That report is already unlocked.', 409);
+    let r;
+    try { r = await adminUnlock(env, token, parsed.row); } catch (e) { return fail(`Could not unlock: ${redact(env, e?.message || e, 200)}`, 500); }
+    const q = `report=${encodeURIComponent(token)}&unlocked=1`;
+    if (r.scan && r.scan.ok) return redirect(url, `/admin?${q}&started=${r.scan.scanId}#report`);
+    if (r.scan) return redirect(url, `/admin?${q}&scan=${encodeURIComponent(String(r.scan.reason || 'failed').slice(0, 120))}#report`);
+    return redirect(url, `/admin?${q}#report`);
+  }
+
+  if (path === '/admin/report/breakdown') {
+    if (method !== 'POST') return redirect(url, '/admin#report');
+    const f = await form(request);
+    const fields = f ? Object.fromEntries(f.entries()) : {};
+    const token = reportTokenFrom(fields.token);
+    const fail = (text, status) => render({ flash: { report: { ok: false, text } }, status, report: token || '' });
+    if (!token) return fail('Bad report token.', 422);
+    const parsed = parseUnlockForm(fields);
+    if (!parsed.ok) return fail(parsed.error, 422);
+    let found;
+    try { found = await reportLookup(env, token); } catch (e) { return fail(`Could not check the report: ${redact(env, e?.message || e, 200)}`, 503); }
+    if (!found || !found.unlocked) return fail('Unlock the report first (the Breakdown comes with the paid audit).', 422);
+    if (hasBreakdown(found.payments)) return fail('That report already has the Competitor Breakdown.', 409);
+    try { await adminAddBreakdown(env, token, parsed.row); } catch (e) { return fail(`Could not add it: ${redact(env, e?.message || e, 200)}`, 500); }
+    return redirect(url, `/admin?report=${encodeURIComponent(token)}&breakdown=1#report`);
+  }
+
   if (path === '/admin/scan') {
     if (method !== 'POST') return redirect(url, '/admin#run');
     const f = await form(request);
@@ -275,6 +331,14 @@ export async function handleAdminRequest(request, url, env) {
   if (url.searchParams.get('again') === '1') flash.email = { ok: true, text: 'Already logged for this business and campaign: the same links as before.' };
   const gmailFlash = { paused: 'All Gmail sending is paused.', resumed: 'Gmail sending is back on.', sent: 'Test email sent. Check the inbox; the row is under “Last sends”.' }[url.searchParams.get('gmail')];
   if (gmailFlash) flash.gmail = { ok: true, text: gmailFlash };
+  if (url.searchParams.get('unlocked') === '1') {
+    const why = url.searchParams.get('scan');
+    flash.report = why
+      ? { ok: false, text: `Unlocked. The full audit did not start (${why}); use “Re-run full audit” below.` }
+      : { ok: true, text: watch.length ? 'Unlocked. The full audit is running; the same link updates when it finishes.' : 'Unlocked. The same link now shows the whole report, no new API calls.' };
+    if (watch.length) delete flash.run;
+  }
+  if (url.searchParams.get('breakdown') === '1') flash.report = { ok: true, text: 'Competitor Breakdown added. It shows on the same link now, no new API calls.' };
   const sentParam = url.searchParams.get('sent');
-  return render({ flash, watch, sent: validToken(sentParam || '') ? sentParam : null });
+  return render({ flash, watch, sent: validToken(sentParam || '') ? sentParam : null, report: url.searchParams.get('report') });
 }

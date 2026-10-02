@@ -151,3 +151,35 @@ export async function prospectDetails(env, businessId) {
   if (!biz[0]) return null;
   return { name: biz[0].name, town: biz[0].town || null, reportToken: rep[0]?.report_token || null };
 }
+
+/** A report token from what was pasted: the token itself or any link with /report/<token> in it. Else null. */
+export function reportTokenFrom(input) {
+  let s = String(input || '').trim();
+  const m = s.match(/\/report\/([^/?#\s]+)/);
+  if (m) { try { s = decodeURIComponent(m[1]); } catch { return null; } }
+  return /^[A-Za-z0-9_-]{6,64}$/.test(s) ? s : null;
+}
+
+/**
+ * Everything /admin's "Find a report" box shows for one token: the business, whether it's unlocked
+ * (the same report_unlocked() the report page asks), its payments, and every scan under the token with
+ * its real cost (v_scan_costs), so a free report's and its full audit's API spend stay on that business.
+ * → { token, name, hasReport, unlocked, payments: [...], scans: [...], costUsd } | null (no such token)
+ */
+export async function reportLookup(env, token) {
+  const s = supa(env);
+  if (!s) throw new Error('SUPABASE_SERVICE_KEY is not set');
+  const t = encodeURIComponent(token);
+  const [scans, payments, saved, unlockedRes] = await Promise.all([
+    get(env, s, `v_scan_costs?select=scan_id,trigger,status,started_at,total_cost_usd,business_name,report_saved,engines,answers,calls_ok&report_token=eq.${t}&order=started_at.asc.nullslast`),
+    get(env, s, `payments?select=tier,amount_cents,addons,livemode,paid_at,revoked_at,stripe_session_id,customer_email&report_token=eq.${t}&order=paid_at.asc`),
+    get(env, s, `scan_results?select=name:report->business->>name&report_token=eq.${t}&version=eq.2&order=scanned_at.desc&limit=1`),
+    fetch(`${s.base}/rpc/report_unlocked`, { method: 'POST', headers: s.headers, body: JSON.stringify({ p_token: token }) }),
+  ]);
+  if (!unlockedRes.ok) throw new Error(`report_unlocked: HTTP ${unlockedRes.status}`);
+  const unlocked = (await unlockedRes.json()) === true;
+  if (!scans.length && !saved.length && !payments.length) return null;
+  const costUsd = scans.reduce((sum, r) => sum + (Number(r.total_cost_usd) || 0), 0);
+  const name = saved[0]?.name || [...scans].reverse().find((r) => r.business_name)?.business_name || null;
+  return { token, name, hasReport: saved.length > 0, unlocked, payments, scans, costUsd };
+}
