@@ -56,13 +56,20 @@ const AWARD_SITE_RE = /(^|\.)(odwyerpr|provokemedia|prweek|holmesreport|prnewson
  * How a cited page is joined: 'directory' (claim or add a profile), 'award' (an industry list or award,
  * entered by submission) or 'article' (a "best of" post or blog: ask the writer).
  */
-export function siteType(domain, url = '') {
+export function siteType(domain, url = '', { trade = '' } = {}) {
   const dom = String(domain || '').toLowerCase();
   if (AWARD_SITE_RE.test(dom)) return 'award';
   if (LIST_SITE_RE.test(dom)) return 'directory';
   let path = '';
   try { path = new URL(String(url)).pathname.toLowerCase(); } catch { path = ''; }
-  return /(^|\/)(awards?|rankings?)(\/|-|$)/.test(path) ? 'award' : 'article';
+  if (/(^|\/)(awards?|rankings?)(\/|-|$)/.test(path)) return 'award';
+  // A post: a dated or blog path, or a "best/top N" headline.
+  if (/(^|\/)(blog|news|posts?|articles?|stories)(\/|$)|\/(19|20)\d\d\/|(^|[/-])(best|top)(-\d+)?-/.test(path)) return 'article';
+  // A listings page: directory words, or the trade itself in the path (/massapequa-ny/plumbers).
+  const tradeWord = squash(String(trade).split(/\s+/).pop() || '').replace(/(ing|er|ers|s)$/, '');
+  if (/(^|[/-])(director(y|ies)|listings?|find|near|businesses|companies|agencies|firms|pros|contractors|services)([/-]|$)/.test(path)
+    || (tradeWord.length >= 3 && squash(path).includes(tradeWord))) return 'directory';
+  return 'unsure';
 }
 
 const squash = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
@@ -155,7 +162,7 @@ export function buildActionPlan(report) {
     // to the site itself, not to the rival's page.
     const path = squash(String(s.url || '').replace(/^https?:\/\/[^/]+/i, ''));
     const rivalPage = entities.some((e) => { const n = squash(e.name); return n.length >= 4 && !isDirectoryName(e.name) && path.includes(n); });
-    const type = siteType(dom, s.url);
+    const type = siteType(dom, s.url, { trade: b.trade });
     sites.push({ domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, type, status: s.youListed === false ? 'missing' : 'check', engines, count: lostIn.length, topListed: s.topListed || null });
   }
   sites.sort((x, y) => (x.status === 'missing' ? 0 : 1) - (y.status === 'missing' ? 0 : 1) || y.count - x.count);
@@ -165,7 +172,7 @@ export function buildActionPlan(report) {
     items.push({
       id: 'lists',
       impact: 'high',
-      title: `Get on the ${shown.length} ${plural(shown.length, 'list', 'lists')} AI read when it picked other ${office ? 'firms' : 'businesses'}`,
+      title: `Get on the ${shown.length} ${shown.some((x) => x.type === 'directory' || x.type === 'award' || x.type === 'unsure') ? plural(shown.length, 'list', 'lists') : plural(shown.length, 'page', 'pages')} AI read when it picked other ${office ? 'firms' : 'businesses'}`,
       why: `When AI named ${topRivals.length ? listJoin(topRivals) : 'other businesses'} instead of you, it read ${plural(shown.length, 'this page', 'these pages')}. ${missing ? `You’re not on ${missing === shown.length ? (missing === 1 ? 'it' : 'any of them') : `${missing} of them`}. ` : ''}Being on the pages AI reads gives it a reason to include you.`,
       who: 'you',
       steps: [
@@ -176,7 +183,10 @@ export function buildActionPlan(report) {
         ...(shown.some((x) => x.type === 'award')
           ? ['Industry lists and awards: these take entries, often once a year and sometimes with a fee or a size rule. Find the entry page, check you qualify, and put the deadline in your calendar.']
           : []),
-        ...(shown.some((x) => x.type === 'article')
+        ...(shown.some((x) => x.type === 'unsure')
+          ? [`Pages marked “Other”: if it lists ${office ? 'firms' : 'businesses'} you can join, add yours; if it’s an article, contact the writer as below.`]
+          : []),
+        ...(shown.some((x) => x.type === 'article' || x.type === 'unsure')
           ? [`Articles and “best of” posts: find the writer or the site’s contact page and send a short note: who you are, what makes you a fit, and one ${office ? 'client result' : 'happy customer'}. Ask to be considered when they update it.`]
           : []),
         'Use the same name, website and description everywhere, word for word.',

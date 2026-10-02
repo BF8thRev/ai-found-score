@@ -537,6 +537,7 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-title { flex: 1; min-width: 0; font-weight: 700; color: var(--navy); font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
 .ap-row summary .badge { flex: none; margin: 0; }
 .ap-body { padding: 0 16px 16px 36px; }
+.ap-whotag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--wash-2); color: var(--navy); font-size: 12px; font-weight: 600; vertical-align: middle; white-space: nowrap; }
 .ap-who { margin: 0 0 6px; font-size: 14px; color: var(--muted); font-weight: 600; }
 .ap-why { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
 .ap-how-k { margin: 12px 0 0; font-weight: 700; color: var(--navy); font-size: 15px; }
@@ -557,5 +558,6 @@ details.r2-allans[open] > summary::after { content: "–"; }
   .ap-row summary { flex-wrap: wrap; gap: 6px 8px; padding-right: 32px; }
   .ap-title { flex-basis: calc(100% - 40px); font-size: 16px; }
   .ap-row summary .badge { margin-left: 34px; }
-  .ap-body { padding: 0 12px 14px 0; }
+  /* The open step uses the full card width: its body slides under the tick column. */
+  .ap-body { padding: 0 12px 14px 0; margin-left: -38px; }
 }

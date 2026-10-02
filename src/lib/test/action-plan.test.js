@@ -297,6 +297,11 @@ test('site types: directories are claimed, industry lists are entered, articles 
   assert.equal(siteType('odwyerpr.com', 'https://www.odwyerpr.com/pr_firm_rankings/newyork.htm'), 'award');
   assert.equal(siteType('example.org', 'https://example.org/awards/2026'), 'award');
   assert.equal(siteType('franklinpatch.com', 'https://franklinpatch.com/best-plumbers-in-franklin'), 'article');
+  // A town directory on a domain we don't know is still a directory.
+  assert.equal(siteType('localpages.example.com', 'https://localpages.example.com/massapequa-ny/plumbers', { trade: 'plumber' }), 'directory');
+  assert.equal(siteType('chamber.example.org', 'https://chamber.example.org/directory/'), 'directory');
+  assert.equal(siteType('news.example.com', 'https://news.example.com/2026/05/new-shop-opens'), 'article');
+  assert.equal(siteType('example.com', 'https://example.com/about'), 'unsure');
   const rep = officeReport();
   rep.sources.push({ url: 'https://citymag.example.com/best-pr-agencies-nyc', domain: 'citymag.example.com', citedIn: ['a1'], youListed: null });
   const lists = byId(buildActionPlan(rep), 'lists');
@@ -327,4 +332,13 @@ test('Fix Kit notes show on a paid report and never on a sample', () => {
   assert.match(paid, /class="ap-kitnote"/);
   const sample = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
   assert.doesNotMatch(sample, /ap-kitnote|Fix Kit/);
+});
+
+test('the plumber sample: its town directory is a directory, and the row shows who does the step', () => {
+  const plan = buildActionPlan(MOCK_REPORTS['sample-001']);
+  const lists = byId(plan, 'lists');
+  assert.ok(lists.sites.some((x) => x.domain === 'localpages.example.com' && x.type === 'directory'));
+  assert.match(lists.title, /lists AI read/);
+  const html = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
+  assert.match(html, /<span class="ap-whotag">Web person<\/span>/);
 });

@@ -623,7 +623,8 @@ function actionPlanV2(report) {
         <p><strong>Your Fix Kit is ready, and it’s included.</strong> Confirm your details once and we build the files several steps below ask for (FAQ code, business code, llms.txt, your Google text), with a one-page guide for whoever runs your website.</p>
         <a class="btn" href="${kitUrl}">Open my Fix Kit</a>
       </div>`;
-  const TYPE_LABEL = { award: 'Industry list', article: 'Article' };
+  const TYPE_LABEL = { award: 'Industry list', article: 'Article', unsure: 'Other' };
+  const WHO_TAG = { web: 'Web person', both: 'You + web person' };
   const sites = (list) => ((list || []).length ? `
           <ul class="ap-sites">${list.map((s) => `<li><span class="badge ${s.status === 'missing' ? 'mismatch' : 'low'}">${s.status === 'missing' ? 'Not on it' : 'Check'}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`).join('')}</ul>` : '');
   // Wired once the page is in the DOM: save a tick, strike the step through, update the count.
@@ -644,6 +645,8 @@ function actionPlanV2(report) {
         const nextLi = [...root.querySelectorAll('.ap-item')].find((x) => !x.classList.contains('done'));
         const nextRow = nextLi && nextLi.querySelector('details');
         if (nextRow) nextRow.open = true;
+        // Closing a long step above moves the page: keep the next step in view.
+        if (nextLi && typeof nextLi.scrollIntoView === 'function') nextLi.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
       const n = root.querySelectorAll('input[data-ap]:checked').length;
       const out = root.querySelector('[data-ap-count]');
@@ -664,7 +667,7 @@ function actionPlanV2(report) {
           <details class="ap-row"${n === firstOpen ? ' open' : ''}>
             <summary>
               <span class="ap-num">${n + 1}</span>
-              <span class="ap-title">${escapeHtml(i.title)}</span>
+              <span class="ap-title">${escapeHtml(i.title)}${WHO_TAG[i.who] ? ` <span class="ap-whotag">${WHO_TAG[i.who]}</span>` : ''}</span>
               <span class="badge ${escapeHtml(i.impact)}">${escapeHtml(AP_IMPACT[i.impact] || AP_IMPACT.medium)}</span>
             </summary>
             <div class="ap-body">
