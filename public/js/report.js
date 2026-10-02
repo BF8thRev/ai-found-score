@@ -624,7 +624,7 @@ function actionPlanV2(report) {
         <a class="btn" href="${kitUrl}">Open my Fix Kit</a>
       </div>`;
   const sites = (list) => ((list || []).length ? `
-          <ul class="ap-sites">${list.map((s) => `<li><span class="badge ${s.status === 'missing' ? 'mismatch' : 'low'}">${s.status === 'missing' ? 'Not on it' : 'Check'}</span> <a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`).join('')}</ul>` : '');
+          <ul class="ap-sites">${list.map((s) => `<li><span class="badge ${s.status === 'missing' ? 'mismatch' : 'low'}">${s.status === 'missing' ? 'Not on it' : 'Check'}</span>${s.type === 'award' ? ' <span class="ap-type">Industry list</span>' : ''} <a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`).join('')}</ul>` : '');
   // Wired once the page is in the DOM: save a tick, strike the step through, update the count.
   setTimeout(() => {
     const root = typeof document.getElementById === 'function' ? document.getElementById('action-plan') : null;
@@ -643,9 +643,6 @@ function actionPlanV2(report) {
       if (bar) bar.style.width = `${pct(n)}%`;
     }));
   }, 0);
-  const recheck = !isDemoReport(report) && !report.plan
-    ? ' We ask AI the same questions again 30 days after your audit, free, and show you what changed.'
-    : '';
   return `
     <section class="report-section ap" id="action-plan" aria-label="Your action plan">
       <h2>Your action plan</h2>
@@ -670,7 +667,7 @@ function actionPlanV2(report) {
           </details>
         </li>`).join('')}
       </ol>
-      <p class="r2-muted ap-foot">Below this plan: the evidence behind it (what AI said, who it named, and what we found on your website).${recheck}</p>
+      <p class="r2-muted ap-foot">Below this plan: the evidence behind it (what AI said, who it named, and what we found on your website).</p>
     </section>`;
 }
 

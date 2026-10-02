@@ -532,12 +532,18 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .ap-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 6px; font-size: 13px; }
 .ap-num { font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .04em; }
 .ap-who { color: var(--muted); }
+.ap-meta .badge, .ap-sites .badge { margin: 0; }
+.ap-type { font-size: 13px; color: var(--muted); }
+.ap-tick { min-width: 32px; min-height: 32px; }
 .ap-item h3 { font-size: 18px; margin: 0 0 6px; overflow-wrap: anywhere; }
 .ap-why { margin: 0; font-size: 15px; line-height: 1.5; }
 .ap-sites { list-style: none; margin: 10px 0 0 34px; padding: 0; }
 .ap-sites li { margin: 0 0 6px; font-size: 15px; overflow-wrap: anywhere; }
 .ap-how { margin: 10px 0 0 34px; }
-.ap-how summary { cursor: pointer; font-weight: 700; color: var(--navy); font-size: 15px; }
+.ap-how summary { cursor: pointer; font-weight: 700; color: var(--navy); font-size: 15px; list-style: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
+.ap-how summary::-webkit-details-marker { display: none; }
+.ap-how summary::before { content: "▸"; font-size: 12px; transition: transform .15s; }
+.ap-how[open] summary::before { transform: rotate(90deg); }
 .ap-how .r2-steps { margin-top: 8px; }
 .ap-item.done { background: var(--wash); }
 .ap-item.done h3 { text-decoration: line-through; color: var(--muted); }

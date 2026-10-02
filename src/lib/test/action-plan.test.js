@@ -90,20 +90,87 @@ test('FAQ drafts: their own homepage words, "a PR agency", and [brackets] for wh
   assert.doesNotMatch(qa, /\ban PR\b|\bpr agency\b/);
   assert.equal(qa.split('\n\n').length, 2, 'the "open now" question is left out for an office');
   assert.match(faq.copyText[1].text, /"@type": "FAQPage"/);
+  assert.doesNotMatch(faq.copyText[1].text, /\[[A-Z]/, 'no [bracket] placeholder can go live in the FAQ code');
+  // The homepage words appear once, not in every answer.
+  assert.equal(qa.split("Harbor Lane's integrated communications team").length - 1, 1);
+  // Names, not an inflated count; never a directory.
+  assert.match(faq.why, /named Brightline Communications, Kestrel PR, Monarch Media Group and others, not you/);
+  assert.doesNotMatch(faq.why, /\d+ other businesses|Clutch/);
   assert.equal(fixCase('Pr agency open now'), 'PR agency open now');
 });
 
-test('storefront/trade business: keeps hours and storefront advice; Google comes before the FAQ', () => {
+test('trade business (a plumber): service-area Google advice, hours kept, no storefront; Google and reviews above code', () => {
   const plan = buildActionPlan(MOCK_REPORTS['sample-001']);
-  assert.notEqual(plan.kind, 'professional');
+  assert.equal(plan.kind, 'trade');
   const g = byId(plan, 'google');
-  assert.ok(g, 'a Google step');
-  assert.match(g.steps.join(' '), /hours/i);
-  assert.match(g.steps.join(' '), /storefront/);
-  const ids = plan.items.map((i) => i.id);
-  assert.ok(ids.indexOf('faq') > -1);
+  const gs = g.steps.join(' ');
+  assert.match(gs, /hide your address and set the towns you serve, starting with Massapequa/);
+  assert.match(gs, /hours/i);
+  assert.match(gs, /photos of your jobs/);
+  assert.doesNotMatch(JSON.stringify(plan.items), /storefront/);
+  assert.equal(g.impact, 'medium', 'never a "quick extra" for a local business');
+  const at = (pred) => plan.items.findIndex(pred);
+  const reviews = at((i) => i.from.includes('few_reviews'));
+  const code = at((i) => i.id === 'contact');
+  const llms = at((i) => i.from.includes('site_no_llms_txt'));
+  assert.ok(at((i) => i.id === 'google') < code && at((i) => i.id === 'google') < llms, 'Google above schema code and llms.txt');
+  assert.ok(reviews < llms, 'reviews above llms.txt');
   // Wrong facts and listing mismatches stay first.
   assert.ok(/^fact-/.test(plan.items[0].id), plan.items[0].id);
+});
+
+test('a shop people walk into keeps storefront photos and opening hours', () => {
+  const rep = officeReport();
+  rep.business = { ...rep.business, name: 'Corner Bakery', trade: 'bakery' };
+  const g = byId(buildActionPlan(rep), 'google');
+  assert.match(g.steps.join(' '), /storefront/);
+  assert.match(g.steps.join(' '), /opening hours/);
+  assert.equal(g.impact, 'high', 'not on Maps is the first job for a shop');
+});
+
+test('edge cases: no town, no questions, duplicate titles, positional facts', () => {
+  // No town: the suggested title has no dangling "in" or "| |".
+  const noTown = officeReport();
+  noTown.business = { ...noTown.business, town: '', state: '' };
+  noTown.siteCheck.meta = { ...noTown.siteCheck.meta, title: 'Short', description: 'Fresh bread daily.', h1: 'Hi' };
+  const t = byId(buildActionPlan(noTown), 'homepage').copyText[0].text;
+  assert.equal(t, 'PR agency | Harbor Lane PR');
+  // No questions stored: lost questions fall back to stored fixes, and an office still never sees "open now".
+  const noQ = officeReport();
+  noQ.questions = [];
+  const plan = buildActionPlan(noQ);
+  assert.doesNotMatch(JSON.stringify(plan.items.map((i) => i.title)), /open now/i);
+  // Two stored fixes whose titles share a long start still get different ids (they key the ticks).
+  const dup = officeReport();
+  dup.questions = [];
+  dup.issues.push({ kind: 'few_reviews', severity: 'medium', title: 'Not named when asked "What is the best agency"', steps: [] });
+  dup.issues.push({ kind: 'few_reviews', severity: 'medium', title: 'Not named when asked "What is the best agency"', steps: [] });
+  const ids = buildActionPlan(dup).items.map((i) => i.id);
+  assert.equal(new Set(ids).size, ids.length);
+  // A fact step's id comes from its text, so a tick stays on it when other facts come and go.
+  const f = officeReport();
+  f.issues.unshift({ kind: 'fact_differs', severity: 'high', title: 'AI states your phone differently', steps: [] });
+  const id1 = buildActionPlan(f).items.find((i) => i.title === 'AI states your phone differently').id;
+  f.issues.unshift({ kind: 'fact_differs', severity: 'high', title: 'AI states your hours differently', steps: [] });
+  assert.equal(buildActionPlan(f).items.find((i) => i.title === 'AI states your phone differently').id, id1);
+});
+
+test('contact step: says where the phone goes in the code; office title doesn’t promise an address', () => {
+  const c = byId(buildActionPlan(officeReport()), 'contact');
+  assert.equal(c.title, 'Put your phone number and business code on your website');
+  assert.match(c.copyText[0].text, /"telephone": "\[your phone number\]"/);
+  assert.match(c.steps.join(' '), /replacing each part in \[brackets\]/);
+});
+
+test('lists step: a paid membership association is not a list to "get on"; awards get an entry step', () => {
+  const rep = officeReport();
+  rep.sources.push({ url: 'https://www.aaaa.org/agency-profile/x/brightline-new-york', domain: 'aaaa.org', citedIn: ['a2'], topListed: null, youListed: null });
+  const lists = byId(buildActionPlan(rep), 'lists');
+  assert.ok(!lists.sites.some((s) => s.domain === 'aaaa.org'));
+  assert.equal(lists.sites.find((s) => s.domain === 'odwyerpr.com').type, 'award');
+  assert.equal(lists.sites.find((s) => s.domain === 'clutch.co').type, 'directory');
+  assert.match(lists.steps.join(' '), /Industry lists and awards: these take entries/);
+  assert.doesNotMatch(lists.why, /most direct way/);
 });
 
 test('a directory AI listed as a business is never a competitor', () => {
@@ -198,7 +265,25 @@ test('paid page: saved ticks come back (done steps struck, the first undone step
 test('sample report shows the plan as a buyer would see it, with nothing to buy and no Fix Kit link', () => {
   const html = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
   assert.match(html, /<h2>Your action plan<\/h2>/);
-  assert.doesNotMatch(html, /Open my Fix Kit|Get my Competitor Breakdown|Want us to keep watching\?/);
+  assert.ok(html.indexOf('<h2>Your action plan</h2>') < html.indexOf('Who got the call instead'));
+  assert.doesNotMatch(html, /Open my Fix Kit|Get my Competitor Breakdown|Want us to keep watching\?|Your fix checklist|What to fix, in order/);
+  // The sample's gap sheet found gaps, so it stays, without its own checklist.
+  assert.match(html, /<h2>Competitor gap sheet<\/h2>/);
+});
+
+test('paid page never says "free" in the plan', () => {
+  const html = render(loadPage(), reportBody(officeReport(), true));
+  const plan = html.slice(html.indexOf('id="action-plan"'), html.indexOf('</section>', html.indexOf('id="action-plan"')));
+  assert.doesNotMatch(plan, /\bfree\b/i);
+});
+
+test('Be the Answer report: plan panel and action plan together; Fix Kit link uses the plan token; no $499 pitch', () => {
+  const rep = reportBody(officeReport(), true);
+  rep.plan = { token: 'plan-tok', town: '' };
+  const html = render(loadPage(), rep);
+  assert.ok(html.indexOf('Open my plan') > -1 && html.indexOf('Open my plan') < html.indexOf('<h2>Your action plan</h2>'));
+  assert.match(html, /href="\/fix-kit\/plan-tok"/);
+  assert.doesNotMatch(html, /Want us to keep watching\?|Get my Competitor Breakdown/);
 });
 
 test('free (locked) page is unchanged: no action plan', () => {

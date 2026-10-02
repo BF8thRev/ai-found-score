@@ -39,9 +39,16 @@ const plural = (n, one, many) => (n === 1 ? one : many);
 const ENGINE = { chatgpt: 'ChatGPT', claude: 'Claude', gemini: 'Gemini', perplexity: 'Perplexity', google_ai_mode: 'Google AI Mode' };
 
 /** Sites that list businesses: a cited page here is a list the owner can get onto. */
-const LIST_SITE_RE = /(^|\.)(yelp|angi|angieslist|bbb|homeadvisor|thumbtack|yellowpages|mapquest|porch|networx|manta|superpages|foursquare|buildzoom|houzz|birdeye|clutch|themanifest|goodfirms|upcity|designrush|expertise|sortlist|agencyspotter|odwyerpr|provokemedia|prweek|publicrelationsdatabase|communicationsmatch|aaaa|tripadvisor|nextdoor|avvo|justia|martindale|findlaw|lawyers|healthgrades|zocdoc|vitals|opentable|theknot|weddingwire)\.(com|org|net|co)$/i;
+const LIST_SITE_RE = /(^|\.)(yelp|angi|angieslist|bbb|homeadvisor|thumbtack|yellowpages|mapquest|porch|networx|manta|superpages|foursquare|buildzoom|houzz|birdeye|clutch|themanifest|goodfirms|upcity|designrush|expertise|sortlist|agencyspotter|odwyerpr|provokemedia|prweek|publicrelationsdatabase|communicationsmatch|tripadvisor|nextdoor|avvo|justia|martindale|findlaw|lawyers|healthgrades|zocdoc|vitals|opentable|theknot|weddingwire)\.(com|org|net|co)$/i;
 /** Never something to get "listed" on: social threads, job boards, press-release wires, encyclopedias. */
-const NOT_A_LIST_RE = /(^|\.)(reddit|quora|facebook|instagram|linkedin|x|twitter|tiktok|youtube|wikipedia|glassdoor|indeed|4dayweek|ziprecruiter|publicnow|prnewswire|businesswire|globenewswire|einpresswire|google|apple|bing)\.(com|org|io|net)$/i;
+const NOT_A_LIST_RE = /(^|\.)(aaaa|ana|iabc|prsa|reddit|quora|facebook|instagram|linkedin|x|twitter|tiktok|youtube|wikipedia|glassdoor|indeed|4dayweek|ziprecruiter|publicnow|prnewswire|businesswire|globenewswire|einpresswire|google|apple|bing)\.(com|org|io|net)$/i;
+
+// A short, stable id from text: a saved tick stays on its step even when other steps come and go.
+function hashId(prefix, text) {
+  let h = 5381;
+  for (const ch of String(text || '')) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+  return `${prefix}-${h.toString(36)}`;
+}
 
 const squash = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
 
@@ -109,7 +116,7 @@ export function buildActionPlan(report) {
 
   // 1. What AI gets wrong, and AI being blocked: always first, each its own step.
   for (const i of take((x) => x.kind === 'fact_differs' || x.kind === 'listing_differs' || x.kind === 'listing_mismatch')) {
-    items.push({ id: `fact-${items.length}`, impact: 'high', title: i.title, why: `${i.description ? `${i.description} ` : ''}AI repeats what it reads, so customers get the wrong details until every source matches.`, who: 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind] });
+    items.push({ id: hashId('fact', i.title), impact: 'high', title: i.title, why: `${i.description ? `${i.description} ` : ''}AI repeats what it reads, so customers get the wrong details until every source matches.`, who: 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind] });
   }
   for (const i of take((x) => x.kind === 'site_blocks_ai')) {
     items.push({ id: 'unblock', impact: 'high', title: i.title, why: `${i.description || ''} AI can’t recommend what it isn’t allowed to read.`.trim(), who: 'web', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind] });
@@ -133,7 +140,9 @@ export function buildActionPlan(report) {
     // to the site itself, not to the rival's page.
     const path = squash(String(s.url || '').replace(/^https?:\/\/[^/]+/i, ''));
     const rivalPage = entities.some((e) => { const n = squash(e.name); return n.length >= 4 && !isDirectoryName(e.name) && path.includes(n); });
-    sites.push({ domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, status: s.youListed === false ? 'missing' : 'check', engines, count: lostIn.length, topListed: s.topListed || null });
+    // A "best of" or awards page is entered by submission; a directory is joined by claiming a profile.
+    const type = /odwyer|provoke|prweek|rank|award|top-?\d|best-/i.test(`${dom} ${s.url || ''}`) ? 'award' : 'directory';
+    sites.push({ domain: dom, url: rivalPage || !s.url ? `https://${dom}/` : s.url, type, status: s.youListed === false ? 'missing' : 'check', engines, count: lostIn.length, topListed: s.topListed || null });
   }
   sites.sort((x, y) => (x.status === 'missing' ? 0 : 1) - (y.status === 'missing' ? 0 : 1) || y.count - x.count);
   if (sites.length) {
@@ -143,14 +152,14 @@ export function buildActionPlan(report) {
       id: 'lists',
       impact: 'high',
       title: `Get on the ${shown.length} ${plural(shown.length, 'list', 'lists')} AI read when it picked other ${office ? 'firms' : 'businesses'}`,
-      why: `When AI named ${topRivals.length ? listJoin(topRivals) : 'other businesses'} instead of you, it read ${plural(shown.length, 'this page', 'these pages')}. ${missing ? `You’re not on ${missing === shown.length ? (missing === 1 ? 'it' : 'any of them') : `${missing} of them`}. ` : ''}Being on the lists AI reads is the most direct way into its answer.`,
+      why: `When AI named ${topRivals.length ? listJoin(topRivals) : 'other businesses'} instead of you, it read ${plural(shown.length, 'this page', 'these pages')}. ${missing ? `You’re not on ${missing === shown.length ? (missing === 1 ? 'it' : 'any of them') : `${missing} of them`}. ` : ''}Being on the pages AI reads gives it a reason to include you.`,
       who: 'you',
       steps: [
         `Open each page below and search it for ${name}.${shown.some((s) => s.status === 'check') ? ' Pages marked “Check” we couldn’t read, so look for yourself.' : ''}`,
-        'If you’re listed, claim the listing (look for “claim this profile” or similar) and make every detail match the block below.',
-        office
-          ? 'If you’re not, look for “add your company”, “get listed” or “submit”. Industry lists and awards usually have an entry form or a yearly deadline: note it and put it in your calendar.'
-          : 'If you’re not, look for “add your business” or “get listed” and create the listing with the details below.',
+        'Directories: if you’re listed, claim the profile (look for “claim this profile” or similar) and make every detail match the block below; if you’re not, use “add your company” or “get listed”. Then ask two or three happy clients to leave a review there.',
+        ...(shown.some((x) => x.type === 'award')
+          ? ['Industry lists and awards: these take entries, often once a year and sometimes with a fee or a size rule. Find the entry page, check you qualify, and put the deadline in your calendar.']
+          : []),
         'Use the same name, website and description everywhere, word for word.',
       ],
       copyText: listingCopy(d, noun, where, words),
@@ -158,7 +167,7 @@ export function buildActionPlan(report) {
       from: notListed.length ? ['not_listed'] : [],
     });
   } else if (notListed.length) {
-    for (const i of notListed) items.push({ id: `list-${items.length}`, impact: 'high', title: i.title, why: `${i.description || ''} AI read this page when it named someone else.`.trim(), who: 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind] });
+    for (const i of notListed) items.push({ id: hashId('list', i.title), impact: 'high', title: i.title, why: `${i.description || ''} AI read this page when it named someone else.`.trim(), who: 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind] });
   }
 
   // 3. One FAQ step for every question AI didn't name them for (+ the baseline FAQ and FAQ schema).
@@ -170,9 +179,21 @@ export function buildActionPlan(report) {
     .filter((q) => !(office && (q.intent === 'urgent' || /\bopen now\b/i.test(q.text))));
   const lostQs = qs.filter((q) => lostAnswers.some((a) => a.questionId === q.id));
   if (qs.length && (lostQ.length || faqBase.length || faqSchema.length)) {
-    const pairs = qs.map((q) => ({ q: fixCase(q.text), a: draftAnswer({ d, noun, where, words, intent: q.intent, office }) }));
-    const named = new Set();
-    for (const a of lostAnswers) for (const x of a.businessesNamed || []) if (x && !x.isYou && x.name) named.add(x.name);
+    // Draft the questions AI missed (all of them when it missed none). The owner's own homepage words go
+    // in the first answer only: five copies of one paragraph make a weak page.
+    const pairs = (lostQs.length ? lostQs : qs).map((q, n) => ({ q: fixCase(q.text), a: draftAnswer({ d, noun, where, words: n === 0 ? words : '', intent: q.intent, office }) }));
+    // The rivals named most in the answers to these questions (directories left out). Names, not a
+    // count: AI writes one firm several ways ("5WPR", "5W Public Relations"), so a count overstates.
+    const lostQIds = new Set(lostQs.map((q) => q.id));
+    const hits = new Map();
+    for (const a of lostAnswers) {
+      if (!lostQIds.has(a.questionId)) continue;
+      for (const x of a.businessesNamed || []) {
+        const e = x && !x.isYou && entities.find((y) => y.id === x.entityId);
+        if (e && !isDirectoryName(e.name)) hits.set(e.name, (hits.get(e.name) || 0) + 1);
+      }
+    }
+    const rivals = [...hits].sort((x, y) => y[1] - x[1]).slice(0, 3).map((x) => x[0]);
     items.push({
       id: 'faq',
       impact: lostQs.length ? 'high' : 'medium',
@@ -180,18 +201,18 @@ export function buildActionPlan(report) {
         ? `Answer the ${lostQs.length} ${plural(lostQs.length, 'question', 'questions')} AI didn’t name you for, on your website`
         : 'Answer your customers’ questions on your website',
       why: lostQs.length
-        ? `AI was asked ${listJoin(lostQs.map((q) => `“${fixCase(q.text)}”`))} and named ${named.size ? `${named.size} other ${plural(named.size, 'business', 'businesses')}` : 'others'}, not you. A page that answers those exact questions, in your words, gives AI something to quote.`
+        ? `AI was asked ${listJoin(lostQs.map((q) => `“${fixCase(q.text)}”`))} and named ${rivals.length ? `${rivals.join(', ')} and others` : 'other businesses'}, not you. A page that answers those exact questions, in your words, gives AI something to quote.`
         : 'A page that answers the questions customers ask, in your words, gives AI something to quote.',
       who: 'both',
       steps: [
         'Add a “Questions” section to your website: a new page, or the bottom of your homepage.',
         'Paste the questions and answers below. Replace every part in [brackets] with something true and specific (a client, a result, a specialty), then delete the brackets.',
-        'Ask whoever runs your website to add the FAQ code below to the same page, with your final answers in it word for word.',
-        'Check it at search.google.com/test/rich-results: it should find an FAQ.',
+        'Ask whoever runs your website to add the FAQ code below to the same page, then put your finished answers into it word for word. (Your Fix Kit builds the same FAQ as a file: use one or the other, not both.)',
+        'Check the page at validator.schema.org: it should read each question and answer.',
       ],
       copyText: [
         { label: 'Questions and answers for your website (fill in the brackets)', text: pairs.map((p) => `${p.q}\n${p.a}`).join('\n\n') },
-        { label: 'FAQ code for your web person (JSON-LD)', text: faqJsonLd(pairs), format: 'code' },
+        { label: 'FAQ code for your web person (JSON-LD)', text: faqJsonLd(pairs.map((p) => ({ q: p.q, a: p.a.replace(/\s*\[[^\]]*\]/g, '').trim() }))), format: 'code' },
       ],
       from: [...new Set([...lostQ, ...faqBase, ...faqSchema].map((i) => i.kind))],
     });
@@ -217,9 +238,11 @@ export function buildActionPlan(report) {
         ? `Change your page title and main heading so they say ${listJoin(gaps)}. Keep it under about 60 characters.`
         : `Add “${d.town || 'your town'}” to your page title and your main heading. Keep the title under about 60 characters.`);
       steps.push('In most site builders this is under “SEO title” and “meta description”; or send this step to whoever runs your website.');
-      const title = missWhat
-        ? `${fixCase(noun)} in ${d.town || where} | ${name}`
-        : (m && typeof m.title === 'string' && m.title && `${m.title} | ${d.town}`.length <= 65 ? `${m.title} | ${d.town}` : `${fixCase(noun)} in ${d.town || where} | ${name}`);
+      const place = d.town || where;
+      const base = place ? `${fixCase(noun)} in ${place} | ${name}` : `${fixCase(noun)} | ${name}`;
+      const title = !missWhat && place && m && typeof m.title === 'string' && m.title && `${m.title} | ${place}`.length <= 65
+        ? `${m.title} | ${place}`
+        : base;
       copy.push({ label: 'Suggested page title', text: title });
     }
     if (thin.length) {
@@ -247,7 +270,8 @@ export function buildActionPlan(report) {
     const desc = profileDescription(d, noun, where, words);
     items.push({
       id: 'google',
-      impact: missingG && !office ? 'high' : missingG ? 'medium' : 'low',
+      // A local business lives on Google Maps; an office firm less so.
+      impact: missingG ? (office ? 'medium' : 'high') : (office ? 'low' : 'medium'),
       title: missingG ? (office ? 'Create your Google Business Profile' : 'Get on Google Maps') : 'Make your Google Business Profile complete',
       why: missingG
         ? (office
@@ -260,10 +284,13 @@ export function buildActionPlan(report) {
         'If there is none, create one at business.google.com with your exact name, website and phone.',
         office
           ? 'If clients don’t visit your office, choose to hide your address and set the area you serve instead.'
-          : (d.hours ? `Set your hours to match your website: ${d.hours}.` : 'Add your opening hours, the same as on your website.'),
+          : kind === 'trade'
+            ? `If customers don’t come to you, hide your address and set the towns you serve${d.town ? `, starting with ${d.town}` : ''}.`
+            : (d.hours ? `Set your hours to match your website: ${d.hours}.` : 'Add your opening hours, the same as on your website.'),
+        ...(kind === 'trade' ? [d.hours ? `Set your hours to match your website: ${d.hours}.` : 'Add your hours, the same as on your website.'] : []),
         `Choose the category closest to “${kindText(noun)}”, then add each service you offer by name.`,
         `Paste the description below (it’s under Google’s ${GBP_DESCRIPTION_MAX}-character limit) and fill in the brackets.`,
-        office ? 'Add a few photos of your team and your work.' : 'Add a few recent photos of your storefront and your work.',
+        office ? 'Add a few photos of your team and your work.' : kind === 'trade' ? 'Add a few recent photos of your jobs, your vans and your team.' : 'Add a few recent photos of your storefront and your work.',
       ],
       copyText: [
         desc && { label: 'Google profile description (fill in the brackets)', text: desc },
@@ -278,10 +305,13 @@ export function buildActionPlan(report) {
   const schema = take((x) => x.kind === 'baseline_schema');
   if (nap.length || schema.length) {
     const code = (schema[0] && (schema[0].copyText || []).find((c) => c && c.format === 'code')) || null;
+    // The stored code leaves out what we don't know; show where the phone (and street) go instead of
+    // asking for them to be "filled in" to a block that has no place for them.
+    const codeText = code ? withPlaceholders(String(code.text), { street: !office }) : '';
     items.push({
       id: 'contact',
       impact: 'medium',
-      title: nap.length ? 'Put your phone, address and business code on your website' : 'Add or check the business code on your website',
+      title: nap.length ? (office ? 'Put your phone number and business code on your website' : 'Put your phone, address and business code on your website') : 'Add or check the business code on your website',
       why: nap.length
         ? 'We couldn’t find your phone number or address on your homepage. AI checks your own website first when it decides whether details it read elsewhere are right.'
         : 'A small block of code states your name and contact details in a form AI tools read directly.',
@@ -289,21 +319,26 @@ export function buildActionPlan(report) {
       steps: [
         nap.length && `Put your phone number${office ? '' : ' and street address'} as plain text in the footer of every page${office ? ' (add your office address if clients can visit)' : ''}, written the same as on Google.`,
         nap.length && 'Make the phone number a tap-to-call link.',
-        code && 'Ask whoever runs your website to add the code below to your homepage’s <head> section, with your phone and address filled in.',
+        code && `Ask whoever runs your website to add the code below to your homepage’s <head> section${/\[your /.test(codeText) ? ', replacing each part in [brackets]' : ''}. (Your Fix Kit builds the same code as a file: use one or the other.)`,
         code && 'Check it at validator.schema.org: it should read your name and contact details.',
       ].filter(Boolean),
-      copyText: code ? [{ ...code, label: 'Business code for your web person (JSON-LD)' }] : [],
+      copyText: code ? [{ ...code, text: codeText, label: 'Business code for your web person (JSON-LD)' }] : [],
       from: [...new Set([...nap, ...schema].map((i) => i.kind))],
     });
   }
 
   // 7. Everything else, as stored (reviews, https, speed, llms.txt, anything new).
   for (const i of take(() => true)) items.push(passThrough(i, rawNoun, d.tradeNoun));
+  // An office never gets the "open now" question back through the fallback either.
+  if (office) for (let n = items.length - 1; n >= 0; n--) if (items[n].from.includes('lost_question') && /\bopen now\b/i.test(items[n].title)) items.splice(n, 1);
+  // Ids key the saved ticks: never two steps with one id.
+  const seen = new Map();
+  for (const it of items) { const k = seen.get(it.id) || 0; seen.set(it.id, k + 1); if (k) it.id = `${it.id}-${k + 1}`; }
 
   // Order: impact, then the order that matters most for this kind of business.
   const rank = office
     ? ['fact', 'unblock', 'lists', 'list', 'homepage', 'faq', 'google', 'contact']
-    : ['fact', 'unblock', 'google', 'lists', 'list', 'faq', 'homepage', 'contact'];
+    : ['fact', 'unblock', 'google', 'few_reviews', 'lists', 'list', 'faq', 'homepage', 'contact'];
   const pos = (it) => { const k = rank.findIndex((p) => it.id === p || it.id.startsWith(`${p}-`)); return k < 0 ? rank.length : k; };
   const imp = { high: 0, medium: 1, low: 2 };
   const ordered = items.map((it, n) => ({ it, n }))
@@ -318,7 +353,7 @@ function passThrough(i, rawNoun = '', noun = '') {
   i = { ...i, title: fix(i.title), description: i.description && fix(i.description), steps: (i.steps || []).map(fix), copyText: (i.copyText || []).map((c) => (c && typeof c.text === 'string' ? { ...c, text: fix(c.text) } : c)) };
   const impact = i.severity === 'high' ? 'high' : i.severity === 'medium' ? 'medium' : 'low';
   const web = /^site_/.test(String(i.kind || ''));
-  return { id: `${i.kind || 'fix'}-${String(i.title).slice(0, 24).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, impact, title: i.title, why: i.description || '', who: web ? 'web' : 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind || null] };
+  return { id: hashId(i.kind || 'fix', i.title), impact, title: i.title, why: i.description || '', who: web ? 'web' : 'you', steps: i.steps || [], copyText: i.copyText || [], from: [i.kind || null] };
 }
 
 // A draft answer: the real details we have, the owner's own homepage words, and [brackets] for the
@@ -356,6 +391,26 @@ function listingCopy(d, noun, where, words) {
   const desc = profileDescription(d, noun, where, words);
   if (desc) out.push({ label: 'Short description for listings (fill in the brackets)', text: desc });
   return out;
+}
+
+// LocalBusiness JSON-LD with a [placeholder] for the phone (and street) we don't know, so the web
+// person sees where they go. Code we can't parse is returned as is.
+function withPlaceholders(text, { street = true } = {}) {
+  const m = text.match(/^(\s*<script[^>]*>)([\s\S]*?)(<\/script>\s*)$/i);
+  let o;
+  try { o = JSON.parse(m ? m[2] : text); } catch { return text; }
+  if (!o || typeof o !== 'object') return text;
+  const out = {};
+  for (const [k, v] of Object.entries(o)) {
+    out[k] = v;
+    if (k === 'name' && !o.telephone) out.telephone = '[your phone number]';
+  }
+  if (street && out.address && typeof out.address === 'object' && !out.address.streetAddress) {
+    const { '@type': type, ...rest } = out.address;
+    out.address = { '@type': type, streetAddress: '[your street address]', ...rest };
+  }
+  const json = JSON.stringify(out, null, 2).replace(/</g, '\\u003c');
+  return m ? `${m[1].trim()}\n${json}\n</script>` : json;
 }
 
 function faqJsonLd(pairs) {
