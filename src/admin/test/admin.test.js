@@ -94,7 +94,9 @@ test('esc escapes every HTML-significant character', () => {
 
 test('usd and pct', () => {
   assert.equal(usd(12.345), '$12.35');
-  assert.equal(usd(0.04123), '$0.0412');
+  assert.equal(usd(0.04123), '$0.04', 'always 2 decimals, small costs too');
+  assert.equal(usd(0.2728), '$0.27');
+  assert.equal(usd(0.9535), '$0.95');
   assert.equal(usd(-3), '−$3.00');
   assert.equal(usd(null), '—');
   assert.equal(usd('1234.5'), '$1,234.50');
@@ -151,7 +153,7 @@ test('engineVerdicts: fixed rules, first match wins', () => {
   assert.equal(by.headliner.tone, 'good');
   assert.match(by.headliner.verdict, /headline in 40% of reports/);
   assert.equal(by.vague.tone, 'warn');
-  assert.match(by.cheap.verdict, /^Pulls its weight: 2 competitors only it named, at \$0\.0100 per answer\.$/);
+  assert.match(by.cheap.verdict, /^Pulls its weight: 2 competitors only it named, at \$0\.01 per answer\.$/);
   assert.deepEqual(engineVerdicts([]), []);
 });
 
