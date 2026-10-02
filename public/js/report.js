@@ -683,7 +683,7 @@ function actionPlanV2(report) {
   // page), and the sign-up link. "No profile found" is a Google search that came back empty, never a fact.
   const SITE_BADGE = {
     missing: ['mismatch', 'You’re not on it'], listed: ['match', 'You’re listed — check the details'],
-    not_found: ['low', 'No profile found'], check: ['low', 'Couldn’t check'], waiting: ['low', 'We’ll check this on your next scan'],
+    not_found: ['low', 'No profile found'], check: ['low', 'Couldn’t check'], waiting: ['low', 'Pending check'],
   };
   const siteExtra = (s) => {
     const out = [];
@@ -1276,6 +1276,13 @@ function countWords(report) {
 }
 
 function isYouNamed(n) { return !!n && (n.isYou === true || n.entityId === 'you'); }
+// An answer that named no business at all (directories don't count): it still didn't name the owner,
+// so the score is unchanged, but nobody holds that spot yet (buyer review, Oct 2: "two answers that
+// named no business still count as losses").
+function openSpot(a) {
+  return !!a && !a.namedYou && a.ownerMatch !== 'unsure'
+    && !(a.businessesNamed || []).some((n) => n && !isYouNamed(n) && n.name && !DIRECTORY_NAME_RE.test(String(n.name).trim().replace(/[.,]+$/, '')));
+}
 
 function renderV2(root, report) {
   const b = report.business || {};
@@ -1529,7 +1536,13 @@ function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineLis
   const state = zero ? 'zero' : allNamed ? 'all' : 'some';
   const boxes = answers.map((a) => (a.ownerMatch === 'unsure'
     ? '<i class="unsure" title="Not sure">?</i>'
-    : a.namedYou ? '<i class="yes" title="Mentioned you">✓</i>' : '<i class="no" title="Did not mention you">✕</i>')).join('');
+    : a.namedYou ? '<i class="yes" title="Mentioned you">✓</i>'
+      : openSpot(a) ? '<i class="open" title="AI named no business: an open spot">○</i>'
+        : '<i class="no" title="Did not mention you">✕</i>')).join('');
+  const open = allUnsure ? 0 : answers.filter(openSpot).length;
+  const openLine = open
+    ? `<p class="r2-verdict-open">${open === 1 ? 'In 1 answer' : `In ${open} answers`} AI named no business at all. Nobody holds ${open === 1 ? 'that spot' : 'those spots'} yet, so ${open === 1 ? 'it is' : 'they are'} the easiest to win.</p>`
+    : '';
   const where = b.town || b.city ? ` near ${escapeHtml(b.town || b.city)}` : '';
   const ask = engineList ? `<p class="r2-verdict-ask">We asked ${escapeHtml(engineList)} for ${escapeHtml(tradePlural(b.trade))}${where}.</p>` : '';
   return `
@@ -1539,7 +1552,8 @@ function verdictV2(report, { t, N, cw, proven, zero, allNamed, b = {}, engineLis
         <p class="r2-verdict-line">${you}${them}</p>
         ${ask}
         <div class="r2-boxes" role="img" aria-label="${N_TIMES(N)} we asked: ${t.namedYou} mentioned you">${boxes}</div>
-        <p class="r2-verdict-key">One box per answer: <b class="y">✓ mentioned you</b> <b class="n">✕ didn’t</b>${allUnsure || answers.some((a) => a.ownerMatch === 'unsure') ? ' <b class="u">? not sure</b>' : ''}</p>
+        <p class="r2-verdict-key">One box per answer: <b class="y">✓ mentioned you</b> <b class="n">✕ didn’t</b>${open ? ' <b class="o">○ named no one</b>' : ''}${allUnsure || answers.some((a) => a.ownerMatch === 'unsure') ? ' <b class="u">? not sure</b>' : ''}</p>
+        ${openLine}
         ${next}
       </div>
     </section>`;
@@ -2604,7 +2618,7 @@ function answerSummary(a) {
   }
   const more = (list, k) => `${escapeHtml(list.slice(0, k).join(', '))}${list.length > k ? ` + ${list.length - k} more` : ''}`;
   const m = markFor(a);
-  return `<p class="r2-ans-sum">${names.length ? `<span><b>Named:</b> ${more(names, 3)}</span>` : '<span>Named no other business</span>'}${doms.length ? `<span><b>Read:</b> ${more(doms, 2)}</span>` : '<span>No sites cited</span>'}<span class="${m.cls === 'y' ? 'yes' : m.cls === 'x' ? 'no' : ''}">${escapeHtml(m.cls === 'x' ? 'Didn’t name you' : m.label)}</span></p>`;
+  return `<p class="r2-ans-sum">${names.length ? `<span><b>Named:</b> ${more(names, 3)}</span>` : '<span>Named no other business</span>'}${doms.length ? `<span><b>Read:</b> ${more(doms, 2)}</span>` : '<span>No sites cited</span>'}${m.cls === 'x' && openSpot(a) ? '<span class="open">Open spot: AI named no one</span>' : `<span class="${m.cls === 'y' ? 'yes' : m.cls === 'x' ? 'no' : ''}">${escapeHtml(m.cls === 'x' ? 'Didn’t name you' : m.label)}</span>`}</p>`;
 }
 
 // 10. Every answer: full text, collapsed, cited URLs under each.

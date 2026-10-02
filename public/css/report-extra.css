@@ -61,9 +61,13 @@
 .r2-boxes i.no { background: #FDECEA; color: #9B1C12; border-color: #B42318; }
 .r2-boxes i.yes { background: #E2F4E8; color: #0F5A35; border-color: #1E7B4F; }
 .r2-boxes i.unsure { background: #EEF1F6; color: #3D4858; border-color: #8A94A6; }
+/* AI named no business: not a win, but nobody holds the spot. */
+.r2-boxes i.open { background: #FFF6E5; color: #8A5A00; border-color: #D99A1E; border-style: dashed; }
 .r2-verdict-key { margin: 0; font-size: 16px; color: #14213A; }
 .r2-verdict-key b.y { color: #0F5A35; }
 .r2-verdict-key b.n { color: #9B1C12; }
+.r2-verdict-key b.o { color: #8A5A00; }
+.r2-verdict-open { margin: 8px 0 0; font-size: 16px; color: #14213A; }
 .r2-score-how { margin: 12px 0 0; }
 .r2-score-how summary { cursor: pointer; font-size: 14.5px; font-weight: 600; color: var(--navy); }
 .r2-score-how .r2-score-parts { margin-top: 10px; }
@@ -672,6 +676,7 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .r2-ans-sum { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 10px; font-size: 14px; color: #3D4858; overflow-wrap: anywhere; min-width: 0; }
 .r2-ans-sum .yes { color: var(--green); font-weight: 700; }
 .r2-ans-sum .no { color: var(--red); font-weight: 700; }
+.r2-ans-sum .open { color: #8A5A00; font-weight: 700; }
 .r2-md { font-size: 15.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
 .r2-md p { margin: 0 0 10px; }
 .r2-md .md-h { margin: 14px 0 6px; font-size: 16px; font-weight: 700; color: var(--navy); }

@@ -449,11 +449,11 @@ test('lists split: directories this week; rankings and awards a later "put the d
   assert.match(lists.time, /half an hour per site/);
   assert.equal(awards.week, false);
   assert.notEqual(awards.impact, 'high');
-  assert.match(awards.title, /in your calendar/);
+  assert.match(awards.title, /^Later, not this week: enter the .*industry lists? AI read when the next round opens$/, 'a reminder for the next round, not homework (buyer review, Oct 2)');
   assert.match(awards.cost, /charge to enter/);
   assert.ok(plan.items.indexOf(lists) < plan.items.indexOf(awards));
   const html = paidOffice();
-  assert.match(html, /<span class="badge low">We’ll check this on your next scan<\/span>/);
+  assert.match(html, /<span class="badge low">Pending check<\/span>/);
   assert.doesNotMatch(html, /<span class="badge low">Check<\/span>|marked “Check”/);
 });
 
