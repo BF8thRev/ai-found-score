@@ -700,26 +700,26 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .report-page .r2 > .r2-verdict + .r2-tools-top, .report-page .r2 > .r2-jump { margin-top: 14px; }
 .report-page .r2 .report-section .sub { max-width: 68ch; line-height: 1.65; margin-bottom: 24px; }
 .report-page .r2 .listing-card, .report-page .r2 .r2-why-card { padding: 20px 22px; }
-@media (max-width: 600px) { .report-page .r2 > .report-section { margin: 44px 0; } .report-page .r2 .listing-card, .report-page .r2 .r2-why-card { padding: 16px 16px; } }
+@media (max-width: 600px) { .report-page .r2 > .report-section { margin: 52px 0; } .report-page .r2 .listing-card, .report-page .r2 .r2-why-card { padding: 16px 16px; } }
 
 /* "Jump to": one row of section links under the result. */
-.r2-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 0; }
-.r2-jump-k { white-space: nowrap; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #3D4858; margin-right: 4px; }
-.r2-jump a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--navy); font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap; }
-.r2-jump a:hover { border-color: var(--navy); }
+.r2-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; margin: 14px 0 0; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.r2-jump-k { white-space: nowrap; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #3D4858; margin-right: 8px; }
+/* Text links, not pills: the Share / Save buttons above are the pills. */
+.r2-jump a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; color: #1A5FD0; font-size: 15px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; white-space: nowrap; }
+.r2-jump a:hover { text-decoration-thickness: 2px; }
 .report-section[id], details.r2-allans[id] { scroll-margin-top: 84px; }
 @media (max-width: 600px) {
-  .r2-jump { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
-  .r2-jump::-webkit-scrollbar { display: none; }
-  .r2-jump a { flex: none; font-size: 14.5px; }
+  /* Phones: two rows of links (the label sits on its own line), nothing hidden off the edge. */
+  .r2-jump { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; padding: 6px 0; }
+  .r2-jump-k { grid-column: 1 / -1; padding: 6px 0 2px; }
+  .r2-jump a { padding: 0; font-size: 15px; white-space: normal; }
 }
 
 /* "Show all N": a plain link-style click under the first few items. */
 details.r2-more { margin: 8px 0 0; }
 details.r2-more > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-weight: 700; font-size: 15px; color: #1A5FD0; }
 details.r2-more > summary::-webkit-details-marker { display: none; }
-details.r2-more > summary::after { content: "▸"; color: #1A5FD0; transition: transform .15s; }
-details.r2-more[open] > summary::after { transform: rotate(90deg); }
 details.r2-more[open] > summary { margin-bottom: 6px; }
 /* Inside a plan step: "Why it matters" says its label once (the bold label is for print). */
 .ap-whybox { margin: 0 0 4px; }
@@ -730,8 +730,6 @@ details.r2-more[open] > summary { margin-bottom: 6px; }
 /* A card that opens: its name and one line, with a chevron. */
 details.r2-card-fold > summary { list-style: none; cursor: pointer; display: block; position: relative; padding: 2px 34px 2px 0; min-height: 44px; }
 details.r2-card-fold > summary::-webkit-details-marker { display: none; }
-details.r2-card-fold > summary::after { content: "▸"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 18px; color: var(--muted); transition: transform .15s; }
-details.r2-card-fold[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 details.r2-card-fold[open] > summary { margin-bottom: 8px; }
 details.r2-card-fold > summary h3 { margin: 0 0 2px; }
 .r2-why-meta { display: block; }
@@ -745,16 +743,14 @@ details.r2-card-fold > summary h3 { margin: 0 0 2px; }
 details.r2-group-fold { margin: 26px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
 details.r2-group-fold > summary { list-style: none; cursor: pointer; display: block; position: relative; padding: 4px 34px 4px 0; min-height: 44px; }
 details.r2-group-fold > summary::-webkit-details-marker { display: none; }
-details.r2-group-fold > summary::after { content: "+"; position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 24px; font-weight: 700; color: var(--navy); }
-details.r2-group-fold[open] > summary::after { content: "–"; }
 details.r2-group-fold > summary .r2-match-h { margin: 0 0 2px; }
 /* "Do these first" continues its numbers after "Show all N". */
 .r2-more ol.r2-first { counter-reset: first var(--start, 0); }
 
 /* Owner, Oct 2 2026: "add more space, it feels heavier text a tiny bit". More room, softer body text
-   (#2B3648 on white is about 12:1, AA), line-height 1.65, bold kept for the one key phrase per block.
+   (#2B3A52, the Fix Kit's body ink: about 11:1 on white, AA), line-height 1.65, bold kept for the one key phrase per block.
    No font size goes below what it was. */
-#report-root > .wrap.r2 { color: #2B3648; }
+#report-root > .wrap.r2 { color: #2B3A52; }
 .report-page .r2 p, .report-page .r2 li, .report-page .r2 .r2-md { line-height: 1.65; }
 .report-page .r2 .listing-card, .report-page .r2 .r2-why-card, .report-page .r2 .r2-why-you, .report-page .r2 .r2-why-take { margin: 14px 0; }
 .r2-why-take, .r2-why-you { padding: 16px 20px; }
@@ -768,9 +764,44 @@ details.r2-group-fold > summary .r2-match-h { margin: 0 0 2px; }
 .ap-title { font-weight: 600; }
 .ap-body { padding-bottom: 22px; }
 .ap-body .r2-steps li { margin-bottom: 6px; }
-.ap-needs b { font-weight: 600; color: var(--navy); }
+.ap-needs { font-weight: 400; }
+.ap-needs b { font-weight: 700; color: var(--navy); }
 .ap-kitcard, .r2-recheck { padding: 20px 22px; }
 .r2-why-pages li a, .r2-first b { font-weight: 600; }
 .r2-first li { padding-top: 14px; padding-bottom: 14px; }
 .r2-verdict-ask, .r2-verdict-key, .r2-verdict-open { line-height: 1.65; }
 @media (max-width: 520px) { .ap-week { padding: 16px 16px; } }
+
+/* Every fold looks tappable the same way: the Fix Kit's circled + / − (public/fix-kit.html .fk details),
+   scoped to the report. Inline folds ("Show all N", "Why it matters") put it before the label; cards,
+   groups, plan steps and the proof put it at the right edge. Print hides it (report-print.css). */
+.report-page .r2 details.r2-more > summary::before,
+.report-page .r2 details.r2-site-more > summary::before,
+.report-page .r2 details.r2-fold > summary::before,
+.report-page .r2 details.r2-method > summary::before,
+.report-page .r2 details.r2-qans > summary::before {
+  content: "+"; flex: none; display: inline-grid; place-content: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid currentColor; font-size: 15px; line-height: 1; font-weight: 700; text-decoration: none; margin-right: 8px;
+}
+.report-page .r2 details.r2-more[open] > summary::before,
+.report-page .r2 details.r2-site-more[open] > summary::before,
+.report-page .r2 details.r2-fold[open] > summary::before,
+.report-page .r2 details.r2-method[open] > summary::before,
+.report-page .r2 details.r2-qans[open] > summary::before { content: "2"; }
+.report-page .r2 details.r2-site-more > summary, .report-page .r2 details.r2-fold > summary,
+.report-page .r2 details.r2-method > summary, .report-page .r2 details.r2-qans > summary { list-style: none; display: flex; align-items: center; min-height: 44px; }
+.report-page .r2 details.r2-site-more > summary::-webkit-details-marker, .report-page .r2 details.r2-fold > summary::-webkit-details-marker,
+.report-page .r2 details.r2-method > summary::-webkit-details-marker, .report-page .r2 details.r2-qans > summary::-webkit-details-marker { display: none; }
+.report-page .r2 details.r2-more > summary { gap: 0; }
+.report-page .r2 details.r2-card-fold > summary::after,
+.report-page .r2 details.r2-group-fold > summary::after,
+.report-page .r2 details.r2-allans > summary::after,
+.report-page .r2 .ap-row summary::after {
+  content: "+"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: inline-grid; place-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid currentColor; color: #1A5FD0; font-size: 16px; line-height: 1; font-weight: 700; transition: none;
+}
+.report-page .r2 details.r2-card-fold[open] > summary::after,
+.report-page .r2 details.r2-group-fold[open] > summary::after,
+.report-page .r2 details.r2-allans[open] > summary::after,
+.report-page .r2 .ap-row[open] summary::after { content: "2"; transform: translateY(-50%); }
+.report-page .r2 details.r2-allans > summary { position: relative; padding-right: 44px; }
+.report-page .r2 .ap-row summary { padding-right: 44px; }
+.report-page .r2 details.r2-card-fold > summary, .report-page .r2 details.r2-group-fold > summary { padding-right: 44px; }

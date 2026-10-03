@@ -547,7 +547,7 @@ const SHORT_TIME = [
   [/^About an hour for you, then about half an hour for your web person$/, '~1 hr, then ~30 min on the site'],
   [/^About half an hour, then a few days for Google to verify you$/, '~30 min, then a few days for Google to verify you'],
   [/^About half an hour to find the dates$/, '~30 min'],
-  [/^Under half an hour to set up, then seconds per customer$/, 'under 30 min to set up'],
+  [/^Under half an hour to set up, then seconds per customer$/, 'under 30 min to set up, then seconds per customer'],
   [/^Under half an hour to ask$/, 'under 30 min to ask'],
   [/^Under half an hour per site$/, 'under 30 min per site'],
   [/^Under half an hour( for your web person)?$/, 'under 30 min'],
@@ -567,6 +567,13 @@ const LISTING_SIGNIN = [
   [/^yelp\b/i, 'Yelp for Business sign-in'], [/^apple\b/i, 'Apple Business Connect sign-in'],
 ];
 const FIELD_WORDS = [['phone number', /phone/i], ['address', /address/i], ['hours', /hours/i], ['name', /\bname\b/i]];
+// A step title as a short task: "Your website is slow on phones (Google speed score 41 out of 100)" → "Your
+// website is slow on phones". Cut at a bracket, a colon or a dash, then at 60 characters on a word.
+function shortTask(title) {
+  let t = String(title || '').split(/\s[(–—-]|:\s/)[0].trim();
+  if (t.length > 60) t = `${t.slice(0, 60).replace(/\s+\S*$/, '')}…`;
+  return t || 'See the steps';
+}
 function needsFor(it, { pf = null, faqNeeds = 0 } = {}) {
   const site = pf ? `${pf.name} sign-in` : 'website access';
   const host = 'website hosting access';
@@ -586,11 +593,14 @@ function needsFor(it, { pf = null, faqNeeds = 0 } = {}) {
   if (id.startsWith('unblock')) return { access: pf ? site : host, task: 'Let AI read your site (one setting or file)', time };
   if (id.startsWith('lists')) {
     const n = (it.sites || []).filter((s) => s.status !== 'listed').length;
-    return { access: 'an email to sign up with', task: n ? `Add your ${plural(n, 'listing', 'listings')} (${n} ${plural(n, 'site', 'sites')})` : 'Check your profiles match', time };
+    const listedN = (it.sites || []).filter((s) => s.status === 'listed').length;
+    return n
+      ? { access: listedN ? 'an email, or your sign-in where you’re already listed' : 'an email, or your sign-in if you’re already listed', task: `Add or claim your listing on ${n} ${plural(n, 'site', 'sites')}`, time }
+      : { access: 'your sign-in on each site', task: `Check your ${plural(listedN, 'profile matches', 'profiles match')}`, time };
   }
-  if (id.startsWith('awards')) return { access: 'nothing', task: 'Find the entry dates', time };
-  if (has('listed_low')) return { access: 'a sign-in on that review site', task: 'Claim your page and ask for reviews', time };
-  if (id.startsWith('list-') || id === 'list') return { access: 'an email to sign up with', task: 'Add your listing (1 site)', time };
+  if (id.startsWith('awards')) return { access: 'the list’s entry page', task: 'Find the entry dates and rules', time };
+  if (has('listed_low')) return { access: 'an email to claim your page', task: 'Claim your page and ask for reviews', time };
+  if (id.startsWith('list-') || id === 'list') return { access: 'an email, or your sign-in if you’re already listed', task: 'Add or claim your listing on 1 site', time };
   if (id.startsWith('faq') || has('lost_question') || has('baseline_faq')) {
     return { access: site, task: faqNeeds ? `Fill in ${faqNeeds} ${plural(faqNeeds, 'detail', 'details')}, then add one page` : 'Add one page from your Fix Kit', time };
   }
@@ -610,8 +620,9 @@ function needsFor(it, { pf = null, faqNeeds = 0 } = {}) {
   if (has('site_http_no_redirect')) return { access: host, task: 'Turn on “Force HTTPS”', time };
   if (has('site_slow')) return { access: site, task: 'Shrink big photos, remove what the homepage doesn’t need', time };
   if (has('site_no_faq_schema')) return { access: site, task: 'Add one code block', time };
-  if (kinds.some((k) => /^site_/.test(String(k || '')))) return { access: site, task: 'Follow the steps below', time };
-  return { access: 'nothing', task: 'Follow the steps below', time };
+  // Anything else: no access claim we can't back. The task is the step's own title, short.
+  const task = shortTask(title);
+  return kinds.some((k) => /^site_/.test(String(k || ''))) ? { access: site, task, time } : { task, time };
 }
 
 // Rough time and cost for the stored fixes that pass through as they are. Conservative; a kind not

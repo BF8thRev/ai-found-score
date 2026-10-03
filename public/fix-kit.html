@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=19">
+  <link rel="stylesheet" href="/css/styles.css?v=20">
   <style>
     /* Fix Kit page only (kept here so styles.css keeps its version). */
     .fk { padding: 40px 0 72px; }
@@ -124,9 +124,10 @@
        block (names, labels, headings), never whole sentences. Font sizes unchanged. */
     .fk { --ink: #2B3A52; color: var(--ink); padding: 56px 0 112px; line-height: 1.65; }
     .fk .lede-page { margin: 0 0 22px; max-width: 62ch; }
-    .fk-steps { list-style: none; margin: 0 0 22px; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; counter-reset: step; }
-    .fk-steps li { counter-increment: step; display: flex; align-items: center; gap: 10px; background: var(--wash); border-radius: 999px; padding: 8px 16px 8px 8px; font-weight: 500; color: var(--ink); font-size: 15px; }
-    .fk-steps li::before { content: counter(step); display: inline-grid; place-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 13px; font-weight: 700; flex: none; }
+    /* The 3 steps: a plain numbered line, not buttons. Three equal columns, so it never wraps 2 + 1. */
+    .fk-steps { list-style: none; margin: 0 0 22px; padding: 0; display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 8px 16px; counter-reset: step; }
+    .fk-steps li { counter-increment: step; display: flex; align-items: baseline; gap: 6px; font-weight: 500; color: var(--ink); font-size: 15px; line-height: 1.45; }
+    .fk-steps li::before { content: counter(step) "."; color: var(--navy); font-weight: 700; flex: none; }
     .fk-caveat { color: var(--muted); font-size: 15px; margin: 0 0 40px; max-width: 62ch; }
     .fk-box { padding: 40px 44px; margin: 0 0 72px; }
     .fk h2 { margin: 0 0 8px; }
@@ -149,6 +150,7 @@
     .fk-job p { margin: 0 0 12px; }
     .fk-job .who { margin: 0 0 4px; }
     .fk-job .fk-note { margin: 14px 0 0; font-size: 15px; }
+    .fk-job .fk-if { font-size: 15px; color: var(--muted); }
     .fk-job details { margin: 8px 0 0; padding: 0; border-top: 0; }
     .fk-job details + details { margin-top: 0; }
     .fk-how > :not(summary) { margin-top: 10px; }
@@ -173,7 +175,7 @@
       .fk-job { padding: 24px 22px; }
       .fk h2.fk-section { margin-top: 56px; }
       .fk-help { margin-top: 56px; }
-      .fk-steps { flex-direction: column; align-items: flex-start; }
+      .fk-steps { grid-template-columns: 1fr; gap: 8px; }
     }
     [hidden] { display: none !important; }
   </style>
@@ -229,7 +231,7 @@
       <ol class="fk-steps">
         <li>Check the details</li>
         <li>Tick the box and download</li>
-        <li>Hand the folder to whoever runs your website</li>
+        <li>Send it to whoever runs your site</li>
       </ol>
       <p class="fk-caveat">We can&rsquo;t promise any assistant will name you; the last item in your kit says what to expect and how to tell.</p>
 
@@ -395,9 +397,9 @@
       </div>
 
       <section class="fk-box fk-help" id="fk-help" aria-labelledby="fk-help-h">
-        <h2 id="fk-help-h">Nobody to do the website part? We can help.</h2>
-        <p class="fk-take">Tell us how to reach you and what you want done. We&rsquo;ll write back by email with what we would do and what it would cost.</p>
-        <p class="fk-small">Asking is free, you don&rsquo;t owe anything unless you say yes in writing, it&rsquo;s one reply and not a mailing list, and we never ask for a password here.</p>
+        <h2 id="fk-help-h">Nobody to do the website part? We can do it.</h2>
+        <p class="fk-take">Tell us what you want done and what you&rsquo;d pay. We&rsquo;ll reply by email to say if we can do it.</p>
+        <p class="fk-small">Asking is free and you don&rsquo;t owe anything unless you say yes in writing. One reply, not a mailing list, and we never ask for a password here.</p>
         <div data-help-form>
           <div class="fk-field" data-field="helpContact">
             <label for="fk-help-email">Your email</label>
@@ -416,13 +418,18 @@
             <label class="fk-confirm"><input type="checkbox" data-want value="reviews"> Getting more Google reviews</label>
             <p class="fk-err"></p>
           </div>
+          <div class="fk-field" data-field="helpPrice">
+            <label for="fk-help-price">What would you pay for this?</label>
+            <input id="fk-help-price" type="text" inputmode="text" maxlength="80" placeholder="e.g. $150" autocomplete="off" required>
+            <p class="fk-err"></p>
+          </div>
           <div class="fk-field" data-field="helpNote">
             <label for="fk-help-note">Anything we should know? (optional)</label>
             <textarea id="fk-help-note" rows="3" maxlength="600"></textarea>
             <p class="fk-err"></p>
           </div>
           <div class="fk-actions">
-            <button class="btn" type="button" data-help-send>Do it for me</button>
+            <button class="btn" type="button" data-help-send>Send my request</button>
             <p class="fk-status" data-help-status role="status" aria-live="polite"></p>
           </div>
         </div>
@@ -486,6 +493,6 @@
   </div>
 </footer>
 
-<script src="/js/fix-kit.js?v=2"></script>
+<script src="/js/fix-kit.js?v=5"></script>
 </body>
 </html>

@@ -922,7 +922,7 @@ export function readmeTxt(d, kit, { origin = 'https://aifoundscore.com', token =
     });
   };
   section('START HERE: JOBS YOU CAN DO YOURSELF, TODAY', ['No website skills needed. If you only do one thing, do number 1.'], mine);
-  section('JOBS FOR WHOEVER RUNS YOUR WEBSITE', ['These go on your website. Give them this folder. Nobody does that for you? Ask us on your Fix Kit page (the “Do it for me” box) and we will write back with what we would do and what it would cost. Asking is free.'], web);
+  section('JOBS FOR WHOEVER RUNS YOUR WEBSITE', ['These go on your website. Give them this folder. Nobody does that for you? Ask us on your Fix Kit page (the “We can do it” box): tell us what you want done and what you’d pay, and we will write back to say if we can do it. Asking is free.'], web);
   if (done.length) {
     out.push('ALREADY DONE ON YOUR WEBSITE');
     for (const x of done) out.push(`- ${x.title}: ${x.note}`);

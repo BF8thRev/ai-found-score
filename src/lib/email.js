@@ -230,7 +230,7 @@ export function recheckEmail(env, { token, name, totals, before }) {
     paragraphs: [
       'We ran your audit again, free, 30 days after you bought it.',
       line,
-      'No one to put the fixes on your website? Reply to this email and we’ll tell you what we would do and what it would cost.',
+      'No one to put the fixes on your website? Reply to this email with what you want done and what you’d pay, and we’ll tell you if we can do it.',
     ],
     button: 'See what changed',
     url: reportUrl(env, token),

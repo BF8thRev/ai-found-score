@@ -136,3 +136,5 @@ details > summary::after { content: none !important; display: none !important; }
 .ap-whybox .ap-why b { display: inline !important; }
 details.r2-card-fold > summary, details.r2-group-fold > summary { display: block !important; padding: 0 !important; min-height: 0 !important; }
 details.r2-group-fold { border-top: 0 !important; padding-top: 0 !important; }
+/* The circled + / − markers on screen mean nothing on paper. */
+details > summary::before { content: none !important; display: none !important; }

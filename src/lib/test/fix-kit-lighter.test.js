@@ -53,11 +53,11 @@ test('router: /fix-kit/sample-001 serves the lighter page: short lede, 3 steps, 
     assert.match(lede, /correct facts/);
     assert.match(lede, /from your website and your report/);
     const steps = kit.match(/<ol class="fk-steps">([\s\S]*?)<\/ol>/)[1];
-    assert.deepEqual([...steps.matchAll(/<li>([^<]+)<\/li>/g)].map((m) => m[1]), ['Check the details', 'Tick the box and download', 'Hand the folder to whoever runs your website']);
+    assert.deepEqual([...steps.matchAll(/<li>([^<]+)<\/li>/g)].map((m) => m[1]), ['Check the details', 'Tick the box and download', 'Send it to whoever runs your site']);
     // The honesty line stays next to the claim, not behind a click.
     assert.match(visible(kit), /We can&rsquo;t promise any assistant will name you; the last item in your kit says what to expect and how to tell\./);
     // The help box's promises stay on screen too.
-    assert.match(visible(kit), /Asking is free, you don&rsquo;t owe anything unless you say yes in writing, it&rsquo;s one reply and not a mailing list, and we never ask for a password here\./);
+    assert.match(visible(kit), /Asking is free and you don&rsquo;t owe anything unless you say yes in writing\. One reply, not a mailing list, and we never ask for a password here\./);
     // Nothing starts open.
     assert.doesNotMatch(kit, /<details[^>]*\sopen/);
     // Cache-buster on the changed script.
@@ -84,7 +84,7 @@ test('the blanks: why we ask is inside a closed <details>; the first 3 show and 
   assert.doesNotMatch(visible(needs), /AI picked other businesses/, 'the why is not on screen before the click');
   assert.match(visible(needs), /Write one true sentence for each and we put it into the answer\. Any you leave blank stay out of the code until you fill them in\./);
   assert.match(JS, /var SHOW_SLOTS = 3;/);
-  assert.match(JS, /more\.appendChild\(el\('summary', null, 'Show all ' \+ items\.length\)\);/);
+  assert.match(JS, /more\.appendChild\(el\('summary', null, 'Show all ' \+ plural\(items\.length, 'answer', 'answers'\)\)\);/, '"Show all 7 answers", not a bare number');
   assert.match(JS, /\(more && n >= SHOW_SLOTS \? more : wrap\)\.appendChild\(row\);/);
   // "Add to my answers" still reads every blank, the hidden ones too.
   assert.match(JS, /document\.querySelectorAll\('\[data-slot\]'\)\.forEach\(function \(input\) \{ d\.faqFacts/);
@@ -159,4 +159,91 @@ test('second pass: line-height 1.65, a softer body colour that still passes AA, 
   assert.match(HTML, /\.fk \.lede-page \{ font-size: 19px;/);
   assert.match(HTML, /\.fk-steps li \{[^}]*font-size: 15px;/);
   assert.match(HTML, /\.fk-job h3 \{ font-size: 20px; \}/);
+});
+
+// ---- reviewers on 8cbe63a: the job meta line, the visible "skip it" caveat, the step line ----
+// needsFor / shortTime / splitWhere, run as the page runs them (lifted from public/js/fix-kit.js).
+const pageFns = (() => {
+  const src = JS.slice(JS.indexOf('  var SHORT_TIME = ['), JS.indexOf('  function drawJobs'));
+  // eslint-disable-next-line no-new-func
+  return new Function(`function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }\n${src}\nreturn { needsFor, shortTime, splitWhere };`)();
+})();
+
+test('router: the sample kit\'s job lines say what you need, not "you, with your web person"', async () => {
+  await withWorker(async ({ call }) => {
+    const { kit } = await (await call('/api/fix-kit/sample-001')).json();
+    const lines = Object.fromEntries(kit.jobs.map((j) => [j.id, pageFns.needsFor(j, kit)]));
+    assert.deepEqual(lines, {
+      google: 'Needs: Google Business Profile sign-in · Paste in the text · under 30 min · No cost from us',
+      qr: 'Needs: your Google review link · Send a message after each job · under 30 min to set up, then seconds per customer · No cost from us',
+      faq: `Needs: website access · Fill in ${kit.faq.needs} details, then add one page · ~1 hr, then ~30 min on the site · No cost from us`,
+      schema: 'Needs: website access · Add one code block to your home page · under 30 min · No cost from us',
+      llms: 'Needs: website access · Upload one file · under 30 min · No cost from us',
+    });
+    for (const l of Object.values(lines)) assert.doesNotMatch(l, /web person|You can do this|You, with|whoever/);
+  });
+  assert.match(JS, /li\.appendChild\(el\('p', 'who', needsFor\(j, kit\)\)\);/);
+  assert.doesNotMatch(JS, /You, with your web person|var WHO =/);
+});
+
+test('times: only written shorter, never less time; tails kept; every estimate the kit uses has a short form', () => {
+  const { shortTime } = pageFns;
+  assert.equal(shortTime('About an hour for you, then about half an hour for your web person'), '~1 hr, then ~30 min on the site');
+  assert.equal(shortTime('Under half an hour to set up, then seconds per customer'), 'under 30 min to set up, then seconds per customer');
+  assert.equal(shortTime('Under half an hour for you'), 'under 30 min');
+  assert.equal(shortTime('Under half an hour for your web person'), 'under 30 min');
+  assert.equal(shortTime('About half an hour'), '~30 min');
+  assert.equal(shortTime('About an hour for your web person'), '~1 hr');
+  // Every time string src/lib/fix-kit.js writes maps through the table, not the fallback.
+  const kitSrc = readFileSync(new URL('../fix-kit.js', import.meta.url), 'utf8');
+  const times = [...new Set([...kitSrc.matchAll(/^\s+time: '([^']+)',$/gm)].map((m) => m[1]))];
+  assert.ok(times.length >= 3, times.join(' | '));
+  for (const t of times) assert.match(shortTime(t), /^(~1 hr|~30 min|under 30 min)/, t);
+});
+
+test('a site builder: the sign-in is named, and a job it can\'t take says so instead of a time', async () => {
+  const { prefillDetails, validateDetails, buildKit } = await import('../fix-kit.js');
+  const { officeReport } = await import('./fixtures/office-report.js');
+  const r = officeReport();
+  r.siteCheck.platform = { id: 'wix', seo: null };
+  r.siteCheck.robots = { found: true, blocked: [{ agent: 'GPTBot', who: 'ChatGPT' }] };
+  const kit = buildKit(validateDetails(prefillDetails(r)).details, r);
+  const line = (id) => pageFns.needsFor(kit.jobs.find((j) => j.id === id), kit);
+  assert.match(line('faq'), /^Needs: Wix sign-in · /);
+  const skipped = kit.jobs.filter((j) => j.skip);
+  assert.ok(skipped.length, 'Wix skips a job');
+  for (const j of skipped) assert.match(pageFns.needsFor(j, kit), /^Skip it on Wix · (see “How to do it”|Use Wix’s setting instead) · No cost from us$/, j.id);
+});
+
+test('"If your site builder won’t let you add files, skip it." is on screen, not behind "How to do it"', () => {
+  const { splitWhere } = pageFns;
+  assert.deepEqual(splitWhere('The top folder of your website. If your site builder won’t let you add files, skip it.'),
+    { ifs: 'If your site builder won’t let you add files, skip it.', rest: 'The top folder of your website.' });
+  // A file name's full stop is not the end of a sentence.
+  assert.deepEqual(splitWhere('The top folder of your website. If you already have a robots.txt, add these lines to it instead of replacing it.'),
+    { ifs: 'If you already have a robots.txt, add these lines to it instead of replacing it.', rest: 'The top folder of your website.' });
+  const faqWhere = 'A page on your website called “FAQ” or “Questions”. On Wix or Squarespace, paste faq-page.txt into a text block; your web person adds the code from faq-page.html.';
+  assert.deepEqual(splitWhere(faqWhere), { ifs: '', rest: faqWhere });
+  const draw = JS.slice(JS.indexOf('function drawJobs'), JS.indexOf('if (kit.readme)'));
+  assert.ok(draw.indexOf("li.appendChild(el('p', 'fk-if', w.ifs));") >= 0);
+  assert.ok(draw.indexOf("li.appendChild(el('p', 'fk-if', w.ifs));") < draw.indexOf("var how = el('details', 'fk-how');"), 'before the click');
+  assert.match(draw, /where\.appendChild\(document\.createTextNode\(w\.rest \|\| j\.where\)\);/);
+});
+
+test('the 1-2-3 steps read as a plain numbered line: no pill, three columns that never wrap 2 + 1', () => {
+  const li = HTML.match(/\.fk-steps li \{([^}]*)\}/)[1];
+  assert.doesNotMatch(li, /background|border-radius/);
+  assert.match(HTML, /\.fk-steps \{[^}]*display: grid; grid-template-columns: repeat\(3, auto\);/);
+  assert.match(HTML, /\.fk-steps li::before \{ content: counter\(step\) "\.";/);
+  assert.match(HTML, /<script src="\/js\/fix-kit\.js\?v=5"><\/script>/);
+});
+
+test('owner (Oct 2): the Fix Kit page never says "web person" or "Needs: nothing" to the owner', () => {
+  const html = readFileSync(new URL('../../../public/fix-kit.html', import.meta.url), 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
+  assert.doesNotMatch(html, /web person/i);
+  // Owner-facing strings in the page script (the time-shortening patterns may still match the old data).
+  const js = readFileSync(new URL('../../../public/js/fix-kit.js', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, '');
+  const strings = [...js.matchAll(/'([^'\n]*)'/g)].map((m) => m[1]).filter((x) => !x.startsWith('^') && !x.includes('('));
+  for (const t of strings) assert.doesNotMatch(t, /web person|^nothing$/i, t);
 });

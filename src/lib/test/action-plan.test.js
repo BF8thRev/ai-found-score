@@ -253,7 +253,7 @@ test('paid page: the action plan comes first, with the Fix Kit; evidence after; 
   // One evidence section replaces the search card, the "who instead" bars and the sources list.
   assert.doesNotMatch(html, /told a customer who asked|Who AI recommended instead|Why they got named instead/);
   const n = buildActionPlan(officeReport()).items.length;
-  assert.ok(at(html, 'Hand the website work to your web person') > at(html, `id="step-${n}"`), 'Fix Kit card after the last step');
+  assert.ok(at(html, 'Your website files are ready') > at(html, `id="step-${n}"`), 'Fix Kit card after the last step');
   assert.ok(at(html, 'The proof: every answer, word for word') < at(html, 'Want us to keep watching?'), 'Be the Answer after the evidence');
   assert.ok(at(html, 'Want us to keep watching?') < at(html, 'Get my Competitor Breakdown'), '$25 offer last of all');
   // The plan replaces the old fix list, the checklist and the Fix Kit band.
@@ -441,23 +441,25 @@ test('Fix Kit: no box above step 1; "Done for you" on the steps it covers; one h
   // The card, after the last step.
   const card = plan.slice(at(plan, 'class="ap-kitcard"'));
   assert.ok(plan.indexOf('class="ap-kitcard"') > plan.indexOf(`id="step-${items.length}"`));
-  assert.match(card, /<h3>Hand the website work to your web person<\/h3>/);
+  assert.match(card, /<h3>Your website files are ready<\/h3>\s*<p>Send them to whoever updates your site\. It’s one email\.<\/p>/);
   assert.match(card, /<a class="btn" href="\/fix-kit\/office-test-token">Open my Fix Kit<\/a>/);
   assert.match(card, /llms\.txt/, 'llms.txt is named in the kit card');
   // No web person: the kit's "do it for me" box, reachable from the report too (buyer review, Oct 2).
-  assert.match(card, /No web person\? <a href="\/fix-kit\/office-test-token#fk-help">We can do it for you<\/a>/);
+  assert.match(card, /No one to do it\? <a href="\/fix-kit\/office-test-token#fk-help">We can do it for you<\/a>: tell us what you want done and what you&rsquo;d pay\./);
+  // Owner, Oct 2 2026: we don't promise a price from us here.
+  assert.doesNotMatch(card, /what it would cost|web person/);
   // One time for the Questions page, the same as the kit's: about half an hour for the web person.
   assert.doesNotMatch(plan, /1–2 hours/);
   assert.doesNotMatch(card.match(/<h3>[^<]*<\/h3>/)[0], /JSON|llms|schema/i);
   // "Email it to my web person": the owner's own mail app, the kit link inside, no address of theirs.
-  const href = card.match(/<a class="btn-secondary" href="([^"]+)">Email it to my web person<\/a>/)[1].replace(/&amp;/g, '&');
+  const href = card.match(/<a class="btn-secondary" href="([^"]+)">Email the files<\/a>/)[1].replace(/&amp;/g, '&');
   assert.match(href, /^mailto:\?subject=/);
   const body = decodeURIComponent(href.split('&body=')[1]);
   assert.match(body, /https:\/\/aifoundscore\.com\/fix-kit\/office-test-token/);
   assert.doesNotMatch(href, /@|%40/);
   // A sample has no kit to open.
   const sample = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
-  assert.doesNotMatch(sample, /ap-kitcard|Email it to my web person/);
+  assert.doesNotMatch(sample, /ap-kitcard|Email the files/);
 });
 
 test('Do these 3 this week: above the full plan, each with who, time and cost; the plan shows them too', () => {
@@ -547,7 +549,7 @@ test('paid report with a plan: the website checklist is a closed box for the web
   const html = paidOffice();
   const site = html.slice(at(html, '<h2>Can AI read your website?</h2>'), html.indexOf('</section>', at(html, '<h2>Can AI read your website?</h2>')));
   assert.match(site, /<b>\d+ of \d+ checks passed\.<\/b>/);
-  assert.match(site, /<details class="r2-site-more">\s*<summary>Technical details for your web person<\/summary>/);
+  assert.match(site, /<details class="r2-site-more">\s*<summary>Technical details for whoever builds your site<\/summary>/);
   assert.doesNotMatch(site, /<details class="r2-site-more" open/);
   assert.doesNotMatch(site, /Page title:|A sitemap helps|has a meta description/, 'passes that say nothing are left out');
   // Failed checks come first inside the box.

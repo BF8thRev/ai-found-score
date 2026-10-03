@@ -104,7 +104,7 @@ test('about page carries the founder note, the founder bio and the css it uses',
   assert.match(about, /href="\/#request"/, 'about page links to the free check');
   const css = read('css/styles.css');
   for (const cls of ['founder-note', 'about-cta']) assert.ok(css.includes(`.${cls}`), `styles.css is missing .${cls}`);
-  assert.match(about, /styles\.css\?v=19/, 'about page loads the stylesheet version that has the new classes');
+  assert.match(about, /styles\.css\?v=20/, 'about page loads the stylesheet version that has the new classes');
 });
 
 test('about page: no prices, says the business is AI-run, and has the note about mom', () => {

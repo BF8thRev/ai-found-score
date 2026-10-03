@@ -980,172 +980,106 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .final-cta .intro { color: #C8D6E8; margin: 0 auto 24px; }
 .final-cta .fine { color: #A9BAD3; margin: 12px 0 0; font-size: 14px; }
 
-/* ---------- Lighter landing pages (Oct 2026): short first, more on click, more space ---------- */
-/* Scoped to body.lp (index, about, success, contact) and the checkout page so the report and Fix Kit
-   pages, which share this file, look the same. */
-.lp .section { padding: 72px 0; }
-.lp .section h2 { margin-bottom: 14px; }
-.lp .section .intro { margin-bottom: 40px; line-height: 1.6; }
-.lp .stats-band { padding: 72px 0; }
+/* ---------- Lighter landing pages (Oct 2026): short first, more space, lighter type ---------- */
+/* Scoped to body.lp (index, about, success, contact), the checkout page (.co-page) and classes only
+   those pages use, so the report and Fix Kit pages, which share this file, look the same.
+   details.disc is the shared disclosure marker (the Fix Kit's circled +/−), for any page to adopt. */
+details.disc > summary { list-style: none; cursor: pointer; font-weight: 600; color: var(--blue); min-height: 44px; display: flex; align-items: center; gap: 10px; }
+details.disc > summary::-webkit-details-marker { display: none; }
+details.disc > summary::before { content: "+"; flex: none; display: inline-grid; place-content: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid currentColor; font-size: 15px; line-height: 1; }
+details.disc[open] > summary::before { content: "\2212"; }
+
+.lp { --ink-soft: #2B3A52; } /* body text, a touch softer than --ink: 11.6:1 on white, 10.8:1 on --wash */
+.lp .section, .lp .stats-band { padding: 88px 0; line-height: 1.65; }
+.lp .section h2 { margin-bottom: 18px; }
+.lp .section .intro { margin-bottom: 48px; }
 .lp .stats { gap: 22px; }
-.lp .stat { padding: 30px 28px; }
-.lp .lost-note { font-size: clamp(18px, 2vw, 20px); margin: 0 0 40px; max-width: 68ch; }
-/* "What you're blind to": four points, no boxes. */
-.what-points { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px 28px; }
+.lp .stat { padding: 34px 30px; }
+.lp .stat p, .lp .how-step > p, .lp .tier-list { color: var(--ink-soft); }
+.lp .stats-band .stat p { color: #E6EDF7; }
+.lp .stats-after { font-weight: 400; }
+.lp .stats-after b { font-weight: 700; }
+/* "What you're blind to": four points, no boxes; one bold phrase in the intro. */
+.lp .lost-note { font-size: clamp(18px, 2vw, 20px); font-weight: 400; color: var(--ink-soft); margin: 0 0 40px; max-width: 68ch; }
+.lp .lost-note b { font-weight: 700; color: var(--navy); }
+.what-points { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 40px 32px; }
 .what-points .card { background: none; border: 0; padding: 0; }
-.what-points .card h3 { font-size: 19px; line-height: 1.3; }
-.what-points .card p { font-size: 15.5px; line-height: 1.6; }
+.what-points .card h3 { font-size: 19px; line-height: 1.3; margin-bottom: 10px; }
+.what-points .card p { font-size: 15.5px; line-height: 1.65; }
 .lp .what-cta { margin-top: 44px; }
 .lp .how-steps { gap: 24px; margin-top: 8px; }
-.lp .how-step { padding: 26px 24px; gap: 12px; }
+.lp .how-step { padding: 30px 28px; gap: 14px; }
 .lp .how-cta { margin-top: 40px; }
+/* Pricing: more room, regular-weight lines with the key phrase in bold. */
 .lp .tiers.ladder { gap: 28px; }
-.lp .tiers.ladder .tier { padding: 36px 30px 30px; }
+.lp .tiers.ladder .tier { padding: 40px 34px 34px; }
+.lp .tiers.ladder .tier-tagline { font-weight: 500; }
+.lp .tiers.ladder .tier-list li { padding: 6px 0 6px 26px; }
+.lp .tiers.ladder .tier-promise { font-weight: 400; }
+.lp .tiers.ladder .tier-promise b { font-weight: 700; }
+.lp .tiers.ladder .tier-when { font-weight: 400; }
 /* "What you can count on": a quiet grid of four, a check instead of a box. */
-.trust-points { gap: 28px; }
+.lp #trust h2 { margin-bottom: 44px; }
+.trust-points { gap: 36px 32px; }
 .trust-points .card { background: none; border: 0; padding: 0 0 0 34px; position: relative; }
 .trust-points .card::before {
   content: "✓"; position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
   background: #E2F4E8; color: var(--green); font-size: 13px; font-weight: 800; display: grid; place-content: center;
 }
-.trust-points .card h3 { font-size: 18px; line-height: 1.3; margin-bottom: 6px; }
-.trust-points .card p { font-size: 15.5px; line-height: 1.6; }
-/* FAQ: the first few questions, the rest one click away. */
+.trust-points .card h3 { font-size: 18px; line-height: 1.3; margin-bottom: 10px; }
+.trust-points .card p { font-size: 15.5px; line-height: 1.65; }
+/* FAQ: the first few questions, the rest behind "More questions" (details.disc). */
 .lp .faq h2 { margin-bottom: 24px; }
-.faq .faq-more { border-bottom: 0; }
-.faq .faq-more > summary { display: inline-block; margin-top: 18px; padding: 12px 0; min-height: 44px; font-size: 16px; font-weight: 700; color: var(--blue); }
-.faq .faq-more > summary::after { content: none; }
-.faq .faq-more > summary::before { content: "+ "; }
-.faq .faq-more[open] > summary::before { content: "\2212  "; }
-.faq .faq-more[open] > summary { margin-bottom: 4px; }
+.faq details.faq-more { border-bottom: 0; }
+.faq details.faq-more > summary { margin-top: 18px; padding: 12px 0; font-size: 16px; font-weight: 700; }
+.faq details.faq-more > summary::after, .faq details.faq-more[open] > summary::after { content: none; }
+.faq details.faq-more[open] > summary { margin-bottom: 4px; }
 .faq .faq-more > details:first-of-type { border-top: 1px solid var(--line); }
 /* An open "More questions" must not flip the + on the closed questions inside it. */
 .faq .faq-more details:not([open]) > summary::after { content: "+"; }
-.lp .final-cta { padding: 80px 0; }
-@media (max-width: 1040px) and (min-width: 861px) { .what-points { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 860px) {
-  .what-points { grid-template-columns: 1fr; gap: 24px; }
-  .what-points .card { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 16px; align-items: start; }
-  .what-points .card .icon { grid-row: span 2; margin: 0; }
-  .trust-points { grid-template-columns: 1fr 1fr; gap: 24px 20px; }
-}
-@media (max-width: 560px) {
-  .lp .section { padding: 44px 0; }
-  .lp .stats-band { padding: 44px 0; }
-  .lp .section .intro { margin-bottom: 28px; }
-  .lp .lost-note { margin-bottom: 28px; }
-  .lp .what-cta, .lp .how-cta { margin-top: 32px; }
-  .lp .tiers.ladder .tier { padding: 32px 22px 24px; }
-  .trust-points { grid-template-columns: 1fr; }
-  .lp .final-cta { padding: 52px 0; }
-}
-.lp #trust h2 { margin-bottom: 36px; }
-/* About page: shorter on screen, the rest one click away (details.more, .diff-list). */
-.lp .page { max-width: 760px; }
-.lp .page h2 { margin: 56px 0 14px; }
+.lp .final-cta { padding: 96px 0; }
+/* About page. */
+.lp .page { max-width: 760px; line-height: 1.65; color: var(--ink-soft); }
+.lp .page h2 { margin: 56px 0 18px; }
 .lp .page p { max-width: 68ch; }
-.lp .page .lede-page { margin-bottom: 8px; }
+.lp .page .lede-page { color: var(--ink-soft); line-height: 1.6; }
 .lp .founder-note { padding: 10px 28px 16px; margin: 0; }
-.page details.more { margin: 4px 0 14px; }
-.page details.more > summary {
-  display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; list-style: none;
-  font-size: 16px; font-weight: 700; color: var(--blue);
-}
-.page details.more > summary::-webkit-details-marker { display: none; }
-.page details.more > summary::before { content: "+"; display: inline-block; width: 18px; font-weight: 700; }
-.page details.more[open] > summary::before { content: "\2212"; }
-.page details.more[open] > summary { margin-bottom: 6px; }
-.diff-list { margin: 22px 0 0; border-top: 1px solid var(--line); }
-.diff-list details { border-bottom: 1px solid var(--line); }
-.diff-list summary {
-  list-style: none; cursor: pointer; position: relative; padding: 14px 40px 14px 34px; min-height: 44px;
-  font-weight: 700; font-size: 17px; color: var(--navy);
-}
-.diff-list summary::-webkit-details-marker { display: none; }
-.diff-list summary::before {
-  content: "✓"; position: absolute; left: 0; top: 15px; width: 22px; height: 22px; border-radius: 50%;
+.lp .page details.disc { margin: 4px 0 14px; }
+.lp .page details.disc[open] > summary { margin-bottom: 6px; }
+.diff-list { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 18px; }
+.lp .page .diff-list li { position: relative; margin: 0; padding: 0 0 0 34px; max-width: 68ch; }
+.diff-list li::before {
+  content: "✓"; position: absolute; left: 0; top: 2px; width: 22px; height: 22px; border-radius: 50%;
   background: #E2F4E8; color: var(--green); font-size: 13px; font-weight: 800; display: grid; place-content: center;
 }
-.diff-list summary::after { content: "+"; position: absolute; right: 6px; top: 9px; font-size: 24px; font-weight: 300; color: var(--blue); }
-.diff-list details[open] summary::after { content: "\2013"; }
-.diff-list details p { margin: 0 0 16px 34px; color: var(--muted); }
+.diff-list strong { color: var(--navy); }
 .lp .about-cta { margin: 56px 0 28px; padding: 30px 24px; }
-@media (max-width: 560px) {
-  .lp #trust h2 { margin-bottom: 24px; }
-  .lp .page h2 { margin-top: 40px; }
-  .lp .founder-note { padding: 6px 18px 12px; }
-  .lp .about-cta { margin-top: 40px; }
-}
-/* Checkout: the three main things included, the rest one click away; a little more room. */
-.co-page .co-card { padding: 34px 32px; }
-.co-page .co-sub { line-height: 1.6; margin-bottom: 26px; }
-.co-page #co-form { gap: 16px; }
-.co-incl + .co-more { margin: -8px 0 16px; }
-.co-more > summary {
-  display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; list-style: none;
-  font-size: 14.5px; font-weight: 700; color: var(--blue);
-}
-.co-more > summary::-webkit-details-marker { display: none; }
-.co-more > summary::before { content: "+"; display: inline-block; width: 16px; font-weight: 700; }
-.co-more[open] > summary::before { content: "\2212"; }
-.co-more .co-incl { margin-top: 2px; }
-@media (max-width: 860px) { .co-page .co-card { padding: 26px 20px; } }
-/* ---------- Lighter landing pages, pass 2 (owner: "more space, the text feels a tiny bit heavy") ---------- */
-.lp { --ink-soft: #36435A; } /* body text, a touch softer than --ink: 9.97:1 on white, 9.27:1 on --wash */
-.lp .section, .lp .stats-band { line-height: 1.65; }
-.lp .section, .lp .stats-band { padding: 88px 0; }
-.lp .final-cta { padding: 96px 0; }
-.lp .section h2 { margin-bottom: 18px; }
-.lp .section .intro { margin-bottom: 48px; }
-.lp .page { line-height: 1.65; color: var(--ink-soft); }
-.lp .page .lede-page { color: var(--ink-soft); line-height: 1.6; }
-.lp .page h2 { margin-bottom: 18px; }
-.lp .how-step > p, .lp .tier-list, .lp .stat p { color: var(--ink-soft); }
-.lp .stats-band .stat p { color: #E6EDF7; }
-/* One key phrase in bold per block, not whole sentences. */
-.lp .lost-note { font-weight: 400; color: var(--ink-soft); }
-.lp .lost-note b { font-weight: 700; color: var(--navy); }
-.lp .stats-after { font-weight: 400; }
-.lp .stats-after b { font-weight: 700; }
-.lp .tiers.ladder .tier.featured .tier-tagline { font-weight: 500; }
-.lp .tiers.ladder .tier-tagline { font-weight: 500; }
-.lp .tiers.ladder .tier-promise { font-weight: 400; }
-.lp .tiers.ladder .tier-promise b { font-weight: 700; }
-.lp .tiers.ladder .tier-when { font-weight: 400; }
-.lp .tiers.ladder .tier-list li { padding: 6px 0 6px 26px; }
-/* More room inside cards and between a heading and its line. */
-.lp .stat { padding: 34px 30px; }
-.lp .how-step { padding: 30px 28px; gap: 14px; }
-.lp .tiers.ladder .tier { padding: 40px 34px 34px; }
-.what-points .card h3, .trust-points .card h3 { margin-bottom: 10px; }
-.what-points { gap: 40px 32px; }
-.trust-points { gap: 36px 32px; }
-.lp #trust h2 { margin-bottom: 44px; }
-/* The second sentence of a card, behind a small "More". */
-.more-line { margin: 4px 0 0; }
-.more-line > summary {
-  display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; list-style: none;
-  font-size: 14.5px; font-weight: 600; color: var(--blue);
-}
-.more-line > summary::-webkit-details-marker { display: none; }
-.more-line > summary::after { content: "+"; margin-left: 6px; font-weight: 700; }
-.more-line[open] > summary::after { content: "\2212"; }
-.more-line[open] > summary { min-height: 32px; }
-.more-line > p { margin: 0; }
-.what-points .card .more-line, .trust-points .card .more-line { grid-column: 2; }
-.how-step .more-line { margin-top: -6px; }
-@media (max-width: 860px) { .what-points .card .icon { grid-row: span 3; } }
+/* Checkout: a little more room. */
+.co-page { --ink-soft: #2B3A52; }
 .co-page .co-card { padding: 38px 36px; }
-.co-page .co-sub { line-height: 1.65; }
+.co-page .co-sub { line-height: 1.65; margin-bottom: 26px; }
+.co-page #co-form { gap: 16px; }
 .co-page .co-badges { gap: 14px; }
-@media (max-width: 860px) { .co-page .co-card { padding: 28px 22px; } }
-@media (min-width: 861px) { .what-points .card .more-line { grid-column: auto; } }
+.co-page .co-incl { color: var(--ink-soft); }
+@media (max-width: 1040px) and (min-width: 861px) { .what-points { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 860px) {
+  .what-points { grid-template-columns: 1fr; gap: 28px; }
+  .what-points .card { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 16px; align-items: start; }
+  .what-points .card .icon { grid-row: span 2; margin: 0; }
+  .trust-points { grid-template-columns: 1fr 1fr; gap: 28px 20px; }
+  .co-page .co-card { padding: 28px 22px; }
+}
 @media (max-width: 560px) {
   .lp .section, .lp .stats-band { padding: 56px 0; }
   .lp .final-cta { padding: 64px 0; }
   .lp .section .intro { margin-bottom: 32px; }
-  .lp .tiers.ladder .tier { padding: 36px 24px 28px; }
+  .lp .lost-note { margin-bottom: 28px; }
+  .lp .what-cta, .lp .how-cta { margin-top: 32px; }
   .lp .how-step { padding: 26px 22px; }
+  .lp .tiers.ladder .tier { padding: 36px 24px 28px; }
   .lp #trust h2 { margin-bottom: 32px; }
-  .trust-points { gap: 28px; }
+  .trust-points { grid-template-columns: 1fr; gap: 28px; }
+  .lp .page h2 { margin-top: 40px; }
+  .lp .founder-note { padding: 6px 18px 12px; }
+  .lp .about-cta { margin-top: 40px; }
 }

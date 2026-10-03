@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=19">
+  <link rel="stylesheet" href="/css/styles.css?v=20">
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
   <!-- Google Tag Manager -->
   <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-K58KFVJC');</script>
@@ -43,7 +43,7 @@
     <h2>A note from the founder</h2>
     <div class="founder-note">
       <p>My dad ran a small service business. I watched what that takes: long days, a phone that never stops, and no spare hours to read up on whatever the internet decided to change this year. Word of mouth and a good name got him most of his work. If he had needed to learn a new way for customers to find him, it would have come after everything else on the list.</p>
-      <details class="more">
+      <details class="disc">
         <summary>Read the whole note</summary>
         <p>My mom has spent her life helping people. She taught me that the best work you can do is the kind that makes someone else&rsquo;s day easier, and that you don&rsquo;t wait to be asked. That&rsquo;s the spirit this company is built on.</p>
         <p>Now I write software for a living, and I can see how fast things are moving. People ask an AI assistant who to call, and they get one short answer back. Behind it, AI agents are starting to compare, book and buy on people&rsquo;s behalf. For a business that is set up for it, that is a real opening. For one that isn&rsquo;t, the call goes somewhere else, and the owner never finds out.</p>
@@ -55,22 +55,22 @@
 
     <h2>An AI-run business, on purpose</h2>
     <p>AI Found Score is run largely by an AI agent, with me building it and keeping watch. We think that&rsquo;s the honest way to build a company about AI: we use it ourselves, every day, for the same reason we want you to be ready for it.</p>
-    <details class="more">
+    <details class="disc">
       <summary>How the agent finds businesses</summary>
       <p>It also lets us do something a small team can&rsquo;t do by hand. The agent&rsquo;s job is to go looking for local businesses that AI isn&rsquo;t naming and offer them a free look, so owners don&rsquo;t have to find us first. If you hear from us, it&rsquo;s because the agent found your business, checked what AI says about it, and thought you&rsquo;d want to know. It uses only public information, every message can be answered or unsubscribed with one click, and a person reads what you send to hello@aifoundscore.com.</p>
     </details>
 
     <h2>How we&rsquo;re different</h2>
     <p>There are plenty of marketing tools and agencies. Most are built for marketers or for companies with a marketing budget.</p>
-    <div class="diff-list">
-      <details><summary>We show you the real answer.</summary><p>Not a made-up score you have to take on faith. Every AI answer is quoted word for word, with the question and the date, so you can type it in yourself and check.</p></details>
-      <details><summary>We name who got the call.</summary><p>Knowing you&rsquo;re missing is only half of it. The report shows which businesses the AI named instead of you.</p></details>
-      <details><summary>You get the fix, not just the problem.</summary><p>Exact text to paste and ready-to-install files for whoever runs your website, so a report turns into action.</p></details>
-      <details><summary>No logins, ever.</summary><p>We read only what anyone can see. We never ask for a password or into your accounts, so you stay in control of everything.</p></details>
-      <details><summary>Free to look, no strings.</summary><p>The first check needs no email and no card. No contract, no retainer, nothing to cancel.</p></details>
-      <details><summary>Plain English.</summary><p>Made to read on your phone between jobs.</p></details>
-      <details><summary>Honest about the limits.</summary><p>No one can promise what an AI will say. We show you what it says today and what&rsquo;s in your hands to improve. If we didn&rsquo;t find it, we don&rsquo;t show it.</p></details>
-    </div>
+    <ul class="diff-list">
+      <li><strong>We show you the real answer.</strong> Not a made-up score you have to take on faith. Every AI answer is quoted word for word, with the question and the date, so you can type it in yourself and check.</li>
+      <li><strong>We name who got the call.</strong> Knowing you&rsquo;re missing is only half of it. The report shows which businesses the AI named instead of you.</li>
+      <li><strong>You get the fix, not just the problem.</strong> Exact text to paste and ready-to-install files for whoever runs your website, so a report turns into action.</li>
+      <li><strong>No logins, ever.</strong> We read only what anyone can see. We never ask for a password or into your accounts, so you stay in control of everything.</li>
+      <li><strong>Free to look, no strings.</strong> The first check needs no email and no card. No contract, no retainer, nothing to cancel.</li>
+      <li><strong>Plain English.</strong> Made to read on your phone between jobs.</li>
+      <li><strong>Honest about the limits.</strong> No one can promise what an AI will say. We show you what it says today and what&rsquo;s in your hands to improve. If we didn&rsquo;t find it, we don&rsquo;t show it.</li>
+    </ul>
 
     <h2>About me</h2>
     <p>I&rsquo;m Bryan Fields. I&rsquo;ve been writing software for more than eight years, and much of that work has been with AI: building with it, testing where it&rsquo;s reliable, and finding out where it makes things up. That matters here, because an AI assistant gives different answers depending on how it&rsquo;s asked, and a careful check has to account for that.</p>
@@ -124,6 +124,6 @@
 
 <script src="/js/config.js?v=12"></script>
 <script src="/js/analytics.js?v=10"></script>
-<script>/* Print and Save as PDF show what sits behind a click. */ window.addEventListener('beforeprint', function () { document.querySelectorAll('details').forEach(function (d) { d.open = true; }); });</script>
+<script>/* Print and Save as PDF show what sits behind a click; afterwards the page is as it was. */ (function () { var opened = []; window.addEventListener('beforeprint', function () { opened = []; document.querySelectorAll('details:not([open])').forEach(function (d) { d.open = true; opened.push(d); }); }); window.addEventListener('afterprint', function () { opened.forEach(function (d) { d.open = false; }); opened = []; }); })();</script>
 </body>
 </html>

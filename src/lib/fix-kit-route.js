@@ -15,7 +15,7 @@
 //                                    kit's blanks, read off the owner's own website and checked against it
 //                                    (src/lib/fix-kit-suggest.js). Never applied by themselves; the page offers each one. Paid only,
 //                                    cached per token for a week, its cost logged to scan_usage. A sample token gets none.
-//                                    JSON { help: true, details, contact, phone?, wants[], note? } → { ok }: the "do it for me" button.
+//                                    JSON { help: true, details, contact, phone?, wants[], price, note? } → { ok }: the "do it for me" button.
 //                                    Emails us (the alert addresses) the request with the kit and report links, and the owner a
 //                                    short "we got it". Paid only; one per token per day (idempotency key); a sample sends nothing.
 //                                    (src/lib/done-for-you.js)

@@ -667,7 +667,7 @@ function apNeeds(i) {
   const n = i && i.needs && typeof i.needs === 'object' ? i.needs : null;
   const parts = n
     ? [n.access, n.task, n.time]
-    : [i.who === 'web' || i.who === 'both' ? 'website access' : 'nothing', 'Follow the steps below', String(i.time || 'time varies').replace(/ for your web person/g, '')];
+    : [i.who === 'web' || i.who === 'both' ? 'website access' : '', i.time ? String(i.time).replace(/ for your web person/g, '') : 'time varies'];
   return parts.filter((x) => typeof x === 'string' && x).map(escapeHtml).join(' · ');
 }
 // The plan's steps, the ticks saved in this browser, and "Do these 3 this week" (the first steps, biggest
@@ -793,11 +793,11 @@ function actionPlanV2(report) {
     </section>`;
 }
 
-// A step's copy-paste text: one block on screen; two or more behind one click.
+// A step's copy-paste text: the first block on screen (the text is the action); any more behind one click.
 function copyFold(items) {
-  const n = (items || []).filter((c) => c && c.label && typeof c.text === 'string' && c.text).length;
-  const html = copyBlocksV2(items);
-  return n >= 2 ? `<details class="r2-more ap-copyfold"><summary>Text to copy and paste (${n})</summary>${html}</details>` : html;
+  const xs = (items || []).filter((c) => c && c.label && typeof c.text === 'string' && c.text);
+  if (xs.length < 2) return copyBlocksV2(xs);
+  return `${copyBlocksV2(xs.slice(0, 1))}<details class="r2-more ap-copyfold"><summary>More text to copy (${xs.length - 1})</summary>${copyBlocksV2(xs.slice(1))}</details>`;
 }
 
 // A step whose work is a file already written in the Fix Kit (shared/action-plan.js `kit`): say so, how many
@@ -834,7 +834,7 @@ function builtOn(p) {
 }
 
 // After the last step: the website work in one hand-off. The Fix Kit files are built for the owner to
-// check; "Email it to my web person" opens the owner's own mail app (a mailto: link, nothing is sent by
+// check; "Email the files" opens the owner's own mail app (a mailto: link, nothing is sent by
 // us, and no address of theirs goes in the link).
 function kitCard(report, kitUrl) {
   const name = (report.business && report.business.name) || 'our business';
@@ -845,11 +845,11 @@ function kitCard(report, kitUrl) {
   const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return `
       <div class="ap-kitcard">
-        <h3>Hand the website work to your web person</h3>
-        <p>Your Fix Kit has the website files built for you from this report. Check them, then send them on.</p>
+        <h3>Your website files are ready</h3>
+        <p>Send them to whoever updates your site. It’s one email.</p>
         <details class="r2-more ap-kitcard-what"><summary>What’s in the kit</summary><p>In it: ${kitFilesText(report)}. Your Google profile text is in there too; that one is for you to paste in.</p></details>
-        <p class="ap-kitcard-btns"><a class="btn" href="${kitUrl}">Open my Fix Kit</a> <a class="btn-secondary" href="${escapeHtml(mailto)}">Email it to my web person</a></p>
-        <p class="ap-kitcard-help">No web person? <a href="${kitUrl}#fk-help">We can do it for you</a>: tell us what you need and we&rsquo;ll reply with what we would do and what it would cost.</p>
+        <p class="ap-kitcard-btns"><a class="btn" href="${kitUrl}">Open my Fix Kit</a> <a class="btn-secondary" href="${escapeHtml(mailto)}">Email the files</a></p>
+        <p class="ap-kitcard-help">No one to do it? <a href="${kitUrl}#fk-help">We can do it for you</a>: tell us what you want done and what you&rsquo;d pay.</p>
       </div>`;
 }
 
@@ -1466,10 +1466,19 @@ function renderV2(root, report) {
     const d = document.getElementById('ans-' + hash[1]);
     if (d) { openAnswer(d); d.scrollIntoView({ block: 'start' }); }
   }
+  // A link to a section (#proof, #listings, the "Jump to" ids): the page was empty when the browser looked
+  // for it, so go there now that the report is drawn, opening it when it is a closed box.
+  const jumpTo = location.hash.match(/^#([a-z-]+)$/);
+  const target = jumpTo && JUMP_IDS.includes(jumpTo[1]) ? document.getElementById(jumpTo[1]) : null;
+  if (target) {
+    openAnswer(target);
+    if (typeof target.scrollIntoView === 'function') target.scrollIntoView({ block: 'start' });
+  }
 }
 
 // The sections a "Jump to" link can reach: [anchor id, label], shown in page order. Only the ones on
 // this page (`html` is the page's sections), and only when there are 3 or more.
+const JUMP_IDS = ['action-plan', 'why-picked', 'who', 'gap-sheet', 'breakdown', 'site', 'listings', 'facts', 'proof'];
 function jumpRowV2(html, report) {
   const office = isOffice(report);
   const targets = [
@@ -1899,7 +1908,7 @@ function whyPickedV2({ report, b, questions, answers }) {
   return `
     <section class="report-section r2-why" id="why-picked">
       <h2>Why AI picked them</h2>
-      <p class="sub">The other ${firms} AI named in 2 or more answers. Tap one for what AI said about it, word for word, and the pages it read when it named them.</p>
+      <p class="sub">The other ${firms} AI named in 2 or more answers. Open one for what AI said about it, word for word, and the pages it read when it named them.</p>
       ${rivals.length ? takeaway : ''}
       ${size}
       ${rivals.length ? `${youRow}${moreItems(rivals.map(card), { k: 3, label: (n) => `Show all ${n} ${firms}` })}` : `<p class="r2-muted">No other ${office ? 'firm' : 'business'} was named in 2 or more answers.</p>`}
@@ -2199,7 +2208,7 @@ function siteV2(report) {
       <h2>Can AI read your website?</h2>
       <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI assistant would. <b>${num(okN)} of ${num(rows.length)} checks passed.</b>${failedN ? ' The fixes that matter are in your action plan above.' : ''}</p>
       <details class="r2-site-more">
-        <summary>Technical details for your web person</summary>
+        <summary>Technical details for whoever builds your site</summary>
         <ul class="r2-site-list">${shown.join('')}</ul>
       </details>
     </section>`;
@@ -2380,7 +2389,7 @@ function xrayV2({ report, aById, cw, N }) {
     // Closed: the name, how often AI named them, and how many sites list them and not you.
     return `
       <div class="listing-card r2-gap"><details class="r2-card-fold">
-        <summary><h3>${escapeHtml(c.name)}</h3><span class="r2-fold-line">Named in ${num(c.named)} of ${num(N)} ${cw.unit}${num(c.first) ? `, first in ${num(c.first)}` : ', never first'}.${srcs.length ? ` Listed on ${srcs.length} ${plural(srcs.length, 'site that leaves', 'sites that leave')} you out.` : ''}</span></summary>
+        <summary><h3>${escapeHtml(c.name)}</h3><span class="r2-fold-line">Named in ${num(c.named)} of ${num(N)} ${cw.unit}${num(c.first) ? `, first in ${num(c.first)}` : ', never first'}.${srcs.length ? ` Listed on ${escapeHtml(srcs.length > 2 ? `${srcs.slice(0, 2).map((x) => x.domain).join(', ')} and ${srcs.length - 2} more` : listJoin(srcs.map((x) => x.domain)))}, which ${srcs.length === 1 ? 'leaves' : 'leave'} you out.` : ''}</span></summary>
         ${reviewsLine(c)}
         ${srcs.length
           ? `<p><strong>Sites AI cited that list them and not you:</strong></p>
@@ -2480,7 +2489,7 @@ function breakdownV2(report) {
   // B. Do these first: the rows you lack, most rivals first, each with one plain action.
   const first = m && m.first.length ? `
       <h3 class="r2-match-h">Do these first</h3>
-      ${moreUl(m.first.map((f) => `<li><b>${escapeHtml(f.label)}</b><span>${escapeHtml(f.action)}</span><em>${num(f.rivalCount)} of ${comps.length} ${plural(comps.length, 'business', 'businesses')} ${f.rivalCount === 1 ? 'has' : 'have'} it</em></li>`), { k: 3, cls: 'r2-first', tag: 'ol', label: (n) => `Show all ${n}` })}` : '';
+      ${moreUl(m.first.map((f) => `<li><b>${escapeHtml(f.label)}</b><span>${escapeHtml(f.action)}</span><em>${num(f.rivalCount)} of ${comps.length} ${plural(comps.length, 'business', 'businesses')} ${f.rivalCount === 1 ? 'has' : 'have'} it</em></li>`), { k: 3, cls: 'r2-first', tag: 'ol', label: (n) => `Show all ${n} things to copy` })}` : '';
 
   // C. How AI describes each one, word for word, and the pages AI cited for them.
   const describe = comps.map((c) => {

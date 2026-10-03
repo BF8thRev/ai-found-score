@@ -153,7 +153,7 @@
     if (items.length > SHOW_SLOTS) {
       more = el('details', 'fk-more');
       more.setAttribute('data-slots-more', '');
-      more.appendChild(el('summary', null, 'Show all ' + items.length));
+      more.appendChild(el('summary', null, 'Show all ' + plural(items.length, 'answer', 'answers')));
     }
     items.forEach(function (it, n) {
       var id = 'fk-slot-' + it.slot.type;
@@ -212,7 +212,52 @@
     return det;
   }
 
-  var WHO = { web: 'For whoever runs your website', you: 'You can do this', both: 'You, with your web person' };
+  // The job's meta line: "Needs: <access> · <task> · <time> · No cost from us", the same shape as the
+  // report's action plan (owner, Oct 2 2026: "Don't have it say 'you with your web person'. Just say what
+  // you need"). The time is the job's own estimate (src/lib/fix-kit.js), only written shorter, never
+  // shorter in meaning: "About half an hour" → "~30 min", "Under half an hour" → "under 30 min",
+  // "About an hour" → "~1 hr", tails kept. The zip's README keeps the long wording.
+  var SHORT_TIME = [
+    [/^About an hour for you, then about half an hour for your web person$/, '~1 hr, then ~30 min on the site'],
+    [/^Under half an hour to set up, then seconds per customer$/, 'under 30 min to set up, then seconds per customer'],
+    [/^Under half an hour( for you| for your web person)?$/, 'under 30 min'],
+    [/^About half an hour( for you| for your web person)?$/, '~30 min'],
+    [/^About an hour( for you| for your web person)?$/, '~1 hr'],
+  ];
+  function shortTime(t) {
+    var s = String(t || '').trim();
+    for (var i = 0; i < SHORT_TIME.length; i++) if (SHORT_TIME[i][0].test(s)) return SHORT_TIME[i][1];
+    return s.replace(/ for your web person| for you\b/g, '');
+  }
+  // What each job asks for, from its own steps ("Where it goes"). The site sign-in is named when we know the builder.
+  function needsFor(j, kit) {
+    var pf = (j.platform && j.platform.name) || (kit.platform && kit.platform.name) || '';
+    var site = pf ? pf + ' sign-in' : 'website access';
+    var blanks = (kit.faq && kit.faq.needs) || 0;
+    var NEEDS = {
+      robots: [site, 'Add one file'],
+      faq: [site, blanks ? 'Fill in ' + plural(blanks, 'detail', 'details') + ', then add one page' : 'Add one page'],
+      google: ['Google Business Profile sign-in', 'Paste in the text'],
+      schema: [site, 'Add one code block to your home page'],
+      llms: [site, 'Upload one file'],
+      qr: ['your Google review link', String(j.where || 'Send a message after each job.').split('.')[0]],
+    };
+    // Unknown job: no access claim we can't back, just the time.
+    var n = NEEDS[j.id] || [j.who === 'you' ? '' : site, ''];
+    // A job the site builder can't take (or makes itself): say to skip it, no "Needs".
+    if (j.skip) return 'Skip it' + (pf ? ' on ' + pf : '') + ' · ' + (pf && /setting/.test(j.where || '') ? 'Use ' + pf + '’s setting instead' : 'see “How to do it”') + ' · No cost from us';
+    var parts = [n[0], n[1]].filter(Boolean);
+    if (j.time) parts.push(shortTime(j.time));
+    return 'Needs: ' + parts.join(' · ') + ' · No cost from us';
+  }
+  // "If …" sentences in "Where it goes" are caveats: they stay on screen, the rest goes behind the click.
+  function splitWhere(where) {
+    // Sentences end at a full stop followed by a capital, so "robots.txt" or "faq-page.txt" isn't split.
+    var parts = String(where || '').split(/(?<=\.)\s+(?=[A-Z])/);
+    var ifs = parts.filter(function (x) { return /^If /.test(x); }).join(' ');
+    var rest = parts.filter(function (x) { return !/^If /.test(x); }).join(' ');
+    return { ifs: ifs, rest: rest };
+  }
 
   function drawJobs(kit) {
     var lists = { you: $('[data-jobs-you]'), web: $('[data-jobs-web]'), after: $('[data-jobs-after]') };
@@ -226,14 +271,18 @@
       li.appendChild(h);
       li.appendChild(el('span', 'fk-tech', j.tech));
       li.appendChild(el('p', null, j.what));
-      li.appendChild(el('p', 'who', (WHO[j.who] || '') + (j.time ? ' · ' + j.time + ' · No cost from us' : '')));
+      li.appendChild(el('p', 'who', needsFor(j, kit)));
+      // A caveat in "Where it goes" ("If your site builder won’t let you add files, skip it.") stays on
+      // screen; the rest of it sits behind "How to do it".
+      var w = splitWhere(j.where);
+      if (w.ifs) li.appendChild(el('p', 'fk-if', w.ifs));
       if (j.note) li.appendChild(el('p', 'fk-note sample', j.note));
       // Where it goes, the site builder's steps and the "why" sit behind one click.
       var how = el('details', 'fk-how');
       how.appendChild(el('summary', null, 'How to do it'));
       var where = el('p');
       where.appendChild(el('strong', null, 'Where it goes: '));
-      where.appendChild(document.createTextNode(j.where));
+      where.appendChild(document.createTextNode(w.rest || j.where));
       how.appendChild(where);
       li.appendChild(how);
       // The site builder's own click-paths and help pages (shared/platforms.js), when we know it.
@@ -268,7 +317,7 @@
     });
     if (kit.readme) {
       var r = el('li', 'fk-job');
-      r.appendChild(el('h3', null, 'A one-page guide for your web person'));
+      r.appendChild(el('h3', null, 'A one-page guide for whoever updates your site'));
       r.appendChild(el('span', 'fk-tech', 'README.txt'));
       r.appendChild(el('p', null, 'What each file does and where it goes, in plain words, in order.'));
       r.appendChild(fileDetails({ path: 'README.txt', content: kit.readme }));
@@ -479,7 +528,8 @@
     rebuild(d, $('[data-slots-status]'), $('[data-save-slots]'));
   });
 
-  // "Do it for me": one request that emails us; nothing is asked for but a way to reach them and what they want.
+  // "We can do it" box ("Send my request"): one request that emails us. We ask only for a way to reach them, what
+  // they want done and what they'd pay; we never publish a price and reply to say if we can do it.
   $('[data-help-send]').addEventListener('click', function () {
     var status = $('[data-help-status]');
     var button = $('[data-help-send]');
@@ -487,7 +537,7 @@
     var wants = [].slice.call(document.querySelectorAll('[data-want]:checked')).map(function (x) { return x.value; });
     button.disabled = true;
     setStatus(status, 'Sending…');
-    post({ help: true, details: current, contact: $('#fk-help-email').value, phone: $('#fk-help-phone').value, wants: wants, note: $('#fk-help-note').value }).then(function (res) {
+    post({ help: true, details: current, contact: $('#fk-help-email').value, phone: $('#fk-help-phone').value, wants: wants, price: $('#fk-help-price').value, note: $('#fk-help-note').value }).then(function (res) {
       button.disabled = false;
       if (res.body && res.body.ok) {
         $('[data-help-form]').hidden = true;
