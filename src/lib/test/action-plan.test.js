@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { register } from 'node:module';
-import { buildActionPlan, homepageSaysTrade, fixCase, siteType } from '../../../shared/action-plan.js';
+import { buildActionPlan, homepageSaysTrade, fixCase, siteType, shortTime } from '../../../shared/action-plan.js';
 import { buildGapSheet, lintText } from '../../../shared/report-v2.js';
 import { tradeWords, metaCheck } from '../../../scanner/owner-checks.js';
 import { reportBody, lockReport } from '../lock.js';
@@ -359,13 +359,58 @@ test('Fix Kit notes show on a paid report; a sample only links to the sample kit
   assert.ok((sample.match(/href="\/fix-kit\/([^"]+)"/g) || []).every((h) => h === 'href="/fix-kit/sample-001"'), 'only the sample kit');
 });
 
-test('the plumber sample: its town directory is a directory, and the row shows who does the step', () => {
+test('the plumber sample: its town directory is a directory, and each row says what the step needs', () => {
   const plan = buildActionPlan(MOCK_REPORTS['sample-001']);
   const lists = byId(plan, 'lists');
   assert.ok(lists.sites.some((x) => x.domain === 'localpages.example.com' && x.type === 'directory'));
   assert.match(lists.title, /lists AI read/);
   const html = render(loadPage(), reportBody(MOCK_REPORTS['sample-001'], true));
-  assert.match(html, /<span class="ap-whotag">Web person<\/span>/);
+  // Owner, Oct 2 2026: no "Web person" tag on a step; the step says what it needs instead.
+  assert.doesNotMatch(planOf(html), /class="ap-whotag"/);
+  assert.match(html, /<p class="ap-who ap-needs"><b>Needs:<\/b> Bing Places sign-in · Change the phone number · ~30 min<span class="ap-effort"> · No cost<\/span><\/p>/);
+});
+
+// Owner, Oct 2 2026: "Don't have it say 'you with your web person'. Just say what you need: access to the
+// website, upload one file, ~10 minutes. For all the steps." Every step: "Needs: access · task · time".
+test('every plan step says what it needs (access · task · time), and no step meta says "web person"', () => {
+  const reports = [
+    reportBody(officeReport(), true),
+    ...['sample-001', 'sample-recheck', 'sample-edge-failed'].map((k) => reportBody(MOCK_REPORTS[k], true)),
+  ];
+  for (const rep of reports) {
+    const items = rep.xray.actionPlan.items;
+    assert.ok(items.length >= 3, rep.id);
+    const plan = planOf(render(loadPage(), rep));
+    const metas = [...plan.matchAll(/<p class="ap-who ap-needs"><b>Needs:<\/b> ([^<]+)(?:<span class="ap-effort"> · ([^<]+)<\/span>)?<\/p>/g)];
+    assert.equal(metas.length, items.length, `${rep.id}: one Needs line per step`);
+    for (const [, line] of metas) {
+      const parts = line.split(' · ');
+      assert.equal(parts.length, 3, `${rep.id}: "${line}" is access · task · time`);
+      assert.ok(parts.every((p) => p.trim().length > 1), line);
+    }
+    // No "who" wording anywhere in a step's meta, the week list or the step titles.
+    const meta = [...plan.matchAll(/<p class="ap-who[^"]*">[\s\S]*?<\/p>|<span class="ap-title">[\s\S]*?<\/span>|<div class="ap-week"[\s\S]*?<\/div>/g)].map((m) => m[0]).join(' ');
+    assert.doesNotMatch(meta, /web person|You can do this|For whoever runs your website|You, with your web person|You \+ web person/i, rep.id);
+  }
+});
+
+test('the Needs line keeps each step’s own time estimate, only written shorter', () => {
+  assert.equal(shortTime('About half an hour'), '~30 min');
+  assert.equal(shortTime('Under half an hour'), 'under 30 min');
+  assert.equal(shortTime('Under half an hour per site'), 'under 30 min per site');
+  assert.equal(shortTime('Under half an hour for your web person'), 'under 30 min');
+  assert.equal(shortTime('About half an hour for your web person'), '~30 min');
+  assert.equal(shortTime('About an hour for your web person'), '~1 hr');
+  assert.equal(shortTime('About an hour for you, then about half an hour for your web person'), '~1 hr, then ~30 min on the site');
+  assert.equal(shortTime('About half an hour, then a few days for Google to verify you'), '~30 min, then a few days for Google to verify you');
+  assert.equal(shortTime('A few hours for your web person, depending on the site'), 'a few hours, depending on the site');
+  assert.equal(shortTime('Under half an hour to ask'), 'under 30 min to ask');
+  assert.equal(shortTime('About half an hour to find the dates'), '~30 min');
+  assert.equal(shortTime(undefined), 'time varies', 'no estimate: never a guess');
+  // Every step's Needs time is its own time estimate, shortened.
+  for (const k of ['sample-001', 'sample-edge-failed']) {
+    for (const i of buildActionPlan(MOCK_REPORTS[k]).items) assert.equal(i.needs.time, shortTime(i.time), i.id);
+  }
 });
 
 // ---- Oct 2 2026 buyer review of the paid PR agency page ----
@@ -425,7 +470,7 @@ test('Do these 3 this week: above the full plan, each with who, time and cost; t
   assert.match(week, /<h3>Do these 3 this week<\/h3>/);
   const links = [...week.matchAll(/<a href="#step-(\d+)">([^<]+)<\/a><span>([^<]+)<\/span>/g)];
   assert.equal(links.length, 3);
-  for (const [, , , meta] of links) assert.match(meta, /(You can do this|For whoever runs your website|You, with your web person) · (About|Under) .+ · .+/);
+  for (const [, , , meta] of links) assert.match(meta, /^Needs: [^·]+ · [^·]+ · (~|under )\d[^·]* · .+/);
   assert.match(week, /Get on the 3 lists AI read/);
   assert.doesNotMatch(week, /industry list|entry dates/i, 'industry lists and awards are not a this-week job');
   // Our own copy: no banned words (shared/report-v2.js BANNED_WORDS, e.g. "minutes", "rank").

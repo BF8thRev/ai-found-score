@@ -128,7 +128,8 @@ export function homepageSaysTrade(meta, trade) {
 }
 
 /**
- * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, steps, copyText, sites?, kitNote?, kit?, time?, cost?, week?, platform?, from }], kitOnly?, platform? }
+ * buildActionPlan(report) → { kind, items: [{ id, impact, title, why, who, needs, steps, copyText, sites?, kitNote?, kit?, time?, cost?, week?, platform?, from }], kitOnly?, platform? }
+ * `needs`: { access, task, time }, the page's "Needs:" line (needsFor). `who` stays for the Fix Kit and old readers.
  * `platform` on a step: { name, guides: [{ label, url }] }, the site builder's own help pages for the steps
  * written for it; on the plan: { id, name }, the builder the owner's site is made with (unknown: absent).
  * `kind`: 'professional' (an office: agency, firm), 'trade' (goes to the customer) or 'storefront'.
@@ -511,6 +512,8 @@ export function buildActionPlan(report) {
   for (const i of take(() => true)) items.push(passThrough(i, rawNoun, d.tradeNoun));
   // An office never gets the "open now" question back through the fallback either.
   if (office) for (let n = items.length - 1; n >= 0; n--) if (items[n].from.includes('lost_question') && /\bopen now\b/i.test(items[n].title)) items.splice(n, 1);
+  // "Needs: access · the one thing you do · time" on every step (owner, Oct 2 2026: "Just say what you need").
+  for (const it of items) it.needs = needsFor(it, { pf, faqNeeds: it.kit && it.kit.file === 'questions' ? it.kit.needs : 0 });
   // Ids key the saved ticks: never two steps with one id.
   const seen = new Map();
   for (const it of items) { const k = seen.get(it.id) || 0; seen.set(it.id, k + 1); if (k) it.id = `${it.id}-${k + 1}`; }
@@ -534,6 +537,81 @@ function passThrough(i, rawNoun = '', noun = '') {
   const impact = i.severity === 'high' ? 'high' : i.severity === 'medium' ? 'medium' : 'low';
   const web = /^site_/.test(String(i.kind || ''));
   return { id: hashId(i.kind || 'fix', i.title), impact, title: i.title, why: i.description || '', who: web ? 'web' : 'you', steps: i.steps || [], copyText: i.copyText || [], ...(EFFORT[i.kind] || {}), from: [i.kind || null] };
+}
+
+// What a step needs, in three short parts (the page shows "Needs: access · task · time", then the cost).
+// Owner, Oct 2 2026: "Don't have it say 'you with your web person'. Just say what you need: access to the
+// website, upload one file, ~10 minutes." The times are the step's own `time` estimate, only written
+// shorter ("About half an hour" → "~30 min"); a step with no estimate says "time varies", never a guess.
+const SHORT_TIME = [
+  [/^About an hour for you, then about half an hour for your web person$/, '~1 hr, then ~30 min on the site'],
+  [/^About half an hour, then a few days for Google to verify you$/, '~30 min, then a few days for Google to verify you'],
+  [/^About half an hour to find the dates$/, '~30 min'],
+  [/^Under half an hour to set up, then seconds per customer$/, 'under 30 min to set up'],
+  [/^Under half an hour to ask$/, 'under 30 min to ask'],
+  [/^Under half an hour per site$/, 'under 30 min per site'],
+  [/^Under half an hour( for your web person)?$/, 'under 30 min'],
+  [/^About half an hour( for your web person)?$/, '~30 min'],
+  [/^About an hour( for your web person)?$/, '~1 hr'],
+  [/^A few hours for your web person, depending on the site$/, 'a few hours, depending on the site'],
+];
+export function shortTime(t) {
+  const s = typeof t === 'string' ? t.trim() : '';
+  if (!s) return 'time varies';
+  for (const [re, out] of SHORT_TIME) if (re.test(s)) return out;
+  return s.replace(/ for your web person/g, '');
+}
+// The sign-in a wrong listing is fixed with, from the step's title ("Bing shows an old phone number…").
+const LISTING_SIGNIN = [
+  [/^google\b/i, 'Google Business Profile sign-in'], [/^bing\b/i, 'Bing Places sign-in'], [/^facebook\b/i, 'Facebook page admin access'],
+  [/^yelp\b/i, 'Yelp for Business sign-in'], [/^apple\b/i, 'Apple Business Connect sign-in'],
+];
+const FIELD_WORDS = [['phone number', /phone/i], ['address', /address/i], ['hours', /hours/i], ['name', /\bname\b/i]];
+function needsFor(it, { pf = null, faqNeeds = 0 } = {}) {
+  const site = pf ? `${pf.name} sign-in` : 'website access';
+  const host = 'website hosting access';
+  const id = String(it.id || '');
+  const kinds = it.from || [];
+  const has = (k) => kinds.includes(k);
+  const time = shortTime(it.time);
+  const title = String(it.title || '');
+  const fields = FIELD_WORDS.filter(([, re]) => re.test(title)).map(([w]) => w);
+  const fieldText = fields.length ? `Change the ${fields.length > 1 ? `${fields.slice(0, -1).join(', ')} and ${fields[fields.length - 1]}` : fields[0]}` : 'Correct the details';
+  if (id.startsWith('fact')) {
+    const signin = (LISTING_SIGNIN.find(([re]) => re.test(title)) || [])[1];
+    return has('fact_differs')
+      ? { access: 'your listing sign-ins', task: `${fieldText.replace('Change the', 'Fix your')} everywhere`, time }
+      : { access: signin || 'that listing’s sign-in', task: fieldText, time };
+  }
+  if (id.startsWith('unblock')) return { access: pf ? site : host, task: 'Let AI read your site (one setting or file)', time };
+  if (id.startsWith('lists')) {
+    const n = (it.sites || []).filter((s) => s.status !== 'listed').length;
+    return { access: 'an email to sign up with', task: n ? `Add your ${plural(n, 'listing', 'listings')} (${n} ${plural(n, 'site', 'sites')})` : 'Check your profiles match', time };
+  }
+  if (id.startsWith('awards')) return { access: 'nothing', task: 'Find the entry dates', time };
+  if (has('listed_low')) return { access: 'a sign-in on that review site', task: 'Claim your page and ask for reviews', time };
+  if (id.startsWith('list-') || id === 'list') return { access: 'an email to sign up with', task: 'Add your listing (1 site)', time };
+  if (id.startsWith('faq') || has('lost_question') || has('baseline_faq')) {
+    return { access: site, task: faqNeeds ? `Fill in ${faqNeeds} ${plural(faqNeeds, 'detail', 'details')}, then add one page` : 'Add one page from your Fix Kit', time };
+  }
+  if (id.startsWith('homepage')) {
+    const t = has('site_title_meta') && it.copyText && it.copyText.length;
+    const p = has('site_thin_pages');
+    return { access: site, task: t && p ? 'Change your page title and add one page' : t ? 'Change your page title and heading' : 'Add one page', time };
+  }
+  if (id.startsWith('google')) return { access: 'a Google account', task: has('google_missing') ? 'Create your profile and paste in the text' : 'Fill in your profile and paste in the text', time };
+  if (id.startsWith('contact')) {
+    const code = !!it.kit;
+    const nap = has('site_missing_nap');
+    return { access: site, task: code && nap ? 'Add your details to the footer and one code block' : code ? 'Add one code block from your Fix Kit' : 'Add your details to the footer', time };
+  }
+  if (has('few_reviews')) return { access: 'your Google review link', task: 'Send it to recent customers', time };
+  if (has('site_no_https')) return { access: host, task: 'Turn on a secure (https) certificate', time };
+  if (has('site_http_no_redirect')) return { access: host, task: 'Turn on “Force HTTPS”', time };
+  if (has('site_slow')) return { access: site, task: 'Shrink big photos, remove what the homepage doesn’t need', time };
+  if (has('site_no_faq_schema')) return { access: site, task: 'Add one code block', time };
+  if (kinds.some((k) => /^site_/.test(String(k || '')))) return { access: site, task: 'Follow the steps below', time };
+  return { access: 'nothing', task: 'Follow the steps below', time };
 }
 
 // Rough time and cost for the stored fixes that pass through as they are. Conservative; a kind not

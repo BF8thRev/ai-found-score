@@ -438,6 +438,23 @@ function blurred(text) {
   return `<p class="locked-text" aria-hidden="true">${escapeHtml(text)}</p><p class="locked-note">🔒 In the full report</p>`;
 }
 
+// Short first, more on click (owner, Oct 2 2026: a buyer found the report "too much information to
+// start"). The first `k` items stay on screen; the rest sit behind one "Show all N" click. Nothing is
+// dropped: print opens every <details> (openAllForPrint) and hides the click label (report-print.css
+// .r2-more > summary). One extra item is just shown: a click to reveal one row isn't worth it.
+// moreItems: blocks (cards). moreUl: <li> rows, split into two lists of the same class.
+function moreItems(items, { k = 3, label }) {
+  const xs = items.filter(Boolean);
+  if (xs.length <= k + 1) return xs.join('');
+  return `${xs.slice(0, k).join('')}<details class="r2-more"><summary>${label(xs.length)}</summary>${xs.slice(k).join('')}</details>`;
+}
+function moreUl(items, { k = 3, cls, label, tag = 'ul' }) {
+  const xs = items.filter(Boolean);
+  if (!xs.length) return '';
+  if (xs.length <= k + 1) return `<${tag} class="${cls}">${xs.join('')}</${tag}>`;
+  return `<${tag} class="${cls}">${xs.slice(0, k).join('')}</${tag}><details class="r2-more"><summary>${label(xs.length)}</summary><${tag} class="${cls}"${tag === 'ol' ? ` start="${k + 1}" style="--start:${k}"` : ''}>${xs.slice(k).join('')}</${tag}></details>`;
+}
+
 // The one paid tier on sale: the $49 AI Visibility Audit (tier key `xray`, kept from its old X-Ray name). The Fix Kit
 // comes with it (src/lib/fix-kit.js FIX_KIT_TIERS). Only rendered when tierOn('xray') and the report has at least
 // MIN_FIX_ITEMS fixes specific to this business, general advice not counted (the refund promise).
@@ -643,7 +660,16 @@ function fixKitIncluded(report) {
 // progress count are saved in this browser. "Do these this week" sits above the list; steps the Fix
 // Kit covers say so, and one card after the last step hands the website files to the web person.
 const AP_IMPACT = { high: 'Biggest impact', medium: 'Next', low: 'Quick extra' };
-const AP_WHO = { you: 'You can do this', web: 'For whoever runs your website', both: 'You, with your web person' };
+// What a step needs (shared/action-plan.js needsFor): "Needs: Bing Places sign-in · Change the phone number ·
+// ~30 min", then the cost. Owner, Oct 2 2026: "Just say what you need", never "you with your web person".
+// A plan without `needs` (built before it) gets the same shape from its own who and time.
+function apNeeds(i) {
+  const n = i && i.needs && typeof i.needs === 'object' ? i.needs : null;
+  const parts = n
+    ? [n.access, n.task, n.time]
+    : [i.who === 'web' || i.who === 'both' ? 'website access' : 'nothing', 'Follow the steps below', String(i.time || 'time varies').replace(/ for your web person/g, '')];
+  return parts.filter((x) => typeof x === 'string' && x).map(escapeHtml).join(' · ');
+}
 // The plan's steps, the ticks saved in this browser, and "Do these 3 this week" (the first steps, biggest
 // impact first, the owner can finish this week and hasn't ticked). Shared by the plan and the result box.
 function planState(report) {
@@ -666,14 +692,13 @@ function actionPlanV2(report) {
   const kitUrl = '/fix-kit/' + encodeURIComponent(String((report.plan && report.plan.token) || report.id || ''));
   const demo = isDemoReport(report);
   const TYPE_LABEL = { award: 'Industry list', article: 'Article', unsure: 'Other' };
-  const WHO_TAG = { web: 'Web person', both: 'You + web person' };
-  // Time and cost for one step: "Under half an hour per site · No cost for a basic profile".
-  const effort = (i) => [i.time, i.cost].filter((x) => typeof x === 'string' && x).map(escapeHtml).join(' · ');
+  // The cost, short: "No cost", "Some may charge".
+  const cost = (i) => (typeof i.cost === 'string' && i.cost ? escapeHtml(i.cost) : '');
   const weekBlock = week.length ? `
       <div class="ap-week" id="this-week">
         <h3>Do ${week.length === 1 ? 'this' : `these ${week.length}`} this week</h3>
         <ol>${week.map(({ i, n }) => `
-          <li><a href="#step-${n + 1}">${escapeHtml(i.title)}</a><span>${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}${effort(i) ? ` · ${effort(i)}` : ''}</span></li>`).join('')}
+          <li><a href="#step-${n + 1}">${escapeHtml(i.title)}</a><span>Needs: ${apNeeds(i)}${cost(i) ? ` · ${cost(i)}` : ''}</span></li>`).join('')}
         </ol>
       </div>` : '';
   // Each site's status from the scan's own read of the page: not on it (with the directory's "add your
@@ -698,8 +723,10 @@ function actionPlanV2(report) {
     return out.join('');
   };
   const badgeOf = (s) => SITE_BADGE[s.status === 'check' && s.nextScan ? 'waiting' : s.status] || SITE_BADGE.check;
-  const sites = (list) => ((list || []).length ? `
-          <ul class="ap-sites">${list.map((s) => { const [cls, label] = badgeOf(s); const href = s.status === 'listed' && s.profileUrl ? s.profileUrl : s.url; return `<li><span class="badge ${cls}">${label}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(href)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${siteExtra(s)}${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`; }).join('')}</ul>` : '');
+  // The first 3 sites, the rest behind "Show all N sites".
+  const sites = (list) => ((list || []).length ? moreUl(list.map((s) => { const [cls, label] = badgeOf(s); const href = s.status === 'listed' && s.profileUrl ? s.profileUrl : s.url; return `<li><span class="badge ${cls}">${label}</span>${TYPE_LABEL[s.type] ? ` <span class="ap-type">${TYPE_LABEL[s.type]}</span>` : ''} <a href="${safeHref(href)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${siteExtra(s)}${(s.engines || []).length ? ` <span class="r2-muted">read by ${escapeHtml(listJoin(s.engines))}</span>` : ''}</li>`; }), {
+    k: 3, cls: 'ap-sites', label: (n) => `Show all ${n} sites`,
+  }) : '');
   // Wired once the page is in the DOM: save a tick, strike the step through, update the count.
   setTimeout(() => {
     const root = typeof document.getElementById === 'function' ? document.getElementById('action-plan') : null;
@@ -745,17 +772,17 @@ function actionPlanV2(report) {
           <details class="ap-row"${n === firstOpen ? ' open' : ''}>
             <summary>
               <span class="ap-num">${n + 1}</span>
-              <span class="ap-title">${escapeHtml(i.title)}${WHO_TAG[i.who] ? ` <span class="ap-whotag">${WHO_TAG[i.who]}</span>` : ''}</span>
+              <span class="ap-title">${escapeHtml(i.title)}</span>
               <span class="badge ${escapeHtml(i.impact)}">${escapeHtml(AP_IMPACT[i.impact] || AP_IMPACT.medium)}</span>
             </summary>
             <div class="ap-body">
-              <p class="ap-who">${escapeHtml(AP_WHO[i.who] || AP_WHO.you)}${effort(i) ? `<span class="ap-effort"> · ${effort(i)}</span>` : ''}</p>
-              ${i.why ? `<p class="ap-why"><b>Why it matters:</b> ${escapeHtml(i.why)}</p>` : ''}
+              <p class="ap-who ap-needs"><b>Needs:</b> ${apNeeds(i)}${cost(i) ? `<span class="ap-effort"> · ${cost(i)}</span>` : ''}</p>
+              ${i.why ? `<details class="r2-more ap-whybox"><summary>Why it matters</summary><p class="ap-why"><b>Why it matters:</b> ${escapeHtml(i.why)}</p></details>` : ''}
               ${i.kit ? kitDone(i.kit, demo ? SAMPLE_KIT_URL : kitUrl, demo) : ''}
               ${sites(i.sites)}
               ${builtOn(i.platform)}
               ${(i.steps || []).length ? `<p class="ap-how-k">How to do it</p><ol class="r2-steps">${i.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}
-              ${copyBlocksV2(i.copyText)}
+              ${copyFold(i.copyText)}
               ${i.kit ? '' : i.kitNote && !demo ? `<p class="ap-kitnote">${escapeHtml(i.kitNote)} <a href="${kitUrl}">Open my Fix Kit</a></p>` : ''}
             </div>
           </details>
@@ -764,6 +791,13 @@ function actionPlanV2(report) {
       ${demo ? '' : kitCard(report, kitUrl)}
       <p class="r2-muted ap-foot">Below this plan: the evidence behind it (what AI said, who it named, and what we found on your website).</p>
     </section>`;
+}
+
+// A step's copy-paste text: one block on screen; two or more behind one click.
+function copyFold(items) {
+  const n = (items || []).filter((c) => c && c.label && typeof c.text === 'string' && c.text).length;
+  const html = copyBlocksV2(items);
+  return n >= 2 ? `<details class="r2-more ap-copyfold"><summary>Text to copy and paste (${n})</summary>${html}</details>` : html;
 }
 
 // A step whose work is a file already written in the Fix Kit (shared/action-plan.js `kit`): say so, how many
@@ -812,7 +846,8 @@ function kitCard(report, kitUrl) {
   return `
       <div class="ap-kitcard">
         <h3>Hand the website work to your web person</h3>
-        <p>Your Fix Kit has the website files built for you from this report: ${kitFilesText(report)}. Check them, then send them on. Your Google profile text is in there too; that one is for you to paste in.</p>
+        <p>Your Fix Kit has the website files built for you from this report. Check them, then send them on.</p>
+        <details class="r2-more ap-kitcard-what"><summary>What’s in the kit</summary><p>In it: ${kitFilesText(report)}. Your Google profile text is in there too; that one is for you to paste in.</p></details>
         <p class="ap-kitcard-btns"><a class="btn" href="${kitUrl}">Open my Fix Kit</a> <a class="btn-secondary" href="${escapeHtml(mailto)}">Email it to my web person</a></p>
         <p class="ap-kitcard-help">No web person? <a href="${kitUrl}#fk-help">We can do it for you</a>: tell us what you need and we&rsquo;ll reply with what we would do and what it would cost.</p>
       </div>`;
@@ -1381,6 +1416,12 @@ function renderV2(root, report) {
         ? ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'why', 'xray', 'breakdown', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell']
         : ['verdict', 'topTools', 'baseline', 'plan', 'actionPlan', 'recheckCard', 'hero', 'who', 'smallFirm', 'xray', 'breakdown', 'sources', 'site', 'listings', 'facts', 'answers', 'method', 'recheck', 'offer', 'breakdownUpsell'])
       : ['verdict', 'topTools', 'hero', 'baseline', 'plan', 'who', 'smallFirm', 'sources', 'facts', 'site', 'listings', 'issues', 'recheckCard', 'xray', 'breakdown', 'fixkit', 'offer', 'answers', 'method', 'recheck'];
+  // "Jump to": one row of links under the result, so "how" and "where" are one tap away. Not on a
+  // sales page (xrayOk: the offer is the next step there).
+  if (!xrayOk) {
+    sec.jump = jumpRowV2(order.map((k) => sec[k]).join(''), report);
+    order.splice(order.indexOf('topTools') + 1, 0, 'jump');
+  }
 
   root.innerHTML = [
     printHeadV2(report, b),
@@ -1397,6 +1438,13 @@ function renderV2(root, report) {
 
   // Grid marks (and "read the answer" links) open their answer in section 10.
   root.addEventListener('click', (e) => {
+    // A "Jump to" link to a closed box (every answer) opens it.
+    const jump = e.target.closest('a[data-jump]');
+    if (jump) {
+      const box = document.getElementById(jump.dataset.jump);
+      if (box && box.tagName === 'DETAILS') box.open = true;
+      return;
+    }
     // "step 2" links in the evidence open that step of the plan.
     const stepLink = e.target.closest('a[data-step]');
     if (stepLink) {
@@ -1418,6 +1466,30 @@ function renderV2(root, report) {
     const d = document.getElementById('ans-' + hash[1]);
     if (d) { openAnswer(d); d.scrollIntoView({ block: 'start' }); }
   }
+}
+
+// The sections a "Jump to" link can reach: [anchor id, label], shown in page order. Only the ones on
+// this page (`html` is the page's sections), and only when there are 3 or more.
+function jumpRowV2(html, report) {
+  const office = isOffice(report);
+  const targets = [
+    ['action-plan', 'Your plan'],
+    ['why-picked', 'Why AI picked them'],
+    ['who', office ? 'Who AI recommended' : 'Who got the call'],
+    ['gap-sheet', 'Gap sheet'],
+    ['breakdown', 'Competitor Breakdown'],
+    ['site', 'Your website'],
+    ['listings', 'Listings'],
+    ['facts', 'What AI says'],
+    ['proof', 'Every answer'],
+  ].filter(([id]) => html.includes(`id="${id}"`))
+    .sort((x, y) => html.indexOf(`id="${x[0]}"`) - html.indexOf(`id="${y[0]}"`));
+  if (targets.length < 3) return '';
+  return `
+    <nav class="r2-jump" aria-label="Jump to a section">
+      <span class="r2-jump-k">Jump to</span>
+      ${targets.map(([id, label]) => `<a href="#${id}" data-jump="${id}">${escapeHtml(label)}</a>`).join('')}
+    </nav>`;
 }
 
 function headerV2(report, b, scoreHtml = '') {
@@ -1705,7 +1777,7 @@ function smallFirmV2({ report, b, questions, answers, block = false }) {
         ? `AI didn’t name you in ${counted.length === 1 ? 'the answer' : `any of the ${counted.length} answers`}${unsure ? `, and we couldn’t tell in ${unsure}` : ''}.`
         : 'We couldn’t tell whether AI named you.';
     const list = names.length
-      ? `<ul class="r2-small-names">${names.map((n) => `<li><span class="nm">${escapeHtml(n.name)}</span> <span class="c">${n.count} of ${as.length} ${plural(as.length, 'answer', 'answers')}</span></li>`).join('')}</ul>`
+      ? moreUl(names.map((n) => `<li><span class="nm">${escapeHtml(n.name)}</span> <span class="c">${n.count} of ${as.length} ${plural(as.length, 'answer', 'answers')}</span></li>`), { k: 3, cls: 'r2-small-names', label: (k) => `Show all ${k} names` })
       : '<p class="r2-muted">AI didn’t name any other business here.</p>';
     const read = as.map((a) => `<a href="#ans-${escapeHtml(a.id)}" data-open="${escapeHtml(a.id)}">${escapeHtml(engineName(a.engine))}</a>`).join(' · ');
     return `
@@ -1720,12 +1792,13 @@ function smallFirmV2({ report, b, questions, answers, block = false }) {
   const office = isOffice(report);
   // Inside "Why AI picked them" (paid reports with an action plan): the first block, not a section of its own.
   if (block) {
+    // Closed: the heading and one line; the questions and names open on a click.
     return `
-      <div class="r2-small r2-why-size" id="your-size">
-        <h3>${office ? 'Firms your size' : 'Businesses your size'}</h3>
-        <p class="r2-muted">We also asked ${blocks.length === 1 ? 'a question' : `${blocks.length} questions`} ${office ? 'a smaller firm' : 'a smaller local business'} can win. These are the ${office ? 'firms' : 'businesses'} AI named in those answers, and whether it named ${escapeHtml(b.name || 'you')}.</p>
+      <details class="r2-small r2-why-size r2-card-fold" id="your-size">
+        <summary><h3>${office ? 'Firms your size' : 'Businesses your size'}</h3><span class="r2-fold-line">We also asked ${blocks.length === 1 ? 'a question' : `${blocks.length} questions`} ${office ? 'a smaller firm' : 'a smaller local business'} can win.</span></summary>
+        <p class="r2-muted">These are the ${office ? 'firms' : 'businesses'} AI named in those answers, and whether it named ${escapeHtml(b.name || 'you')}.</p>
         ${blocks.join('')}
-      </div>`;
+      </details>`;
   }
   return `
     <section class="report-section r2-small" id="your-size">
@@ -1810,25 +1883,26 @@ function whyPickedV2({ report, b, questions, answers }) {
     const which = (ps) => (ps.length === lists.length && ps.length > 1 ? (ps.length === 2 ? 'both' : `all ${ps.length}`) : ps.length <= 3 ? listJoin(ps.map(siteName)) : `${ps.length} of them`);
     const getLine = [...byStep].map(([step, ps]) => `${step === 'awards' ? 'you can enter' : 'you can get on'} ${which(ps)}${stepLink(step) ? ` (${stepLink(step)})` : ''}`).join('; ');
     const readLine = lists.length ? `<p class="r2-why-line">AI read ${lists.length > 3 ? `${lists.slice(0, 3).map(siteName).join(', ')} and ${lists.length - 3} more` : listJoin(lists.map(siteName))} when it named them${getLine ? `; ${getLine}` : ''}.</p>` : '';
+    // Closed: the name and how often AI named them; the quotes and the pages open on a click.
     return `
-      <article class="r2-why-card">
-        <h3>${escapeHtml(r.name)}${r.small ? ` <span class="ap-whotag">Named for ${office ? 'a firm' : 'a business'} your size</span>` : ''}</h3>
-        <p class="r2-why-meta">Named in ${ans(r.named)}${num(r.first) ? `, first in ${num(r.first)}` : ''}${qs.length ? ` · Asked for: ${escapeHtml(qs.join(', '))}` : ''}</p>
+      <article class="r2-why-card"><details class="r2-card-fold">
+        <summary><h3>${escapeHtml(r.name)}${r.small ? ` <span class="ap-whotag">Named for ${office ? 'a firm' : 'a business'} your size</span>` : ''}</h3>
+        <span class="r2-why-meta">Named in ${ans(r.named)}${num(r.first) ? `, first in ${num(r.first)}` : ''}${qs.length ? ` · Asked for: ${escapeHtml(qs.join(', '))}` : ''}</span></summary>
         <p class="r2-why-k">Why: what AI said about them</p>
         ${quotes || '<p class="r2-muted">AI named them without saying why.</p>'}
         <p class="r2-why-k">Where: the pages AI read when it named them</p>
         ${pageRows ? `${readLine}<ul class="r2-why-pages">${pageRows}</ul>${num(r.morePages) ? `<p class="r2-muted">+ ${num(r.morePages)} more ${plural(num(r.morePages), 'page', 'pages')} in the answers below.</p>` : ''}` : '<p class="r2-muted">AI cited no pages in the answers that named them.</p>'}
-      </article>`;
+      </details></article>`;
   };
   const size = smallFirmV2({ report, b, questions, answers, block: true });
   if (!rivals.length && !size) return '';
   return `
     <section class="report-section r2-why" id="why-picked">
       <h2>Why AI picked them</h2>
-      <p class="sub">The other ${firms} AI named in 2 or more answers: what AI said about each one, word for word, and the pages it read when it named them.</p>
+      <p class="sub">The other ${firms} AI named in 2 or more answers. Tap one for what AI said about it, word for word, and the pages it read when it named them.</p>
       ${rivals.length ? takeaway : ''}
       ${size}
-      ${rivals.length ? `${youRow}${rivals.map(card).join('')}` : `<p class="r2-muted">No other ${office ? 'firm' : 'business'} was named in 2 or more answers.</p>`}
+      ${rivals.length ? `${youRow}${moreItems(rivals.map(card), { k: 3, label: (n) => `Show all ${n} ${firms}` })}` : `<p class="r2-muted">No other ${office ? 'firm' : 'business'} was named in 2 or more answers.</p>`}
     </section>`;
 }
 
@@ -1932,7 +2006,7 @@ function sourcesV2({ report, b, aById, lostAnswerIds, ownDomain, cw }) {
     <section class="report-section">
       <h2>Why they got named instead</h2>
       <p class="sub">The sites the AI cited in the ${cw.unit} that didn’t name you, and whether you’re on them.</p>
-      ${shown.map(card).join('')}
+      ${moreItems(shown.map(card), { k: 3, label: (n) => `Show all ${n} sites` })}
       ${folded.length ? `<details class="r2-fold"><summary>${num(folded.length)}${shown.length ? ' more' : ''} ${plural(folded.length, 'site', 'sites')} AI read for these answers</summary><p class="r2-muted r2-fold-note">We haven’t checked these pages for your name yet. Nothing here needs doing now: the ones that look like lists you can join are already in your action plan.</p>${folded.map(card).join('')}</details>` : ''}
     </section>`;
 }
@@ -1995,7 +2069,7 @@ function factsV2({ report, b, aById }) {
   const facts = (checked.length ? checked : all).slice(0, 8);
   const described = descriptorsV2({ report, aById });
   if (!facts.length && !described) return '';
-  const cards = facts.map((f) => {
+  const card = (f) => {
     const a = aById[f.answerId];
     const badge = f.status === 'differs' ? '<span class="badge mismatch">Doesn’t match</span>'
       : f.status === 'match' ? '<span class="badge match">Correct</span>'
@@ -2007,13 +2081,22 @@ function factsV2({ report, b, aById }) {
         <p>${escapeHtml(engineName(a?.engine))} said: <q>${escapeHtml(f.aiSays)}</q>${a ? ` <a href="#ans-${escapeHtml(a.id)}" data-open="${escapeHtml(a.id)}">See the answer</a>` : ''}</p>
         ${f.sourceSays ? `<p class="r2-muted">Your website and listings say: ${escapeHtml(f.sourceSays)}</p>` : ''}
       </div>`;
-  }).join('');
+  };
+  // On screen: the facts AI got wrong (or, when none, the first 2). Behind one click: how AI describes
+  // you and the rest of the facts.
+  const wrong = facts.filter((f) => f.status === 'differs');
+  const shown = wrong.length ? wrong : facts.slice(0, described ? 0 : 2);
+  const rest = facts.filter((f) => !shown.includes(f));
+  const descN = (report.ownerDescriptors || []).filter((d) => d && d.quote && aById[d.answerId]).slice(0, 6).length;
+  const folded = described || rest.length
+    ? `<details class="r2-more"><summary>${shown.length ? `Show all ${descN + facts.length} quotes` : `See the ${descN + facts.length} ${plural(descN + facts.length, 'quote', 'quotes')}`}</summary>${described}${rest.map(card).join('')}</details>`
+    : '';
   return `
-    <section class="report-section">
+    <section class="report-section" id="facts">
       <h2>What AI says about you</h2>
-      <p class="sub">${facts.length ? `Facts the AI stated about ${escapeHtml(b.name)}, quoted exactly and checked against your website and listings.` : `How the AI described ${escapeHtml(b.name)}, quoted exactly.`}</p>
-      ${described}
-      ${cards}
+      <p class="sub">${facts.length ? `Facts the AI stated about ${escapeHtml(b.name)}, quoted exactly and checked against your website and listings.` : `How the AI described ${escapeHtml(b.name)}, quoted exactly.`}${wrong.length ? ` <b>${num(wrong.length)} ${plural(wrong.length, 'doesn’t', 'don’t')} match.</b>` : ''}</p>
+      ${shown.map(card).join('')}
+      ${folded}
     </section>`;
 }
 
@@ -2042,19 +2125,26 @@ function listingsV2({ listings, badListings, report = {} }) {
       : missing.length === badListings.length
         ? `We couldn’t find you on ${escapeHtml(listJoin(missing.map((l) => l.platform)))}.`
         : `${badListings.length} of ${listings.length} listings need a fix. When your listings disagree, AI can repeat the wrong one.`;
-  return `
-    <section class="report-section">
-      <h2>Your listings</h2>
-      <p class="sub">${sub}</p>
-      ${listings.map((l) => {
-        const gone = listingMissing(l);
-        return `
+  const card = (l) => {
+    const gone = listingMissing(l);
+    return `
         <div class="listing-card">
           <span class="badge ${l.status === 'match' ? 'match' : l.status === 'unchecked' ? 'found' : 'mismatch'}">${l.status === 'match' ? '✓ Correct' : l.status === 'unchecked' ? 'Found' : gone ? '✗ Not found' : '✗ Needs a fix'}</span>
           <h3>${escapeHtml(l.platform)}</h3>
           ${l.locked || gone ? '' : `${l.details ? `<p>${escapeHtml(l.details)}</p>` : ''}${fields(l.fields)}`}
         </div>`;
-      }).join('')}
+  };
+  // The listings that need a fix on screen; the rest behind "Show all N listings" (all of them when
+  // none needs a fix and there are more than 2).
+  const rest = listings.filter((l) => l.status !== 'mismatch');
+  const fold = rest.length && (badListings.length || listings.length > 2);
+  return `
+    <section class="report-section" id="listings">
+      <h2>Your listings</h2>
+      <p class="sub">${sub}</p>
+      ${fold
+        ? `${badListings.map(card).join('')}<details class="r2-more"><summary>${badListings.length ? `Show all ${listings.length} listings` : `See the ${listings.length} listings`}</summary>${rest.map(card).join('')}</details>`
+        : listings.map(card).join('')}
     </section>`;
 }
 
@@ -2072,7 +2162,7 @@ function siteV2(report) {
         ? `<li class="bad"><span aria-hidden="true">✗</span> ${failedN} of ${num(sc.checks)} website checks failed. They make your site harder for AI to read.</li>`
         : `<li class="ok"><span aria-hidden="true">✓</span> All ${num(sc.checks)} checks passed.</li>`;
     return `
-    <section class="report-section r2-site">
+    <section class="report-section r2-site" id="site">
       <h2>Can AI read your website?</h2>
       <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI assistant would.</p>
       ${sc.reachable && num(sc.checks) > 0 ? siteMeterV2(num(sc.checks), num(sc.passed)) : ''}
@@ -2105,7 +2195,7 @@ function siteV2(report) {
     const failedN = rows.length - okN;
     const shown = [...rows.filter((r) => !isOk(r)), ...rows.filter((r) => isOk(r) && !r.includes(' noise"'))];
     return `
-    <section class="report-section r2-site">
+    <section class="report-section r2-site" id="site">
       <h2>Can AI read your website?</h2>
       <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI assistant would. <b>${num(okN)} of ${num(rows.length)} checks passed.</b>${failedN ? ' The fixes that matter are in your action plan above.' : ''}</p>
       <details class="r2-site-more">
@@ -2114,11 +2204,17 @@ function siteV2(report) {
       </details>
     </section>`;
   }
+  // The checks that failed on screen; the passes behind one click.
+  const okRows = rows.filter((r) => r.startsWith('<li class="ok'));
+  const badRows = rows.filter((r) => !r.startsWith('<li class="ok'));
+  const list = badRows.length && okRows.length
+    ? `<ul class="r2-site-list">${badRows.join('')}</ul><details class="r2-more"><summary>Show the ${num(okRows.length)} ${plural(okRows.length, 'check', 'checks')} that passed</summary><ul class="r2-site-list">${okRows.join('')}</ul></details>`
+    : `<ul class="r2-site-list">${rows.join('')}</ul>`;
   return `
-    <section class="report-section r2-site">
+    <section class="report-section r2-site" id="site">
       <h2>Can AI read your website?</h2>
-      <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI assistant would.</p>
-      <ul class="r2-site-list">${rows.join('')}</ul>
+      <p class="sub">We read <a href="${escapeHtml(sc.url)}" rel="noopener nofollow" target="_blank">${escapeHtml(sc.url.replace(/^https?:\/\//, ''))}</a> the way an AI assistant would.${badRows.length && okRows.length ? ` <b>${num(okRows.length)} of ${num(rows.length)} checks passed.</b>` : ''}</p>
+      ${list}
     </section>`;
 }
 
@@ -2281,19 +2377,19 @@ function xrayV2({ report, aById, cw, N }) {
   };
   const card = (c) => {
     const srcs = (c.sources || []).filter((s) => s && s.domain);
+    // Closed: the name, how often AI named them, and how many sites list them and not you.
     return `
-      <div class="listing-card r2-gap">
-        <h3>${escapeHtml(c.name)}</h3>
-        <p>Named in ${num(c.named)} of ${num(N)} ${cw.unit}${num(c.first) ? `, first in ${num(c.first)}` : ', never first'}.</p>
+      <div class="listing-card r2-gap"><details class="r2-card-fold">
+        <summary><h3>${escapeHtml(c.name)}</h3><span class="r2-fold-line">Named in ${num(c.named)} of ${num(N)} ${cw.unit}${num(c.first) ? `, first in ${num(c.first)}` : ', never first'}.${srcs.length ? ` Listed on ${srcs.length} ${plural(srcs.length, 'site that leaves', 'sites that leave')} you out.` : ''}</span></summary>
         ${reviewsLine(c)}
         ${srcs.length
           ? `<p><strong>Sites AI cited that list them and not you:</strong></p>
              <ul class="r2-gap-list">${srcs.map((s) => `<li><a href="${safeHref(s.url)}" rel="nofollow noopener" target="_blank">${escapeHtml(s.domain)}</a>${num(s.position) ? ` <span class="r2-muted">(listed #${num(s.position)})</span>` : ''}</li>`).join('')}</ul>`
           : '<p class="r2-muted">We found no sites AI cited that list them and not you.</p>'}
         ${proof(c.answerIds)}
-      </div>`;
+      </details></div>`;
   };
-  const cards = comps.map(card).join('');
+  const cards = moreItems(comps.map(card), { k: 3, label: (n) => `Show all ${n} businesses` });
   const checkedNote = num(gap.sourcesChecked) === 0
     ? 'None of the sites AI cited could be read for their listings, so no gaps could be checked.'
     : anyGap ? '' : 'We found no sites AI cited that list them and not you.';
@@ -2302,10 +2398,10 @@ function xrayV2({ report, aById, cw, N }) {
   if (x.actionPlan && (x.actionPlan.items || []).length) {
     if (!anyGap) return '';
     return `
-    <section class="report-section r2-xray">
+    <section class="report-section r2-xray" id="gap-sheet">
       <h2>Competitor gap sheet</h2>
       <p class="sub">The businesses AI named in at least 2 of the ${num(N)} ${cw.unit}, and the sites AI cited that list them and not you.</p>
-      ${comps.filter((c) => (c.sources || []).some((s) => s && s.domain)).map(card).join('')}
+      ${moreItems(comps.filter((c) => (c.sources || []).some((s) => s && s.domain)).map(card), { k: 3, label: (n) => `Show all ${n} businesses` })}
     </section>`;
   }
   const checklist = (x.checklist || []).filter((i) => i && i.title);
@@ -2323,7 +2419,7 @@ function xrayV2({ report, aById, cw, N }) {
     }));
   }, 0);
   return `
-    <section class="report-section r2-xray">
+    <section class="report-section r2-xray" id="gap-sheet">
       <h2>Competitor gap sheet</h2>
       <p class="sub">${comps.length
         ? `Every business AI named in at least 2 of the ${num(N)} ${cw.unit}, and the sites AI cited that list them and not you.`
@@ -2364,7 +2460,7 @@ function breakdownV2(report) {
   const you = bd.you || {};
   if (!comps.length) {
     return `
-    <section class="report-section r2-xray">
+    <section class="report-section r2-xray" id="breakdown">
       <h2>Competitor Breakdown</h2>
       <p class="sub">No other business was named in 2 or more answers, so there is nobody to match this time.</p>
     </section>`;
@@ -2384,7 +2480,7 @@ function breakdownV2(report) {
   // B. Do these first: the rows you lack, most rivals first, each with one plain action.
   const first = m && m.first.length ? `
       <h3 class="r2-match-h">Do these first</h3>
-      <ol class="r2-first">${m.first.map((f) => `<li><b>${escapeHtml(f.label)}</b><span>${escapeHtml(f.action)}</span><em>${num(f.rivalCount)} of ${comps.length} ${plural(comps.length, 'business', 'businesses')} ${f.rivalCount === 1 ? 'has' : 'have'} it</em></li>`).join('')}</ol>` : '';
+      ${moreUl(m.first.map((f) => `<li><b>${escapeHtml(f.label)}</b><span>${escapeHtml(f.action)}</span><em>${num(f.rivalCount)} of ${comps.length} ${plural(comps.length, 'business', 'businesses')} ${f.rivalCount === 1 ? 'has' : 'have'} it</em></li>`), { k: 3, cls: 'r2-first', tag: 'ol', label: (n) => `Show all ${n}` })}` : '';
 
   // C. How AI describes each one, word for word, and the pages AI cited for them.
   const describe = comps.map((c) => {
@@ -2398,7 +2494,8 @@ function breakdownV2(report) {
         ${pages ? `<p><strong>Pages AI cited for them:</strong></p><ul class="r2-says">${pages}</ul>` : ''}
       </div>`;
   }).join('');
-  const describeBlock = describe ? `<h3 class="r2-match-h">What AI says about them, and the pages it read</h3>${describe}` : '';
+  // C and D are closed: the scorecard and "Do these first" are the short version.
+  const describeBlock = describe ? `<details class="r2-group-fold"><summary><h3 class="r2-match-h">What AI says about them, and the pages it read</h3><span class="r2-fold-line">Word for word, for each of the ${comps.length === 1 ? 'business' : `${comps.length} businesses`}.</span></summary>${describe}</details>` : '';
 
   // D. One by one: their numbers next to yours, the question they win, what they have that you don't.
   const cards = comps.map((c) => `
@@ -2416,14 +2513,15 @@ function breakdownV2(report) {
           : '<p class="r2-muted">We found nothing they have that you don’t in this scan.</p>'}
       </div>`).join('');
   return `
-    <section class="report-section r2-xray r2-matchlist">
+    <section class="report-section r2-xray r2-matchlist" id="breakdown">
       <h2>Competitor Breakdown</h2>
       <p class="sub">${m ? `What the ${comps.length === 1 ? 'business' : `${comps.length} businesses`} AI names instead of you have that you don’t, in the order to copy them.` : `The ${comps.length === 1 ? 'business' : `${comps.length} businesses`} AI names instead of you, one by one.`}</p>
       ${scorecard}
       ${first}
       ${describeBlock}
-      <h3 class="r2-match-h">One by one</h3>
+      <details class="r2-group-fold"${m ? '' : ' open'}><summary><h3 class="r2-match-h">One by one</h3><span class="r2-fold-line">Their numbers next to yours, the questions they win, and what they have that you don’t.</span></summary>
       ${cards}
+      </details>
       <p class="r2-match-note">Built from the answers and the pages AI cited in this scan. A dash means we didn’t see it there, not that it doesn’t exist. These are things that appear next to businesses AI recommends. We can’t promise that copying them changes what AI says.</p>
     </section>`;
 }
@@ -2671,7 +2769,7 @@ function answersV2({ questions, answers, failedNote = '' }) {
   }).join('');
   const hasUnsure = answers.some((a) => a.ownerMatch === 'unsure' && !a.namedYou);
   return `
-    <details class="report-section r2-allans">
+    <details class="report-section r2-allans" id="proof">
       <summary><h2>${answers.some((a) => a.locked) ? 'The proof: what AI answered' : 'The proof: every answer, word for word'}</h2><span class="r2-allans-n">${answers.length} ${plural(answers.length, 'answer', 'answers')}</span></summary>
       <p class="sub">✓ mentioned you (★ first) · ✗ didn’t${hasUnsure ? ' · ? unsure, not counted' : ''}. ${answers.some((a) => a.locked)
         ? 'Tap to open. The answer at the top of this report is here word for word; every other answer, and the websites it cited, is in the audit.'

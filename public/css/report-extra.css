@@ -690,3 +690,87 @@ details.r2-allans[open] > summary::after { content: "–"; }
 .md-table-wrap { max-width: 100%; overflow-x: auto; margin: 0 0 10px; }
 .md-table { border-collapse: collapse; font-size: 14px; }
 .md-table th, .md-table td { padding: 6px 8px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+
+/* ---- Lighter report (Oct 2 2026 buyer feedback: "too much information to start") ----
+   Short first, more on click: each section is a heading, one line and a few items; the rest sits in
+   <details> (report.js moreItems / moreUl / r2-card-fold / r2-group-fold). Print opens all of them. */
+
+/* More room between sections, and an easy reading measure. */
+.report-page .r2 > .report-section { margin: 72px 0; }
+.report-page .r2 > .r2-verdict + .r2-tools-top, .report-page .r2 > .r2-jump { margin-top: 14px; }
+.report-page .r2 .report-section .sub { max-width: 68ch; line-height: 1.65; margin-bottom: 24px; }
+.report-page .r2 .listing-card, .report-page .r2 .r2-why-card { padding: 20px 22px; }
+@media (max-width: 600px) { .report-page .r2 > .report-section { margin: 44px 0; } .report-page .r2 .listing-card, .report-page .r2 .r2-why-card { padding: 16px 16px; } }
+
+/* "Jump to": one row of section links under the result. */
+.r2-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 0; }
+.r2-jump-k { white-space: nowrap; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #3D4858; margin-right: 4px; }
+.r2-jump a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--navy); font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.r2-jump a:hover { border-color: var(--navy); }
+.report-section[id], details.r2-allans[id] { scroll-margin-top: 84px; }
+@media (max-width: 600px) {
+  .r2-jump { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
+  .r2-jump::-webkit-scrollbar { display: none; }
+  .r2-jump a { flex: none; font-size: 14.5px; }
+}
+
+/* "Show all N": a plain link-style click under the first few items. */
+details.r2-more { margin: 8px 0 0; }
+details.r2-more > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-weight: 700; font-size: 15px; color: #1A5FD0; }
+details.r2-more > summary::-webkit-details-marker { display: none; }
+details.r2-more > summary::after { content: "▸"; color: #1A5FD0; transition: transform .15s; }
+details.r2-more[open] > summary::after { transform: rotate(90deg); }
+details.r2-more[open] > summary { margin-bottom: 6px; }
+/* Inside a plan step: "Why it matters" says its label once (the bold label is for print). */
+.ap-whybox { margin: 0 0 4px; }
+.ap-whybox > summary { min-height: 40px; font-size: 14.5px; }
+@media screen { .ap-whybox .ap-why b { display: none; } }
+.ap-kitcard-what { margin: -4px 0 10px; }
+
+/* A card that opens: its name and one line, with a chevron. */
+details.r2-card-fold > summary { list-style: none; cursor: pointer; display: block; position: relative; padding: 2px 34px 2px 0; min-height: 44px; }
+details.r2-card-fold > summary::-webkit-details-marker { display: none; }
+details.r2-card-fold > summary::after { content: "▸"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 18px; color: var(--muted); transition: transform .15s; }
+details.r2-card-fold[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
+details.r2-card-fold[open] > summary { margin-bottom: 8px; }
+details.r2-card-fold > summary h3 { margin: 0 0 2px; }
+.r2-why-meta { display: block; }
+.r2-fold-line { display: block; font-size: 14.5px; line-height: 1.5; color: #3D4858; font-weight: 400; }
+.r2-why-card { margin: 10px 0; }
+.r2-why-size { padding: 12px 16px; }
+.r2-why-size > summary h3 { margin: 0 0 2px; }
+.listing-card.r2-gap > details.r2-card-fold > summary h3 { font-size: 18px; }
+
+/* A group inside a section that opens (the Competitor Breakdown's quotes and one-by-one cards). */
+details.r2-group-fold { margin: 26px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+details.r2-group-fold > summary { list-style: none; cursor: pointer; display: block; position: relative; padding: 4px 34px 4px 0; min-height: 44px; }
+details.r2-group-fold > summary::-webkit-details-marker { display: none; }
+details.r2-group-fold > summary::after { content: "+"; position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 24px; font-weight: 700; color: var(--navy); }
+details.r2-group-fold[open] > summary::after { content: "–"; }
+details.r2-group-fold > summary .r2-match-h { margin: 0 0 2px; }
+/* "Do these first" continues its numbers after "Show all N". */
+.r2-more ol.r2-first { counter-reset: first var(--start, 0); }
+
+/* Owner, Oct 2 2026: "add more space, it feels heavier text a tiny bit". More room, softer body text
+   (#2B3648 on white is about 12:1, AA), line-height 1.65, bold kept for the one key phrase per block.
+   No font size goes below what it was. */
+#report-root > .wrap.r2 { color: #2B3648; }
+.report-page .r2 p, .report-page .r2 li, .report-page .r2 .r2-md { line-height: 1.65; }
+.report-page .r2 .listing-card, .report-page .r2 .r2-why-card, .report-page .r2 .r2-why-you, .report-page .r2 .r2-why-take { margin: 14px 0; }
+.r2-why-take, .r2-why-you { padding: 16px 20px; }
+.ap-week { padding: 20px 22px; margin-bottom: 24px; }
+.ap-week h3 { margin-bottom: 12px; }
+.ap-week li { margin-bottom: 12px; }
+.ap-week li a { font-weight: 600; }
+.ap-progress { margin-bottom: 18px; }
+.ap-item { margin-bottom: 12px; }
+.ap-row summary { min-height: 60px; padding-top: 12px; padding-bottom: 12px; }
+.ap-title { font-weight: 600; }
+.ap-body { padding-bottom: 22px; }
+.ap-body .r2-steps li { margin-bottom: 6px; }
+.ap-needs b { font-weight: 600; color: var(--navy); }
+.ap-kitcard, .r2-recheck { padding: 20px 22px; }
+.r2-why-pages li a, .r2-first b { font-weight: 600; }
+.r2-first li { padding-top: 14px; padding-bottom: 14px; }
+.r2-verdict-ask, .r2-verdict-key, .r2-verdict-open { line-height: 1.65; }
+@media (max-width: 520px) { .ap-week { padding: 16px 16px; } }

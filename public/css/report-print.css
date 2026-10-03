@@ -128,3 +128,11 @@ details > summary::after { content: none !important; display: none !important; }
 .md-table { width: 100%; table-layout: fixed; }
 .md-table th, .md-table td { border: 1px solid #999 !important; overflow-wrap: anywhere; }
 .r2-ans:has(.r2-md li:nth-child(6)) { break-inside: auto; }
+
+/* Short-first folds (report.js moreItems / moreUl / r2-card-fold / r2-group-fold): opened for print by
+   openAllForPrint. "Show all N" and "Why it matters" labels mean nothing on paper; the bold
+   "Why it matters:" inside the step says it instead. A card's or a group's summary is its heading, so it stays. */
+.r2-more > summary, .r2-jump { display: none !important; }
+.ap-whybox .ap-why b { display: inline !important; }
+details.r2-card-fold > summary, details.r2-group-fold > summary { display: block !important; padding: 0 !important; min-height: 0 !important; }
+details.r2-group-fold { border-top: 0 !important; padding-top: 0 !important; }

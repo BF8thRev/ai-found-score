@@ -255,7 +255,10 @@ test('the paid page: a scorecard (rivals and You), a tally, "Do these first", wh
   const ticks = (html.match(/<span class="y" aria-label="Seen">✓<\/span>/g) || []).length;
   assert.equal(ticks, m.rows.reduce((n, row) => n + row.rivals.filter((x) => x.has).length + (row.you ? 1 : 0), 0));
   assert.match(html, /<h3 class="r2-match-h">Do these first<\/h3>\s*<ol class="r2-first">/);
-  assert.equal((html.match(/<ol class="r2-first">([^]*?)<\/ol>/)[1].match(/<li>/g) || []).length, m.first.length);
+  // Every "do this first" item is on the page: the first 3 on screen, the rest behind "Show all N".
+  const firstLis = (html.match(/<ol class="r2-first"[^>]*>[^]*?<\/ol>/g) || []).join('').match(/<li>/g) || [];
+  assert.equal(firstLis.length, m.first.length);
+  if (m.first.length > 4) assert.match(html, new RegExp(`<details class="r2-more"><summary>Show all ${m.first.length}</summary><ol class="r2-first" start="4"`));
   assert.match(html, /Add a page for Smithtown that says what you do there/);
   assert.match(html, /What AI said about them:/);
   assert.match(html, /<q>[^<]*Best of Long Island[^<]*<\/q>/);

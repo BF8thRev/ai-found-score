@@ -61,6 +61,8 @@
     errors.forEach(function (err) {
       var f = document.querySelector('.fk-field[data-field="' + err.field + '"]');
       if (!f) return;
+      // A field behind "Show all N" is opened so the note and the focus land on something visible.
+      for (var d = f.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = true;
       f.classList.add('has-error');
       var e = f.querySelector('.fk-err');
       if (e && !e.textContent) e.textContent = err.message;
@@ -146,6 +148,13 @@
     (kit.faq.attributes || []).forEach(function (a, n) { if (!(a.type in order)) order[a.type] = n; });
     var at = function (i) { return i.slot.type in order ? order[i.slot.type] : 99; };
     items.sort(function (a, b) { return (a.complete ? 1 : 0) - (b.complete ? 1 : 0) || at(a) - at(b); });
+    // The first SHOW_SLOTS on screen; the rest behind "Show all N" (still read by "Add to my answers").
+    var more = null;
+    if (items.length > SHOW_SLOTS) {
+      more = el('details', 'fk-more');
+      more.setAttribute('data-slots-more', '');
+      more.appendChild(el('summary', null, 'Show all ' + items.length));
+    }
     items.forEach(function (it, n) {
       var id = 'fk-slot-' + it.slot.type;
       var row = el('div', 'fk-slot fk-field');
@@ -165,9 +174,11 @@
       input.value = facts[it.slot.type] || '';
       row.appendChild(input);
       row.appendChild(el('p', 'fk-err'));
-      wrap.appendChild(row);
+      (more && n >= SHOW_SLOTS ? more : wrap).appendChild(row);
     });
+    if (more) wrap.appendChild(more);
   }
+  var SHOW_SLOTS = 3;
 
   function qaPreview(items) {
     var box = el('div', 'fk-qa');
@@ -215,10 +226,16 @@
       li.appendChild(h);
       li.appendChild(el('span', 'fk-tech', j.tech));
       li.appendChild(el('p', null, j.what));
+      li.appendChild(el('p', 'who', (WHO[j.who] || '') + (j.time ? ' · ' + j.time + ' · No cost from us' : '')));
+      if (j.note) li.appendChild(el('p', 'fk-note sample', j.note));
+      // Where it goes, the site builder's steps and the "why" sit behind one click.
+      var how = el('details', 'fk-how');
+      how.appendChild(el('summary', null, 'How to do it'));
       var where = el('p');
       where.appendChild(el('strong', null, 'Where it goes: '));
       where.appendChild(document.createTextNode(j.where));
-      li.appendChild(where);
+      how.appendChild(where);
+      li.appendChild(how);
       // The site builder's own click-paths and help pages (shared/platforms.js), when we know it.
       if (j.platform && ((j.platform.steps || []).length || (j.platform.guides || []).length)) {
         var box = el('div', 'fk-platform');
@@ -236,13 +253,11 @@
           gp.appendChild(a);
           box.appendChild(gp);
         });
-        li.appendChild(box);
+        how.appendChild(box);
       }
-      li.appendChild(el('p', 'who', (WHO[j.who] || '') + (j.time ? ' · ' + j.time + ' · No cost from us' : '')));
-      if (j.note) li.appendChild(el('p', 'fk-note sample', j.note));
       if (j.id === 'faq' && kit.faq) {
         var why = (kit.faq.attributes || []).slice(0, 4).map(function (a) { return a.label; });
-        if (why.length) li.appendChild(el('p', null, 'When AI picked other businesses, it mentioned ' + why.join(', ') + '. These answers cover the same things for you.'));
+        if (why.length) how.appendChild(el('p', null, 'When AI picked other businesses, it mentioned ' + why.join(', ') + '. These answers cover the same things for you.'));
         var qa = el('details');
         qa.appendChild(el('summary', null, 'Read all ' + plural((kit.faq.items || []).length, 'question and answer', 'questions and answers')));
         qa.appendChild(qaPreview(kit.faq.items || []));
@@ -295,11 +310,15 @@
       if (!s || input.value) return;
       var box = suggestBox('Drafted by AI from your website. Check that it is true before you use it.');
       box.appendChild(el('p', null, '“' + s.sentence + '”'));
-      box.appendChild(el('p', 'fk-suggest-q', 'From your website: “' + s.quote + '”'));
       var b = el('button', 'btn-secondary', 'Use this');
       b.type = 'button';
       b.addEventListener('click', function () { input.value = s.sentence; box.remove(); input.focus(); });
       box.appendChild(b);
+      // The words on their website that back the draft: one click away.
+      var src = el('details', 'fk-src');
+      src.appendChild(el('summary', null, 'Where this came from'));
+      src.appendChild(el('p', 'fk-suggest-q', 'From your website: “' + s.quote + '”'));
+      box.appendChild(src);
       row.appendChild(box);
     });
     var svc = (suggestions.services || []);
@@ -357,10 +376,12 @@
     drawSuggestions();
     var needs = (kit.faq && kit.faq.needs) || 0;
     var miss = (kit.missing || []).length;
-    var note = $('[data-dl-note]');
-    note.textContent = 'Every file below, with a one-page guide for whoever runs your website. Nothing changes on your website until someone puts the files in place.';
+    // What's still open goes on its own line under the download note, not in the middle of it.
+    var note = $('[data-dl-needs]');
+    note.textContent = '';
+    note.hidden = !(needs || miss);
     if (needs || miss) {
-      note.appendChild(document.createTextNode(' You can download now; ' + [miss ? plural(miss, 'detail is', 'details are') + ' missing' : '', needs ? plural(needs, 'answer still needs', 'answers still need') + ' one detail from you' : ''].filter(Boolean).join(' and ') + ', and the guide says so. '));
+      note.appendChild(document.createTextNode('You can download now; ' + [miss ? plural(miss, 'detail is', 'details are') + ' missing' : '', needs ? plural(needs, 'answer still needs', 'answers still need') + ' one detail from you' : ''].filter(Boolean).join(' and ') + ', and the guide says so. '));
       if (needs) {
         var a = el('a', null, 'Fill them in below');
         a.href = '#fk-needs';
@@ -426,6 +447,18 @@
       if (data.problems && data.problems.length) { openForm(true); showErrors(data.problems); }
     })
     .catch(function () { show('error'); });
+
+  // Print / Save as PDF shows everything: every closed "How to do it", "Show all" and file opens for
+  // the print and closes again after.
+  var openedForPrint = [];
+  window.addEventListener('beforeprint', function () {
+    openedForPrint = [].slice.call(document.querySelectorAll('.fk details:not([open])'));
+    openedForPrint.forEach(function (d) { d.open = true; });
+  });
+  window.addEventListener('afterprint', function () {
+    openedForPrint.forEach(function (d) { d.open = false; });
+    openedForPrint = [];
+  });
 
   form.elements.description.addEventListener('input', count);
   $('[data-edit]').addEventListener('click', function () { openForm(true); });
