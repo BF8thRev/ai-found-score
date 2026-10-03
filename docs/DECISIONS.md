@@ -48,14 +48,88 @@ consultancies) that win big clients through AI search. Both groups are core cust
 
 ## 2. The Offer Playbook: how we decide what to sell and how to sell it
 
-This section is the reusable part. It records the **theory** behind our offers, the **questions**
+This section is the reusable part. **The bar for every offer: exceptional value, incredibly easy to achieve** (2.1). It records the **theory** behind our offers, the **questions**
 we used to pressure-test them, **what each question caught**, and a **template** for running a new
 idea through the same process quickly. If we start another product, service or offer, start here.
 
 > Scores quoted below come from AI reviewer and persona role-play, not real customers. They show
 > direction, not demand. Real sales data replaces them as soon as we have it.
 
-### 2.1 The theory: twelve laws we learned the hard way
+### 2.1 The bar: exceptional value, incredibly easy to achieve (Hormozi's value equation)
+
+Every offer must be so good that saying no feels stupid, and so easy that the buyer can't fail.
+We measure that with Alex Hormozi's value equation:
+
+```
+            Dream outcome  ×  Perceived likelihood of achieving it
+Value  =  ─────────────────────────────────────────────────────────
+                  Time delay  ×  Effort and sacrifice
+```
+
+Push the top up and the bottom toward zero. The bottom is usually where the easy wins are: cutting
+time and effort raises value faster than adding more stuff. **Price isn't in the equation.** We raise
+value until $49 looks like a mistake on our part, not until the price feels fair.
+
+**The four levers, applied to us**
+
+| Lever | What it means here | What we already do | Where we're still weak |
+|---|---|---|---|
+| **Dream outcome ↑** | "When customers ask AI who to call, it says *my* name." | Lead with their loss in their own town and trade (Law 4); "Take the call back from {rival}" | We can't promise the outcome (Law 7), so we sell the clearest path to it and the proof it moved |
+| **Likelihood ↑** | "I believe this will work *for me*." | Their own real data, not a pitch; real sample reports; a countable money-back promise; a 30-day re-check that shows what changed; honest limits | No testimonials or before/after case study yet; no named person on the report |
+| **Time delay ↓** | "How soon do I see something?" | The report opens instantly; "Do these 3 this week", quick wins first; time shown on every step | The proof of change arrives at day 30 |
+| **Effort and sacrifice ↓** | "How much work, risk and hassle is this for me?" | Website-only form; pre-built Fix Kit; AI prefill from their own site; click-by-click steps for 13 site builders; no logins or passwords; "Do it for me" | The website part still needs a web person; "Do it for me" has no price yet |
+
+**How to build a Hormozi-style offer the honest way**
+
+1. **List every obstacle the buyer will hit**, before, during and after buying. Examples: "I don't
+   know what's wrong", "I don't trust AI stuff", "I don't have time", "I don't know how to edit my
+   site", "I'll do it wrong", "will it even work?", "what if it's a waste of $49?"
+2. **Turn each obstacle into a solution**, and each solution into a deliverable:
+   - "I don't know how to edit my site" → builder-specific clicks.
+   - "I'll get it wrong" → pre-built files I only verify.
+   - "Will it work?" → a re-check in 30 days.
+   - "A waste of money?" → fewer than 3 problems found, money back.
+3. **Trim and stack.** Keep what's high value to the buyer and cheap for us to deliver (software,
+   templates, AI drafts checked against their site). Cut what's low value or needs our hands (Law 8).
+   Stack what's left so the offer is plainly worth far more than its price, using **real** numbers only
+   (Law 6).
+4. **Make it easy at every step.** Every field we ask for, click, login and decision is a cost.
+   Infer it, prefill it, or do it for them. If a step can't be removed, show who does it, how long it
+   takes and what it costs.
+5. **Reverse the risk.** A guarantee the system can count, offered only when it can't trigger by
+   design (Law 7). Say plainly what we *don't* promise; it raises belief.
+6. **Real enhancers only.** Urgency and scarcity must be true. An industry list's entry deadline is
+   real urgency; a countdown timer isn't. A bonus must be a real deliverable (the 30-day re-check),
+   never a made-up "$X value". A name says the outcome without promising it ("AI Visibility Audit").
+
+**Where Hormozi and our rules meet.** His method assumes the value stack is real. Ours makes that
+non-negotiable. If an enhancer would need a fake number, a fake deadline or an outcome promise, drop
+it and find value on the bottom of the equation (less time, less effort) instead. That's where we've
+won every time:
+
+| Move | Lever |
+|---|---|
+| Website-only form | Effort |
+| Instant report | Time |
+| Pre-built kit | Effort |
+| "Do these 3 this week" | Time |
+| Builder-specific steps | Effort |
+| "Do it for me" | Effort |
+
+**The value scorecard (run it before any offer ships)**
+
+Score each lever 1–10 from the buyer's side, with a skeptical-buyer persona and then real data:
+
+- Dream outcome: is it stated in their words, about their business?
+- Likelihood: what proof do they see that it works *for them*?
+- Time: what do they get in the first 5 minutes? The first week?
+- Effort: count the fields, clicks, logins, decisions and "now find someone to…" moments.
+
+**Ship only when every lever scores 8 or more and the whole offer reads as a no-brainer at its price.**
+The lowest lever is the next thing to fix. Right now that's likelihood (no proof stories yet) and
+effort (the website part needs a person).
+
+### 2.2 The theory: twelve laws we learned the hard way
 
 Each law gives the rule, why it works, and where we learned it.
 
@@ -146,7 +220,7 @@ for me" for the rest. Write so "a plumber with a high-school degree" understands
 agency gets industry lists, not "open now" advice. *Learned:* Sep 28 to Oct 2. Bryan: *"effortless
 and massive value."* Personas: the kit "hands owners a task list when they want a result."
 
-### 2.2 The question bank: what we asked, what it caught, what it changed
+### 2.3 The question bank: what we asked, what it caught, what it changed
 
 These are the questions that changed the product. Ask them, in roughly this order, of any new offer.
 
@@ -212,7 +286,7 @@ These are the questions that changed the product. Ask them, in roughly this orde
 | "Is a B2B agency our customer?" (Claude said no) | Bryan overruled, Oct 2 | Storefront assumptions everywhere | B2B is core; fixes and questions gated by business type |
 | "Does this fit a business outside the 8 trades?" (skeptical bakery-owner persona) | Critic, Sep 27 | Plumber-only "calls" framing | Trade-agnostic copy; any kind of business accepted |
 
-### 2.3 The method: how we pressure-test (the loop)
+### 2.4 The method: how we pressure-test (the loop)
 
 1. **Write the promise table first.** For each promise: what exists today, can we deliver it, who
    unblocks it. Anything undeliverable is off sale or "coming soon" before any payment link exists.
@@ -241,7 +315,7 @@ These are the questions that changed the product. Ask them, in roughly this orde
 | Accuracy auditor | Precision, recall, "safe to sell as every claim has evidence?" |
 | Personas for a new offer | Score; what I'd do alone today; would I click; what scares me; what I'd pay |
 
-### 2.4 The graveyard: ideas we killed and why
+### 2.5 The graveyard: ideas we killed and why
 
 These are as instructive as what shipped. Don't re-propose them without new facts.
 
@@ -266,11 +340,12 @@ These are as instructive as what shipped. Don't re-propose them without new fact
 yes; Bryan says later); unlock one real fix title as proof; a named person or phone on the report;
 a price range on "Do it for me"; the unproven homepage claims Bryan chose to keep ("Most popular").
 
-### 2.5 Running a new idea through this: the template
+### 2.6 Running a new idea through this: the template
 
 Copy this into the PR or a planning doc for any new offer, product or business idea. A bad idea
-should fail by step 4; a good one should be ready to build by step 9.
+should fail by step 4; a good one should be ready to build by step 10.
 
+0. **Value equation first.** Fill in the four levers (2.1): dream outcome, likelihood, time, effort. List every obstacle and the solution to each. If you can't get every lever to 8 or more on paper, the idea isn't ready.
 1. **Customer and loss.** Who is the buyer (every type: local, B2B, office, storefront)? What are they
    losing today, shown with *their own* real data? Who is the "loser" in the picture? (Laws 3, 4, 12)
 2. **Free vs paid split.** What does free prove? What does paid cure? What is teased only as a count?
@@ -289,9 +364,10 @@ should fail by step 4; a good one should be ready to build by step 9.
    and cost? What can we pre-build, prefill or do for them? (Laws 11, 12)
 9. **Truth pass.** Fact-check every number and claim (OK / WRONG / INVENTED / MISLEADING). Check the
    banned words. Name nothing as losing without permission. (Laws 3, 6, 7)
-10. **Pressure loop.** Run the question bank (2.2) and the reviewer roles (2.3). Loop until 9/10 on
-    value, ease, clarity and design. Check the graveyard (2.4) so we don't repeat a dead idea.
-11. **Ship small, then measure.** Tests and a preview click-through, then real events and cost per
+10. **Value scorecard.** Re-score the four levers with a skeptical-buyer persona. Every lever must be 8 or more, and the lowest one is the next fix.
+11. **Pressure loop.** Run the question bank (2.3) and the reviewer roles (2.4). Loop until 9/10 on
+    value, ease, clarity and design. Check the graveyard (2.5) so we don't repeat a dead idea.
+12. **Ship small, then measure.** Tests and a preview click-through, then real events and cost per
     sale. Record the decision, the why and what we rejected in section 8 of this file.
 
 ---
@@ -525,6 +601,10 @@ Add new entries at the top of this section. Format:
 When a decision changes, add a new entry and mark the old one `**Superseded by …**`. Don't delete it.
 The history is the point.
 
+### 2026-10-02 · Strategy · The bar: exceptional value, incredibly easy (Hormozi value equation)
+**Decision:** Every offer is built and scored on Hormozi's value equation. Raise the dream outcome and the buyer's belief it will work; drive time and effort toward zero. Every lever must score 8 or more before an offer ships. Enhancers (urgency, scarcity, bonuses, value stacks) are used only when they're real.
+**Why:** Bryan wants offers with exceptional value that are incredibly easy to achieve, Hormozi style. Our biggest past wins already came from cutting time and effort: the website-only form, the pre-built kit, builder-specific steps, "Do it for me". The weakest levers now are likelihood (no proof stories yet) and effort (the website part still needs a person).
+
 ### 2026-10-02 · Strategy · Offer Playbook added (section 2)
 **Decision:** The theory behind our offers is written down as 12 laws, alongside the question bank (each question, what it caught, what it changed), the review loop and its rubrics, the graveyard of killed ideas, and an 11-step template for running any new idea through the same process.
 **Why:** Bryan wants the lessons applied as a framework, so a new idea gets to a clear value proposition and offer faster, without re-learning them.
@@ -729,5 +809,5 @@ Do this in every PR, before asking for a merge:
 3. **Something went wrong or nearly did?** Add a row to section 5 with the rule that prevents it.
 4. **Answered or raised an open question?** Edit section 7.
 5. **Changed what's on sale, prices, costs or the stack?** Update section 1.
-6. **Pressure-tested an offer or idea?** Add the question, what it caught and what changed to the question bank in 2.2, and any killed idea to the graveyard in 2.4. If we learned a new law, add it to 2.1.
+6. **Pressure-tested an offer or idea?** Add the question, what it caught and what changed to the question bank in 2.3, and any killed idea to the graveyard in 2.5. If we learned a new law, add it to 2.2. Re-score the value scorecard in 2.1 when an offer changes.
 7. **Truly nothing to record** (a dependency bump, a typo)? Add the `no-decision-log` label to the PR.
