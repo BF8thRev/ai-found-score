@@ -1464,7 +1464,7 @@ function renderV2(root, report) {
   const hash = location.hash.match(/^#ans-(.+)$/);
   if (hash) {
     const d = document.getElementById('ans-' + hash[1]);
-    if (d) { openAnswer(d); d.scrollIntoView({ block: 'start', behavior: 'instant' }); }
+    if (d) { openAnswer(d); d.scrollIntoView({ block: 'start' }); }
   }
   // A link to a section (#proof, #listings, the "Jump to" ids): the page was empty when the browser looked
   // for it, so go there now that the report is drawn, opening it when it is a closed box.
