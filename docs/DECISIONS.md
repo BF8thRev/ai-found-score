@@ -606,11 +606,11 @@ Add new entries at the top of this section. Format:
 When a decision changes, add a new entry and mark the old one `**Superseded by …**`. Don't delete it.
 The history is the point.
 
-### 2026-10-02 · Design · Short first, more on click, more space (this PR)
+### 2026-10-02 · Design · Short first, more on click, more space (PR #64)
 **Decision:** The paid report, the Fix Kit and the landing pages lead each section with a heading, one line and the action. The why, the how, the evidence and long lists sit behind labelled folds (one circled +/− style everywhere). There's more white space, a softer body ink (#2B3A52, AA-checked) and bold only on key phrases. Report steps say what's needed ("Needs: website access · Upload one file · under 30 min · No cost") instead of who does it. Times are only reformatted, never shortened. Prices, what you get, refund and no-subscription lines, honesty caveats and buttons stay visible. Nothing is deleted, only moved one click away, and print opens everything.
 **Why:** A buyer said the report "felt like too much information to start". Bryan wants it quick, easy and short, with the how and where one click away. The meaning stays the same, verified by an independent before/after text review and a design/function review.
 
-### 2026-10-02 · Offer · "Do it for me": the owner names their price (this PR)
+### 2026-10-02 · Offer · "Do it for me": the owner names their price (PR #64)
 **Decision:** The "Do it for me" form asks what they want done and **what they'd pay** (required, free text). We reply to say whether we can do it. Every page, email and the zip README stopped promising "what we would do and what it would cost". No price is published anywhere.
 **Why:** Bryan doesn't want to publish a price yet. Asking owners what they'd pay shows if and what they'd pay before we set one.
 **Replaces:** "we'll write back with what we would do and what it would cost" (PR #57).
