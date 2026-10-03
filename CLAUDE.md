@@ -14,3 +14,15 @@ test by hand, so nothing is "done" until it has been tested and verified here.
 4. **Click through the change on the PR preview build** before merge when it's something a person
    sees or clicks (a page, a button, an admin action). Say in the PR what was checked and how.
 5. If anything couldn't be verified, say so plainly in the PR. Don't call it done.
+
+## The Operating Bible: `docs/DECISIONS.md`
+
+`docs/DECISIONS.md` records what we decided, why, how it changed, and the lessons behind it. **Read it
+before starting work**: if a request conflicts with a principle there, say so before acting.
+
+6. **Every PR updates `docs/DECISIONS.md`** in the same PR: a dated entry at the top of the decision
+   log (Decision, Why, Replaces/Rejected), a lesson row if something went wrong or nearly did, and
+   edits to "Where we are now" / "Open questions" when they changed. Mark replaced decisions as
+   superseded; never delete history. The "Decision log" GitHub check fails if the file isn't touched;
+   only a PR with truly nothing to record (dependency bump, typo) gets the `no-decision-log` label.
+7. **The repo is public**: no personal emails, report tokens, keys, or customer names in that file.
