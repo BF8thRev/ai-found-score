@@ -4,6 +4,7 @@ This file records what we decided, why we decided it, how each decision changed 
 we learned along the way. It is the source of truth for the reasoning behind the product. The code
 shows *what* the product does; this file explains *why*.
 
+- **Starting a new offer or idea?** Run it through [section 2, the Offer Playbook](#2-the-offer-playbook-how-we-decide-what-to-sell-and-how-to-sell-it) first.
 - **Read it before starting work.** If a request conflicts with a rule below, say so and ask before acting.
 - **Every PR updates it** (see [How to update](#how-to-update-this-file)). The "Decision log" check fails if it doesn't.
 - **This repo is public.** Never put personal emails, report tokens, keys, or a customer's name here
@@ -45,7 +46,257 @@ consultancies) that win big clients through AI search. Both groups are core cust
 
 ---
 
-## 2. Operating principles (the framework)
+## 2. The Offer Playbook: how we decide what to sell and how to sell it
+
+This section is the reusable part. It records the **theory** behind our offers, the **questions**
+we used to pressure-test them, **what each question caught**, and a **template** for running a new
+idea through the same process quickly. If we start another product, service or offer, start here.
+
+> Scores quoted below come from AI reviewer and persona role-play, not real customers. They show
+> direction, not demand. Real sales data replaces them as soon as we have it.
+
+### 2.1 The theory: twelve laws we learned the hard way
+
+Each law gives the rule, why it works, and where we learned it.
+
+**Law 1: Only sell what you can deliver today.**
+A promise the system can't keep costs a refund, trust and support time, and it's a legal risk.
+*Learned:* on Sep 24 we checked every plan against the code. $29 had no real fix steps (Mega Wash had
+1 fixable issue, so its guarantee would have triggered). $69 "Full Year" had no scheduler and was
+$10 for 11 months of work. $199 needed hand labour. Two of the four came off sale that night. On Sep
+26 Be the Answer could deliver 3 of its 8 promises, so it stayed "Opening soon". It came off sale on
+Sep 28. Bryan: *"your call, it's your business."*
+
+**Law 2: Free diagnoses; paid cures.**
+The free report proves there's a problem: the verdict, who won, one real answer as proof, the
+score, and a *count* of problems. A count creates pull; problem titles are almost the fix itself.
+The paid audit explains every problem and fixes it. *Counterweight:* if free gets too thin, nobody
+trusts the $49. *Learned:* Sep 26. The free report gave away every answer and check detail, so the
+$49 added only instructions, and the "nothing new? it's free" promise was at risk. Bryan:
+*"it seems out of whack… not so heavy for free."*
+
+**Law 3: Proof before promise, and only real proof.**
+An unaware buyer needs to *see* the problem before any pitch. The hero shows a real AI answer for the
+visitor's own trade and town, with real competitors named. Every number traces to a stored scan, and
+missing data drops the line instead of guessing. Copy tests we use: can you picture it, can you check
+it, could no one else say it? *Learned:* hero rounds, Sep 25 and Sep 28.
+
+**Law 4: Sell the loss, and make the reader the loser.**
+"Is it sending your calls to someone else?" Show who *got* the call (green) and "everyone else: not
+mentioned" (red). The reader works out the loss for themselves; we never claim "you're losing
+customers". We never show a real business losing without its permission. *Learned:* Sep 28. The card
+had shown Mega Wash *winning*, which reads as "nice for them". On the report page, the rival's name
+in amber turned "an abstract 0 into a named villain". Bryan: *"we are pitching is it sending your
+calls to someone else."*
+
+**Law 5: The entry price is an impulse price, anchored to a real loss.**
+$49, not $99 ("makes them stop and think") and not $29 ("signals cheap tool"). The anchor is
+"less than one missed service call", never a crossed-out price. *Learned:* Sep 25. A scan costs a
+few dollars at most, so $49 is mostly margin. Bryan: *"$99 feels high… make it lower and such a
+steal."*
+
+**Law 6: Anchors and value stacks use real prices only.**
+No "~~$99~~ $49" for a product never sold at $99, and no "$1,981 total value". Comparisons are
+arithmetic on prices we actually charge ("12 re-scans at $49 = $588"). *Learned:* the Sep 25 offer
+spec. Fake anchors are FTC risk, and they contradict our "every number is real" trust copy.
+
+**Law 7: Guarantees must be countable, not triggerable by design, and capped.**
+"Fewer than 3 problems specific to you → your $49 back within 30 days." The system counts it, and the
+audit is offered only when the report already has 3 or more specific problems. A human approves
+refunds. No guarantees of outcomes (placement, rank, score lift, calls). Names can't imply what we
+don't promise: "Answer Guarantee" was renamed "Accuracy Guarantee", then dropped. *Learned:* Sep 25–26.
+
+**Law 8: The owner's constraints shape the product. Design inside them.**
+"I don't want to be involved" turned "we fix your listings" into **identify, don't fix**. "We post to
+your Google profile" became a monthly ready-to-post email, and "we write it" became "pre-built,
+owner verifies". Anything that needs a person (manual filing, approvals, "Run now") is a defect.
+*Learned:* Sep 26. Bryan: *"keep [the] script to identify as part of the value we offer."*
+
+**Law 9: Put each upsell at the moment of intent.**
+- **Checkout bump:** one cheap-to-fulfil add-on, unticked (+$25 Competitor Breakdown).
+- **After delivery:** the next rung, pitched from what the report found.
+- **Day 30:** the free re-check shows what changed, and doubles as the natural pitch for more help.
+- **Recurring plans:** never sold cold; only after delivery.
+- **Not on a page that has a different job:** no $499 next to a $49 decision, no upsell above the
+  action plan.
+
+Bryan on the re-check: *"at least we will know who to easily upsell."* *Learned:* Sep 26–29, Oct 2.
+
+**Law 10: Intent decides the path. Paid clicks go to checkout; free gets value first.**
+Someone who clicks a price wants to pay, so give them a dedicated, distraction-free `/checkout`.
+Someone who clicks free gets their answer, then the upsell. Never swap one form's text in place; it
+reads as broken. *Learned:* Sep 27–28. Bryan overruled four critic agents: *"if someone wants to pay
+we should be taking them for paid."* The known cost is that pay-before-report buyers may qualify for
+a refund.
+
+**Law 11: Every page has one job and one decision.**
+- **Pages that sell:** one button wording, with the price only on the button. No "Questions?" lines,
+  no cross-sell next to the main offer, no fake buttons in pictures.
+- **Pages after purchase:** the job is action. Show the impact-ordered checklist first, with who does
+  each step, how long it takes and what it costs. Evidence comes after, offers last.
+- **Every page:** short first, click for more. Same meaning, details behind a toggle.
+
+*Learned:* Sep 29 (report offer), Oct 2 (paid report; buyer feedback: "too much information to
+start"). Bryan: *"they just paid, they are… ready to lock in solve the issues."*
+
+**Law 12: Effortless beats DIY, and plain words beat precise ones.**
+Pre-build everything, prefill from the customer's own site (quote it or drop it), and offer "Do it
+for me" for the rest. Write so "a plumber with a high-school degree" understands it in 5 seconds:
+"mentioned", not "named"; "times we asked AI", not "searches". Fit fixes to the business type: an
+agency gets industry lists, not "open now" advice. *Learned:* Sep 28 to Oct 2. Bryan: *"effortless
+and massive value."* Personas: the kit "hands owners a task list when they want a result."
+
+### 2.2 The question bank: what we asked, what it caught, what it changed
+
+These are the questions that changed the product. Ask them, in roughly this order, of any new offer.
+
+**A. Value: is it worth paying for?**
+| Question | Asked by | What it caught | What changed |
+|---|---|---|---|
+| "Where is the value? I can't find it easily." | Bryan, Oct 2 | Fixes 9 screens down, kit 16 down, filler counted as deliverables, "12 fixes" really 6 | Action-plan checklist first (PR #51). Ratings: value 3→8, ease 3→9 |
+| "Be the Answer doesn't seem worth it, confirm." | Bryan, Sep 26 | $49 + $149 got the same files; the extra $300 bought ~$80 of work | BTA rebuilt as "keep you visible for a year", later taken off sale |
+| "Do we build correctly for enough value for the two?" | Bryan, Sep 26 | Paying didn't run the promised 5-question scan; free gave away the paid evidence | Payment starts a fresh scan; free/paid rebalanced |
+| "The Competitor Breakdown feels valueless." | Bryan, Sep 29 | A scoreboard of rival trivia | Match List: what they have that you don't, with evidence, and "do these first" |
+| "Is it effortless? What does the buyer still have to do?" | Bryan + 3 personas, Oct 2 | Buyers want a result, not a task list | Pre-built kit, AI prefill, "Do it for me" (PRs #52–#57) |
+| "What would you pay?" | Persona role-play, Oct 2 | $100–300 one-time; no monthly "AI stuff" ("SEO guys already burned me") | Done-for-you priced as a one-time quote; monthly not pushed |
+
+**B. Truth: is every word true today?**
+| Question | Asked by | What it caught | What changed |
+|---|---|---|---|
+| "Can we confidently deliver what we say?" | Bryan, Sep 25 | A 5-platform listings check claimed site-wide but never built | Claim removed; the real checks built the next day |
+| "Push back if you don't agree." (on his own 8-point spec) | Bryan, Sep 25 | $1,981 value stack, invented "Tidewater" lost call, "asked 3 times" (false) | Real-math anchors; town-templated loss line; claims cut to what's delivered |
+| "Make the date dynamic so it looks current." | Bryan, Sep 25/28 | A false date on the trust device itself | Refused; date removed from the fallback card instead |
+| "Can we say we helped them?" | Bryan, Sep 28 | Not true yet | Refused; saved as a future true before/after story |
+| Fact-check: OK / WRONG / INVENTED / MISLEADING for every claim | Fact-check agent, Sep 28 onward | Mockups with invented check names, fake fix titles, wrong guarantee wording | Every mockup is fact-checked against live data before Bryan sees it |
+| "Safe to sell as 'every tick has evidence'?" | 3 accuracy audits, Sep 29 | Negations and complaints counted as strengths | Same-sentence rule; 97% precision; prefer a miss over a false claim |
+
+**C. Deliverability and operations: can it run without us?**
+| Question | Asked by | What it caught | What changed |
+|---|---|---|---|
+| "Can we deliver each plan today?" (promise / exists / deliverable / who unblocks) | Claude, Sep 24 | 2 of 4 plans undeliverable | Law 1 |
+| "What's missing to launch? Verify we can handle the full offer." | Bryan, Sep 26 | The GBP API needs a profile we can't legitimately have; big platforms need owner logins | Identify-don't-fix; directory submissions and their guarantee dropped |
+| "Can anyone pay for nothing, see paid content free, or run up our costs?" | Adversarial agent before each deploy | Buy buttons with no report; another business's paid report leaking | Payment tied to your own report; locked data removed on the server |
+| "Does this need my hands?" | Bryan, every offer | Manual "Run now", manual filing, manual refunds | Automate it, cut it, or flag it (refunds are still manual) |
+
+**D. Price, anchor and guarantee**
+| Question | Asked by | What it caught | What changed |
+|---|---|---|---|
+| "$99 feels high. Make it a steal, with a checkout upsell?" | Bryan, Sep 25 | $99 is a considered purchase; unit cost is a few dollars | $49 + one bump |
+| "Need a bigger anchor? Upsells between $49 and $499?" | Bryan, Sep 26 | Empty gap; an anchor must be something we'd really sell | Middle rungs mapped; no fake anchors |
+| "Hide the re-check, reveal it at checkout as a '$49 value'? Consider all sides." | Bryan, Sep 28 | Most drop-off happens at the card; "$49 value" isn't a real price | Kept on the card as an outcome; tagged "Included" at checkout |
+| "Is the guarantee something we can count, and can it trigger by design?" | Claude, Sep 25 | "Show you something you didn't know" was uncheckable | The 3-problem rule, offered only when 3+ exist |
+| "How much would one more question add?" | Bryan, Oct 2 | $0.12–0.17 per question | Paid audit only (+$0.34 a scan, under 1% of $49); free stays lean |
+
+**E. Funnel and placement: does the path match the intent?**
+| Question | Asked by | What it caught | What changed |
+|---|---|---|---|
+| "Get the full audit feels broken and off-putting." | Bryan + 4 critics, Sep 27 | Every price button led to the free form; six competing CTAs; "every word" promised but locked | Separate paid path; one buy action per screen |
+| "I cancelled. Shouldn't back go back, not give me a free scan?" | Bryan, Sep 28 | Cancel dumped buyers into something they didn't ask for | Back returns to a prefilled checkout; no unrequested scans |
+| "When should the free report ask for email?" | Bryan, Sep 24 | An email gate before value | Questions shown first, email optional after |
+| "This is a bad step." (trade picker) | Bryan, Sep 27 | The form blocked any business outside 8 trades | Infer the kind of business; ask only as a last resort |
+| "Only show what's needed to make it easy and clean." | Bryan, Oct 2 | Four boxes up front | Website-only hero; the rest inferred |
+
+**F. Clarity and design: does it land in 5 seconds?**
+| Question | Asked by | What it caught | What changed |
+|---|---|---|---|
+| "Hero isn't wow, too much going on. Loop until 9+, give me 2 options." | Bryan, Sep 25 | Bait-like blurred answers, false "asked today" | Option A (9/10): a real answer card, live ask behind the CTA |
+| "How does it become a 9/10?" | Bryan → critic, Sep 28 | The card read as someone else's problem; no tap target | "Your free report shows this for your business"; "Would it give yours?" |
+| "Can a plumber with a high-school degree understand it?" | Bryan, Sep 28 | "named", "searches", an asterisk score essay | Plain words; "We asked AI 6 times. It never mentioned you." |
+| "Have the agent rate the order." | Bryan, Sep 28 | The money moment was in section 7 | Result → who got the call → offer (order 6 → 8.5/10) |
+| "What else is excessive?" | Bryan, Sep 29 | Duplicate CTAs; a 2,400 px offer; "Why AI skips you" | Cut; phone page 8,430 → 5,060 px |
+| "Too much information to start." | A buyer, Oct 2 | A wall of evidence reads as work | Short first, click for more, on every page |
+
+**G. Customer: who is this really for?**
+| Question | Asked by | What it caught | What changed |
+|---|---|---|---|
+| "Is a B2B agency our customer?" (Claude said no) | Bryan overruled, Oct 2 | Storefront assumptions everywhere | B2B is core; fixes and questions gated by business type |
+| "Does this fit a business outside the 8 trades?" (skeptical bakery-owner persona) | Critic, Sep 27 | Plumber-only "calls" framing | Trade-agnostic copy; any kind of business accepted |
+
+### 2.3 The method: how we pressure-test (the loop)
+
+1. **Write the promise table first.** For each promise: what exists today, can we deliver it, who
+   unblocks it. Anything undeliverable is off sale or "coming soon" before any payment link exists.
+2. **Build the smallest true version.**
+3. **Send out independent reviewers, one role each**, read-only and in parallel: conversion/copy,
+   design, fact-check, plain-language persona, skeptical buyer, order/structure, edge-case QA, and
+   adversarial (abuse, leaks, cost). For pricing, add feasibility, product and buyer reviewers.
+4. **Merge their findings into one ranked list.** Flag where they disagree, decide, and fix in one pass.
+5. **Re-rate with fresh reviewers and loop until 9/10** on Bryan's rubric: *value, ease of use,
+   clarity, design*. Present two options with scores and a recommendation; Bryan decides.
+6. **Triage outside critiques as agree / partly / disagree.** Bryan: *"If I am wrong say that."*
+7. **Show, don't describe.** A side-by-side "live now vs new" page.
+8. **Ship behind tests and a preview click-through.** Then measure real behaviour (GA4 events,
+   `/admin` funnel, cost per sale) and let data replace the role-play scores.
+
+**Rubrics we actually used**
+| Reviewer | Scores |
+|---|---|
+| Copy critic (hero) | 5-second clarity, wow, credibility, specificity, simplicity, CTA pull, rule compliance, owner fit. 9 = every rule passes, the proof is in the reader's own trade, nothing invented |
+| Skeptical owner, 10 seconds | Grabs in 5 s? Feels real and personal? Drives the next step? |
+| Fact-checker | Every claim: OK / WRONG / INVENTED / MISLEADING, plus "did anything locked leak?" |
+| Plain-language persona | Words they'd misread (with replacements), repetition, clarity, impact, keep reading |
+| Skeptical buyer (offer) | Top 10 objections in blocking order; does the page answer each; what must they picture before paying |
+| Offer design | Fit, clarity, pull |
+| Hostile paid-report reviewer | Value for money, "what do I do Monday?", trust, scannability, upsell tact |
+| Accuracy auditor | Precision, recall, "safe to sell as every claim has evidence?" |
+| Personas for a new offer | Score; what I'd do alone today; would I click; what scares me; what I'd pay |
+
+### 2.4 The graveyard: ideas we killed and why
+
+These are as instructive as what shipped. Don't re-propose them without new facts.
+
+| Idea | Why it died |
+|---|---|
+| "Your customers stopped Googling" | An overclaim the stats don't support. "Are asking AI now" is backed by a source. |
+| ~~$99~~ $49 strikethrough; "$1,981 total value" | Fake anchors (FTC risk). |
+| An invented business losing ("AI named Tidewater, not you") | Fabricated. A real business needs its permission. |
+| A dynamic "asked today" date on a stored answer | False, and on the very element meant to build trust. |
+| "Answer Guarantee"; "keep working free until it is" | Implies an outcome we can't control; open-ended labour. |
+| "Named by AI" badge | Goes stale within a week; implies the AI companies endorse it. |
+| $69 one-time "Full Year" | Undeliverable and underpriced. Monitoring returns only as a real recurring plan. |
+| Directory submissions, GBP posting, "we fix your listings" | Need owner logins or hand work; break the hands-off rule. |
+| Haiku or a "cleaner" question prompt to save cost | Answers drift from what customers see. Cut effort and search caps instead. |
+| Blurred fix titles as a teaser | Blurred text is still in the page; fake titles imply findings that don't exist. |
+| Promising score lift or more calls | Can't be backed. Show time, cost and who instead. |
+| A surprise "$49 value" bonus at checkout | Not a real price; the value belongs on the card where people decide. |
+| `cta_click` on every button | Muddies the event list; the funnel is already measured downstream. |
+| "Based in Plainview, NY" | "It limits us." |
+
+**Still contested (decide with data, not opinion):** fold the $25 Breakdown into $49 (the agents say
+yes; Bryan says later); unlock one real fix title as proof; a named person or phone on the report;
+a price range on "Do it for me"; the unproven homepage claims Bryan chose to keep ("Most popular").
+
+### 2.5 Running a new idea through this: the template
+
+Copy this into the PR or a planning doc for any new offer, product or business idea. A bad idea
+should fail by step 4; a good one should be ready to build by step 9.
+
+1. **Customer and loss.** Who is the buyer (every type: local, B2B, office, storefront)? What are they
+   losing today, shown with *their own* real data? Who is the "loser" in the picture? (Laws 3, 4, 12)
+2. **Free vs paid split.** What does free prove? What does paid cure? What is teased only as a count?
+   (Law 2)
+3. **Promise table.** List every promise: exists today? deliverable without us? who unblocks it?
+   Anything that fails is cut or "coming soon". (Laws 1, 8)
+4. **Unit economics.** Cost per free unit, cost per paid unit, fee, margin, and how many free units
+   one sale pays for. Can a cheaper setting give the same answer? Test it on real inputs. (Law 5)
+5. **Price and anchor.** An impulse entry price anchored to a real loss. Any comparison uses only real
+   prices. (Laws 5, 6)
+6. **Guarantee.** Countable by the system, offered only when it can't trigger by design, capped, and
+   refunded by a human. No outcome promises. (Law 7)
+7. **Path and placement.** Paid intent goes to its own checkout. Where does each upsell sit: bump,
+   after delivery, day 30? What must *not* sit next to the main decision? (Laws 9, 10, 11)
+8. **First screen after purchase.** What does the buyer do first, ranked by impact, with who, time
+   and cost? What can we pre-build, prefill or do for them? (Laws 11, 12)
+9. **Truth pass.** Fact-check every number and claim (OK / WRONG / INVENTED / MISLEADING). Check the
+   banned words. Name nothing as losing without permission. (Laws 3, 6, 7)
+10. **Pressure loop.** Run the question bank (2.2) and the reviewer roles (2.3). Loop until 9/10 on
+    value, ease, clarity and design. Check the graveyard (2.4) so we don't repeat a dead idea.
+11. **Ship small, then measure.** Tests and a preview click-through, then real events and cost per
+    sale. Record the decision, the why and what we rejected in section 8 of this file.
+
+---
+
+## 3. Operating principles (the framework)
 
 These are the standing rules. Each one came from a specific decision or mistake, given in brackets.
 
@@ -113,7 +364,7 @@ These are the standing rules. Each one came from a specific decision or mistake,
 
 ---
 
-## 3. How the big things evolved
+## 4. How the big things evolved
 
 ### Offer ladder
 | Date | Ladder | Why it changed |
@@ -192,7 +443,7 @@ file (Oct 2).
 
 ---
 
-## 4. Lessons learned (mistake → rule)
+## 5. Lessons learned (mistake → rule)
 
 | When | What went wrong | Rule now |
 |---|---|---|
@@ -229,7 +480,7 @@ file (Oct 2).
 
 ---
 
-## 5. How Bryan works (so agents don't have to ask)
+## 6. How Bryan works (so agents don't have to ask)
 
 - **Wants an operator, not an assistant.** "You are running this business completely independent."
   He checks dollars on `/admin`. Claude still asks before anything that sends, publishes, spends
@@ -251,7 +502,7 @@ file (Oct 2).
 
 ---
 
-## 6. Open questions (keep this list current)
+## 7. Open questions (keep this list current)
 
 1. "Do it for me": price range, reply deadline, named person, and how it fits the hands-off rule.
 2. Be the Answer: rebuild, rescope or retire. Includes the leftover 60-Day Guarantee/directory copy from PR #5 on the refunds and privacy pages.
@@ -267,12 +518,16 @@ file (Oct 2).
 
 ---
 
-## 7. Decision log (newest first)
+## 8. Decision log (newest first)
 
 Add new entries at the top of this section. Format:
 `### YYYY-MM-DD · Area · Short title (PR #n)`, then **Decision**, **Why**, **Replaces** (if any).
 When a decision changes, add a new entry and mark the old one `**Superseded by …**`. Don't delete it.
 The history is the point.
+
+### 2026-10-02 · Strategy · Offer Playbook added (section 2)
+**Decision:** The theory behind our offers is written down as 12 laws, alongside the question bank (each question, what it caught, what it changed), the review loop and its rubrics, the graveyard of killed ideas, and an 11-step template for running any new idea through the same process.
+**Why:** Bryan wants the lessons applied as a framework, so a new idea gets to a clear value proposition and offer faster, without re-learning them.
 
 ### 2026-10-02 · Process · Operating Bible started; every PR updates it
 **Decision:** `docs/DECISIONS.md` records decisions, reasons, how they changed, and lessons learned. CLAUDE.md requires an update in every PR; a "Decision log" GitHub check fails without one (label `no-decision-log` for PRs with no decision, like dependency bumps).
@@ -466,12 +721,13 @@ The history is the point.
 
 Do this in every PR, before asking for a merge:
 
-1. **New decision?** Add an entry at the top of section 7: date, area, title, PR number, then
+1. **New decision?** Add an entry at the top of section 8: date, area, title, PR number, then
    Decision, Why, and Replaces/Rejected. Decisions include product, pricing, copy rules, cost and
    process choices, and anything Bryan said yes or no to.
 2. **Changed an old decision?** Add the new entry, and append `**Superseded by YYYY-MM-DD …**` to
-   the old one. If it affects a big topic, update the matching part of section 3.
-3. **Something went wrong or nearly did?** Add a row to section 4 with the rule that prevents it.
-4. **Answered or raised an open question?** Edit section 6.
+   the old one. If it affects a big topic, update the matching part of section 4.
+3. **Something went wrong or nearly did?** Add a row to section 5 with the rule that prevents it.
+4. **Answered or raised an open question?** Edit section 7.
 5. **Changed what's on sale, prices, costs or the stack?** Update section 1.
-6. **Truly nothing to record** (a dependency bump, a typo)? Add the `no-decision-log` label to the PR.
+6. **Pressure-tested an offer or idea?** Add the question, what it caught and what changed to the question bank in 2.2, and any killed idea to the graveyard in 2.4. If we learned a new law, add it to 2.1.
+7. **Truly nothing to record** (a dependency bump, a typo)? Add the `no-decision-log` label to the PR.
