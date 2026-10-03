@@ -153,7 +153,7 @@ test('print: every click-for-more opens for Save as PDF, its "Show all" label is
   const page = readFileSync(new URL('../../../public/report.html', import.meta.url), 'utf8');
   assert.match(page, /report-extra\.css\?v=45/);
   assert.match(page, /report-print\.css\?v=6/);
-  assert.match(page, /js\/report\.js\?v=53/);
+  assert.match(page, /js\/report\.js\?v=54/);
 });
 
 // ---- Review of commit 8cbe63a (Oct 2 2026) ----
