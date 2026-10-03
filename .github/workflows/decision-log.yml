@@ -1,0 +1,25 @@
+# Every PR must update docs/DECISIONS.md (the Operating Bible), so the reasoning behind each change
+# is recorded where every agent reads it. A PR with truly nothing to record gets the
+# `no-decision-log` label. Dependabot PRs are skipped.
+name: Decision log
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  decision-log:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'no-decision-log')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: docs/DECISIONS.md is updated in this PR
+        run: |
+          if git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qx 'docs/DECISIONS.md'; then
+            echo "docs/DECISIONS.md updated."
+          else
+            echo "::error::This PR doesn't update docs/DECISIONS.md. Add a decision-log entry (see 'How to update this file'), or add the no-decision-log label if there is nothing to record."
+            exit 1
+          fi
