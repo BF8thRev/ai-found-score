@@ -513,8 +513,8 @@ test('every button that means "see the fixes" says the same thing (header, strip
 
 test('every question, every answer: one line until opened; opening a link to an answer opens it', () => {
   const html = render(load(), locked());
-  assert.match(html, /<details class="report-section r2-allans">\s*<summary><h2>The proof: what AI answered<\/h2><span class="r2-allans-n">\d+ answers?<\/span><\/summary>/);
-  assert.doesNotMatch(html, /<details class="report-section r2-allans" open/);
+  assert.match(html, /<details class="report-section r2-allans" id="proof">\s*<summary><h2>The proof: what AI answered<\/h2><span class="r2-allans-n">\d+ answers?<\/span><\/summary>/);
+  assert.doesNotMatch(html, /<details class="report-section r2-allans"[^>]* open/);
   const css = readFileSync(new URL('../../../public/css/report-extra.css', import.meta.url), 'utf8');
   assert.match(css, /details\.r2-allans > summary \{ cursor: pointer; display: flex;/);
 });
