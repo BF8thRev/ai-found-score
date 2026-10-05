@@ -1,11 +1,12 @@
 // src/lib/done-for-you.js — the Fix Kit's "do it for me" button: one click on the kit page emails us.
 //
-//   validateHelp(body)                       → { ok, help: { contact, phone, wants[], note }, errors: [{ field, message }] }
+//   validateHelp(body)                       → { ok, help: { contact, phone, wants[], price, note }, errors: [{ field, message }] }
 //   helpEmails(env, { token, tiers, ... })   → { toUs, toOwner }: the two emails (src/lib/email.js sendEmail shape)
 //
-// POST { help: true, details, contact, phone?, wants[], note? } on /api/fix-kit/<token> (src/lib/fix-kit-route.js).
-// Paid kits only. It promises nothing about price or timing: it says we got the request and will reply by
-// email. The email to us carries everything needed to answer without asking the owner again: who, how to
+// POST { help: true, details, contact, phone?, wants[], price, note? } on /api/fix-kit/<token> (src/lib/fix-kit-route.js).
+// Paid kits only. We never publish a price (owner, Oct 2 2026: "they submit their prices and tell us what they
+// want us to do and we will see"): the owner says what they want done and what they would pay, and we reply
+// by email to say if we can do it. Nothing about price or timing is promised. The price is only emailed, not stored. The email to us carries everything needed to answer without asking the owner again: who, how to
 // reach them, what they asked for, their site and builder, the kit link and report link, what the kit is
 // still missing. No logins are ever asked for here; the owner decides what to share when we write back.
 
@@ -28,9 +29,11 @@ export function validateHelp(body) {
   if (phone && phone.replace(/\D/g, '').length < 10) errors.push({ field: 'helpPhone', message: 'Enter a 10-digit phone number, or leave it blank.' });
   const wants = [...new Set((Array.isArray(b.wants) ? b.wants : []).map(clean).filter((w) => Object.hasOwn(WANTS, w)))];
   if (!wants.length) errors.push({ field: 'helpWants', message: 'Pick at least one thing you want help with.' });
+  const price = clean(b.price);
+  if (!price || price.length > 80) errors.push({ field: 'helpPrice', message: price ? 'Keep this under 80 characters.' : 'Tell us what you’d pay, even a rough number.' });
   const note = clean(b.note);
   if (note.length > 600) errors.push({ field: 'helpNote', message: 'Keep the note under 600 characters.' });
-  return { ok: !errors.length, help: { contact, phone, wants, note: note.slice(0, 600) }, errors };
+  return { ok: !errors.length, help: { contact, phone, wants, price: price.slice(0, 80), note: note.slice(0, 600) }, errors };
 }
 
 /** What the kit still lacks, in a line each, for the email to us. */
@@ -49,6 +52,7 @@ export function helpEmails(env, { origin, token, tiers = [], details, report, ki
   const lines = [
     `${d.name} asked us to do their Fix Kit for them.`,
     '',
+    `They would pay: ${help.price}`,
     `Reply to: ${help.contact}${help.phone ? ` · phone ${help.phone}` : ''}`,
     `They want help with: ${help.wants.map((w) => WANTS[w]).join('; ')}`,
     ...(help.note ? [`Their note: ${help.note}`] : []),
@@ -62,7 +66,7 @@ export function helpEmails(env, { origin, token, tiers = [], details, report, ki
     `Their Fix Kit page: ${origin}/fix-kit/${encodeURIComponent(token)}`,
     `Their report: ${origin}/report/${encodeURIComponent(token)}`,
     '',
-    'We have not asked them for any login. Decide what to offer, then reply to them.',
+    'We have not asked them for any login. Decide if we can do it for that, then reply to them.',
   ];
   const key = `dfy-${token}-${day}`;
   return {
@@ -73,7 +77,8 @@ export function helpEmails(env, { origin, token, tiers = [], details, report, ki
       text: [
         `Hi,`,
         '',
-        `Thanks for asking us to help with ${d.name}. We got your request and will reply to this address by email with what we would do and what it would cost.`,
+        `Thanks for asking us to help with ${d.name}. We got your request and will reply to this address by email to say if we can do it.`,
+        `You said you’d pay: ${help.price}.`,
         'Asking is free, and you don’t owe anything unless you say yes in writing. This is one reply, not a mailing list. We will never ask for a password in a message like this.',
         '',
         `Your Fix Kit is still here whenever you want it: ${origin}/fix-kit/${encodeURIComponent(token)}`,

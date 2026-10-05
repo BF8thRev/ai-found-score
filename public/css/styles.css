@@ -979,3 +979,107 @@ a.mk:hover { outline: 2px solid currentColor; outline-offset: 1px; }
 .final-cta h2 { color: #fff; margin: 0 0 10px; }
 .final-cta .intro { color: #C8D6E8; margin: 0 auto 24px; }
 .final-cta .fine { color: #A9BAD3; margin: 12px 0 0; font-size: 14px; }
+
+/* ---------- Lighter landing pages (Oct 2026): short first, more space, lighter type ---------- */
+/* Scoped to body.lp (index, about, success, contact), the checkout page (.co-page) and classes only
+   those pages use, so the report and Fix Kit pages, which share this file, look the same.
+   details.disc is the shared disclosure marker (the Fix Kit's circled +/−), for any page to adopt. */
+details.disc > summary { list-style: none; cursor: pointer; font-weight: 600; color: var(--blue); min-height: 44px; display: flex; align-items: center; gap: 10px; }
+details.disc > summary::-webkit-details-marker { display: none; }
+details.disc > summary::before { content: "+"; flex: none; display: inline-grid; place-content: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid currentColor; font-size: 15px; line-height: 1; }
+details.disc[open] > summary::before { content: "\2212"; }
+
+.lp { --ink-soft: #2B3A52; } /* body text, a touch softer than --ink: 11.6:1 on white, 10.8:1 on --wash */
+.lp .section, .lp .stats-band { padding: 88px 0; line-height: 1.65; }
+.lp .section h2 { margin-bottom: 18px; }
+.lp .section .intro { margin-bottom: 48px; }
+.lp .stats { gap: 22px; }
+.lp .stat { padding: 34px 30px; }
+.lp .stat p, .lp .how-step > p, .lp .tier-list { color: var(--ink-soft); }
+.lp .stats-band .stat p { color: #E6EDF7; }
+.lp .stats-after { font-weight: 400; }
+.lp .stats-after b { font-weight: 700; }
+/* "What you're blind to": four points, no boxes; one bold phrase in the intro. */
+.lp .lost-note { font-size: clamp(18px, 2vw, 20px); font-weight: 400; color: var(--ink-soft); margin: 0 0 40px; max-width: 68ch; }
+.lp .lost-note b { font-weight: 700; color: var(--navy); }
+.what-points { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 40px 32px; }
+.what-points .card { background: none; border: 0; padding: 0; }
+.what-points .card h3 { font-size: 19px; line-height: 1.3; margin-bottom: 10px; }
+.what-points .card p { font-size: 15.5px; line-height: 1.65; }
+.lp .what-cta { margin-top: 44px; }
+.lp .how-steps { gap: 24px; margin-top: 8px; }
+.lp .how-step { padding: 30px 28px; gap: 14px; }
+.lp .how-cta { margin-top: 40px; }
+/* Pricing: more room, regular-weight lines with the key phrase in bold. */
+.lp .tiers.ladder { gap: 28px; }
+.lp .tiers.ladder .tier { padding: 40px 34px 34px; }
+.lp .tiers.ladder .tier-tagline { font-weight: 500; }
+.lp .tiers.ladder .tier-list li { padding: 6px 0 6px 26px; }
+.lp .tiers.ladder .tier-promise { font-weight: 400; }
+.lp .tiers.ladder .tier-promise b { font-weight: 700; }
+.lp .tiers.ladder .tier-when { font-weight: 400; }
+/* "What you can count on": a quiet grid of four, a check instead of a box. */
+.lp #trust h2 { margin-bottom: 44px; }
+.trust-points { gap: 36px 32px; }
+.trust-points .card { background: none; border: 0; padding: 0 0 0 34px; position: relative; }
+.trust-points .card::before {
+  content: "✓"; position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+  background: #E2F4E8; color: var(--green); font-size: 13px; font-weight: 800; display: grid; place-content: center;
+}
+.trust-points .card h3 { font-size: 18px; line-height: 1.3; margin-bottom: 10px; }
+.trust-points .card p { font-size: 15.5px; line-height: 1.65; }
+/* FAQ: the first few questions, the rest behind "More questions" (details.disc). */
+.lp .faq h2 { margin-bottom: 24px; }
+.faq details.faq-more { border-bottom: 0; }
+.faq details.faq-more > summary { margin-top: 18px; padding: 12px 0; font-size: 16px; font-weight: 700; }
+.faq details.faq-more > summary::after, .faq details.faq-more[open] > summary::after { content: none; }
+.faq details.faq-more[open] > summary { margin-bottom: 4px; }
+.faq .faq-more > details:first-of-type { border-top: 1px solid var(--line); }
+/* An open "More questions" must not flip the + on the closed questions inside it. */
+.faq .faq-more details:not([open]) > summary::after { content: "+"; }
+.lp .final-cta { padding: 96px 0; }
+/* About page. */
+.lp .page { max-width: 760px; line-height: 1.65; color: var(--ink-soft); }
+.lp .page h2 { margin: 56px 0 18px; }
+.lp .page p { max-width: 68ch; }
+.lp .page .lede-page { color: var(--ink-soft); line-height: 1.6; }
+.lp .founder-note { padding: 10px 28px 16px; margin: 0; }
+.lp .page details.disc { margin: 4px 0 14px; }
+.lp .page details.disc[open] > summary { margin-bottom: 6px; }
+.diff-list { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 18px; }
+.lp .page .diff-list li { position: relative; margin: 0; padding: 0 0 0 34px; max-width: 68ch; }
+.diff-list li::before {
+  content: "✓"; position: absolute; left: 0; top: 2px; width: 22px; height: 22px; border-radius: 50%;
+  background: #E2F4E8; color: var(--green); font-size: 13px; font-weight: 800; display: grid; place-content: center;
+}
+.diff-list strong { color: var(--navy); }
+.lp .about-cta { margin: 56px 0 28px; padding: 30px 24px; }
+/* Checkout: a little more room. */
+.co-page { --ink-soft: #2B3A52; }
+.co-page .co-card { padding: 38px 36px; }
+.co-page .co-sub { line-height: 1.65; margin-bottom: 26px; }
+.co-page #co-form { gap: 16px; }
+.co-page .co-badges { gap: 14px; }
+.co-page .co-incl { color: var(--ink-soft); }
+@media (max-width: 1040px) and (min-width: 861px) { .what-points { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 860px) {
+  .what-points { grid-template-columns: 1fr; gap: 28px; }
+  .what-points .card { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 16px; align-items: start; }
+  .what-points .card .icon { grid-row: span 2; margin: 0; }
+  .trust-points { grid-template-columns: 1fr 1fr; gap: 28px 20px; }
+  .co-page .co-card { padding: 28px 22px; }
+}
+@media (max-width: 560px) {
+  .lp .section, .lp .stats-band { padding: 56px 0; }
+  .lp .final-cta { padding: 64px 0; }
+  .lp .section .intro { margin-bottom: 32px; }
+  .lp .lost-note { margin-bottom: 28px; }
+  .lp .what-cta, .lp .how-cta { margin-top: 32px; }
+  .lp .how-step { padding: 26px 22px; }
+  .lp .tiers.ladder .tier { padding: 36px 24px 28px; }
+  .lp #trust h2 { margin-bottom: 32px; }
+  .trust-points { grid-template-columns: 1fr; gap: 28px; }
+  .lp .page h2 { margin-top: 40px; }
+  .lp .founder-note { padding: 6px 18px 12px; }
+  .lp .about-cta { margin-top: 40px; }
+}

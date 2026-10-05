@@ -29,7 +29,7 @@ Bryan, reviews and merges but does not test by hand or use a terminal.
 | Free Snapshot | $0 | 3 questions × ChatGPT, Gemini, Claude. Shows whether you're named, who's named instead, one answer word for word, the AI Found Score, and pass/fail tallies. Fix titles stay locked. |
 | AI Visibility Audit | $49 | A fresh scan on every engine with a key: 5 questions, plus 2 small-firm questions on the paid audit only. You get an impact-ordered **action plan checklist**, the pre-built **Fix Kit** zip, directory checks, "Why AI picked them", and a free automatic **30-day re-check**. Guarantee: fewer than 3 business-specific problems found means $49 back within 30 days. |
 | Competitor Breakdown | +$25 | An order bump on `/checkout` ($74 total) and an upsell after purchase. A scorecard of what the top 3 rivals have that you don't (the "Match List"). |
-| "Do it for me" | quote on request | A request box on paid Fix Kits that emails us. No price yet. |
+| "Do it for me" | owner names their price | A request box on paid Fix Kits that emails us. The owner says what they want done and what they'd pay (required); we reply whether we can do it. We never publish or quote a price. |
 | Be the Answer | $499/yr | **Off sale and hidden.** Existing plans keep running. |
 
 **How it runs.** One Cloudflare Worker (on Workers Paid, $5/mo since 2026-09-28) with Supabase,
@@ -487,12 +487,16 @@ contrast. Then: a plain-language "Your result" at the top, rivals highlighted in
 call instead" moved up, a slim report-only header, and a navy closing offer card with one amber button
 (Sep 29; phone page cut from 8,430 to 5,060 px). The paid version became an **action plan checklist**
 (Oct 2: an adversarial reviewer scored it 3 → 9 over four rounds), followed by evidence, then offers last.
+Then **short first, more on click** (Oct 2, after a buyer said it was "too much information to start"):
+evidence sections fold into labelled boxes, a "Jump to" row, a "Needs: access · task · time" line on
+every step instead of "you with your web person" (desktop page 12,994 → about 7,500 px).
 
 ### Fix Kit
 A $149 standalone zip the owner verifies (Sep 26) → included in the $49 (Sep 27) → **pre-built**,
 so the owner checks 6 details and downloads (Oct 2) → builder-specific steps for 13 site builders →
 AI prefill that must quote the owner's site and cite a concrete fact, with slogans rejected →
-split into "do these yourself", "for your web person" and "after it's live" → a "Do it for me" box.
+split into "do these yourself", "for your web person" and "after it's live" → a "Do it for me" box →
+short first with "How to do it" folds and "Needs:" lines; "Do it for me" asks what the owner would pay (Oct 2).
 
 ### Engines and cost
 Five engines were built: ChatGPT, Claude, Gemini, Google AI Mode and Perplexity. Launch used 3
@@ -527,6 +531,7 @@ file (Oct 2).
 | Sep 24 | Keys put in Cloudflare *Build* variables; the running Worker never saw them | Secrets go in runtime Variables and Secrets. Non-secret config goes in `wrangler.jsonc`. Check `/api/health`. |
 | Sep 24–25 | Adversarial review caught buy buttons that charged for nothing, a 7-day dedupe that leaked another business's paid report, and an admin login no browser could use | Run an adversarial review before every deploy. Paid content never carries over between requests. |
 | Sep 24 | Offers promised work that couldn't be delivered ($29 had no real steps; $69/yr had no scheduler) | Only sell what we can deliver today. |
+| Oct 2 | A "fewer words" pass hid the $49 what-you-get list on checkout, the about page's honesty caveat, and wrote "Needs: nothing" on a step that costs money; the independent meaning review caught all three | Shortening keeps prices, what you get, refund lines and caveats on screen; run a before/after text-diff review on every copy-trim. |
 | Sep 25 | Site claimed a 5-platform listings check, "asked 3 times" and "every assistant", none of them built | Check every offer line against the code. Star anything that isn't live yet. |
 | Sep 25 | The live site and the repo had drifted; a push would have wiped out the owner's offer v2.3 | Fetch and merge `origin/master` first. |
 | Sep 26 | Paying only unlocked the old 3-question report | Payment starts the paid scan. |
@@ -582,7 +587,7 @@ file (Oct 2).
 
 ## 7. Open questions (keep this list current)
 
-1. "Do it for me": price range, reply deadline, named person, and how it fits the hands-off rule.
+1. "Do it for me": what owners say they'd pay (now asked on the form) decides if and how to price it; also reply deadline, named person, and how it fits the hands-off rule.
 2. Be the Answer: rebuild, rescope or retire. Includes the leftover 60-Day Guarantee/directory copy from PR #5 on the refunds and privacy pages.
 3. Should the $25 Competitor Breakdown be folded into the $49? And is it the right upsell for B2B firms?
 4. Should the free report unlock 1–2 real fix titles as a teaser?
@@ -611,7 +616,16 @@ The history is the point.
 **Decision:** A batch of pre-scans runs through `scanner/batch.js`. Every scan is tagged with `scans.batch_id` + `scans.batch_item` (`supabase/v14_scan_batch.sql`), and before each prospect the runner reads those rows back. A strictly finished scan is skipped (nothing is paid again), a live one is waited for, and anything else is scanned again. "Strictly finished" (`scanFinished` in `src/admin/scan-core.js`) means status `done` **and** a report link **and** a valid report **and** every engine call answered **and** no errors. Scans still start through `POST /api/admin/scan`, so scan behaviour, scoring and reports are unchanged.
 **Why:** A batch that crashed halfway restarted from prospect #1 and paid again (about $0.095) for every completed scan. The 26 EXP-002 pre-scans were queued one at a time from /admin, so there was no batch runner to resume. `status = 'done'` alone can't be trusted: `scanTotals` marks a scan done when *any* call answered, so a skip based on it would keep half-failed scans for good.
 **Rejected:** A KV checkpoint per prospect (`prescan:{batch}:{prospect}`). It would be a second record that can disagree with `scans`. Inferring the batch from timestamps was rejected too: the tag is explicit.
-**Held:** Built 2026-10-05, not merged until Tue 2026-10-06, after the Oct 5 EXP-002 wave. Apply `v14_scan_batch.sql` before the first tagged scan; until then a tagged start is refused (untagged scans are unaffected).
+**Held, then released:** Built 2026-10-05 with a hold until Tue 2026-10-06, after the Oct 5 EXP-002 wave. The owner lifted the hold the same evening, after the wave's emails were logged as sent. `v14_scan_batch.sql` was applied to production first (a tagged start is refused without it; untagged scans never needed it).
+
+### 2026-10-02 · Design · Short first, more on click, more space (PR #64)
+**Decision:** The paid report, the Fix Kit and the landing pages lead each section with a heading, one line and the action. The why, the how, the evidence and long lists sit behind labelled folds (one circled +/− style everywhere). There's more white space, a softer body ink (#2B3A52, AA-checked) and bold only on key phrases. Report steps say what's needed ("Needs: website access · Upload one file · under 30 min · No cost") instead of who does it. Times are only reformatted, never shortened. Prices, what you get, refund and no-subscription lines, honesty caveats and buttons stay visible. Nothing is deleted, only moved one click away, and print opens everything.
+**Why:** A buyer said the report "felt like too much information to start". Bryan wants it quick, easy and short, with the how and where one click away. The meaning stays the same, verified by an independent before/after text review and a design/function review.
+
+### 2026-10-02 · Offer · "Do it for me": the owner names their price (PR #64)
+**Decision:** The "Do it for me" form asks what they want done and **what they'd pay** (required, free text). We reply to say whether we can do it. Every page, email and the zip README stopped promising "what we would do and what it would cost". No price is published anywhere.
+**Why:** Bryan doesn't want to publish a price yet. Asking owners what they'd pay shows if and what they'd pay before we set one.
+**Replaces:** "we'll write back with what we would do and what it would cost" (PR #57).
 
 ### 2026-10-02 · Strategy · The bar: exceptional value, incredibly easy (Hormozi value equation)
 **Decision:** Every offer is built and scored on Hormozi's value equation. Raise the dream outcome and the buyer's belief it will work; drive time and effort toward zero. Every lever must score 8 or more before an offer ships. Enhancers (urgency, scarcity, bonuses, value stacks) are used only when they're real.

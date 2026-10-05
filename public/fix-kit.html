@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=16">
+  <link rel="stylesheet" href="/css/styles.css?v=20">
   <style>
     /* Fix Kit page only (kept here so styles.css keeps its version). */
     .fk { padding: 40px 0 72px; }
@@ -117,6 +117,66 @@
     /* In-page links (#fk-help, #fk-needs) land below the sticky header, not under it. */
     .fk-box[id] { scroll-margin-top: 88px; }
     @media (max-width: 560px) { .fk-box { padding: 20px 18px; } .fk-job { padding: 18px; } .fk h2.fk-section { margin-top: 44px; } }
+    /* Lighter page (Oct 2): short first, more on click. Each block shows a heading, one line and the
+       action; the how/why, long lists and file contents sit behind <details> (opened for print in fix-kit.js).
+       Second pass (owner: "more space, text feels heavier"): more air, a softer body colour (#2B3A52 is
+       10.4:1 or better on every background here; AA needs 4.5:1), and bold only for the one key phrase per
+       block (names, labels, headings), never whole sentences. Font sizes unchanged. */
+    .fk { --ink: #2B3A52; color: var(--ink); padding: 56px 0 112px; line-height: 1.65; }
+    .fk .lede-page { margin: 0 0 22px; max-width: 62ch; }
+    /* The 3 steps: a plain numbered line, not buttons. Three equal columns, so it never wraps 2 + 1. */
+    .fk-steps { list-style: none; margin: 0 0 22px; padding: 0; display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 8px 16px; counter-reset: step; }
+    .fk-steps li { counter-increment: step; display: flex; align-items: baseline; gap: 6px; font-weight: 500; color: var(--ink); font-size: 15px; line-height: 1.45; }
+    .fk-steps li::before { content: counter(step) "."; color: var(--navy); font-weight: 700; flex: none; }
+    .fk-caveat { color: var(--muted); font-size: 15px; margin: 0 0 40px; max-width: 62ch; }
+    .fk-box { padding: 40px 44px; margin: 0 0 72px; }
+    .fk h2 { margin: 0 0 8px; }
+    .fk-box > p.fk-take, .fk p.fk-take { margin: 0 0 28px; color: var(--muted); max-width: 64ch; }
+    .fk-small { font-size: 14px; color: var(--muted); margin: -14px 0 28px; max-width: 64ch; }
+    .fk-dl-needs { margin: -12px 0 28px; padding: 14px 18px; background: #FFFAF0; border-radius: 8px; font-size: 15px; color: var(--ink); }
+    .fk-facts { margin-bottom: 28px; }
+    .fk-facts > li { padding: 16px 0; }
+    /* Bold for the key phrase only: row labels and field labels a step lighter, sentences not bold. */
+    .fk-facts .k, .fk-field label { font-weight: 600; }
+    .fk .fk-confirm { font-weight: 500; color: var(--ink); }
+    .fk-status, .fk-most, .fk-suggest .fk-suggest-h { font-weight: 500; }
+    .fk h2.fk-section { margin: 88px 0 8px; }
+    .fk-section + p { margin: 0 0 28px; }
+    .fk-help { margin: 88px 0 0; }
+    .fk-jobs { gap: 28px; }
+    .fk-job { padding: 32px 36px; }
+    .fk-job h3 { font-size: 20px; }
+    .fk-tech { margin: 8px 0 14px; }
+    .fk-job p { margin: 0 0 12px; }
+    .fk-job .who { margin: 0 0 4px; }
+    .fk-job .fk-note { margin: 14px 0 0; font-size: 15px; }
+    .fk-job .fk-if { font-size: 15px; color: var(--muted); }
+    .fk-job details { margin: 8px 0 0; padding: 0; border-top: 0; }
+    .fk-job details + details { margin-top: 0; }
+    .fk-how > :not(summary) { margin-top: 10px; }
+    /* Every click-for-more: a 44px tap target with a + / − sign. */
+    .fk details > summary { list-style: none; cursor: pointer; font-weight: 600; color: var(--blue); min-height: 44px; display: flex; align-items: center; gap: 10px; }
+    .fk details > summary::-webkit-details-marker { display: none; }
+    .fk details > summary::before { content: "+"; flex: none; display: inline-grid; place-content: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid currentColor; font-size: 15px; line-height: 1; }
+    .fk details[open] > summary::before { content: "\2212"; }
+    .fk-job details:not(.fk-how) > summary { font-weight: 500; font-size: 15px; overflow-wrap: anywhere; }
+    /* --blue is 4.45:1 on the cream box; the darker blue passes AA there. */
+    .fk-needs details > summary { color: var(--blue-dark); }
+    .fk-why { margin: -16px 0 8px; }
+    .fk-why > p { margin: 0 0 8px; color: var(--muted); }
+    .fk-more { margin-top: 4px; }
+    .fk-more > summary { border-top: 1px solid #F3DDB8; padding-top: 4px; }
+    .fk-needs .fk-more .fk-slot:first-of-type { border-top: 0; }
+    .fk-slot { padding: 22px 0; gap: 10px; }
+    .fk-help [data-help-form] { gap: 24px; }
+    @media (max-width: 560px) {
+      .fk { padding: 40px 0 72px; }
+      .fk-box { padding: 28px 22px; margin-bottom: 48px; }
+      .fk-job { padding: 24px 22px; }
+      .fk h2.fk-section { margin-top: 56px; }
+      .fk-help { margin-top: 56px; }
+      .fk-steps { grid-template-columns: 1fr; gap: 8px; }
+    }
     [hidden] { display: none !important; }
   </style>
   <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5dacee79e64c4767a48da5ca6c1f053a"}'></script><!-- End Cloudflare Web Analytics -->
@@ -167,13 +227,19 @@
 
     <div data-state="kit" hidden>
       <h1>Your Fix Kit is ready</h1>
-      <p class="lede-page">We drafted these files for <strong data-biz-name>your business</strong> from your website and your report. Check the details, tick the box and download. Then hand the folder to whoever runs your website. They give AI and Google correct facts to read. We can&rsquo;t promise any assistant will name you; the last item in your kit says what to expect and how to tell.</p>
+      <p class="lede-page">Files that give AI and Google correct facts about <strong data-biz-name>your business</strong>. We drafted them from your website and your report.</p>
+      <ol class="fk-steps">
+        <li>Check the details</li>
+        <li>Tick the box and download</li>
+        <li>Send it to whoever runs your site</li>
+      </ol>
+      <p class="fk-caveat">We can&rsquo;t promise any assistant will name you; the last item in your kit says what to expect and how to tell.</p>
 
       <p class="fk-note sample" data-sample-note hidden>This is the sample. You can try everything here, but the download always uses the sample business's details.</p>
 
       <section class="fk-box" aria-labelledby="fk-check-h">
         <h2 id="fk-check-h">Check these <span data-fact-count>6</span> details</h2>
-        <p>We built this from your website and your report. If something is wrong or missing, fix it here and the kit is rebuilt.</p>
+        <p class="fk-take">Something wrong or missing? Fix it here and the kit is rebuilt.</p>
         <ul class="fk-facts" data-facts></ul>
         <p class="fk-status" data-suggest-status role="status" aria-live="polite"></p>
         <button class="btn-secondary" type="button" data-edit>Edit details</button>
@@ -290,7 +356,8 @@
 
       <section class="fk-box fk-download" aria-labelledby="fk-dl-h">
         <h2 id="fk-dl-h">Download your kit</h2>
-        <p data-dl-note>Every file below, with a one-page guide for whoever runs your website. Nothing changes on your website until someone puts the files in place.</p>
+        <p class="fk-take" data-dl-note>Every file below, plus a one-page guide for whoever runs your website. Nothing changes on your website until someone puts the files in place.</p>
+        <p class="fk-dl-needs" data-dl-needs hidden></p>
         <div class="fk-field" data-field="confirm">
           <label class="fk-confirm"><input type="checkbox" name="confirm" data-confirm> I own or manage this business and these details are correct.</label>
           <p class="fk-err"></p>
@@ -304,7 +371,11 @@
 
       <section class="fk-box fk-needs" id="fk-needs" data-needs hidden aria-labelledby="fk-needs-h">
         <h2 id="fk-needs-h"><span data-needs-count>0</span> need one detail from you</h2>
-        <p>AI picked other businesses for things only you can tell it, like <span data-needs-why>what you specialize in</span>. Write one true sentence for each. We put it into the answer. Any you leave blank stay out of the code until you fill them in.</p>
+        <p class="fk-take">Write one true sentence for each and we put it into the answer. Any you leave blank stay out of the code until you fill them in.</p>
+        <details class="fk-why" data-needs-more>
+          <summary>Why we ask</summary>
+          <p>AI picked other businesses for things only you can tell it, like <span data-needs-why>what you specialize in</span>.</p>
+        </details>
         <div data-slots></div>
         <div class="fk-actions">
           <button class="btn" type="button" data-save-slots>Add to my answers</button>
@@ -326,8 +397,9 @@
       </div>
 
       <section class="fk-box fk-help" id="fk-help" aria-labelledby="fk-help-h">
-        <h2 id="fk-help-h">Nobody to do the website part? We can help.</h2>
-        <p>Tell us how to reach you and what you want done. We&rsquo;ll write back by email with what we would do and what it would cost. Asking is free, you don&rsquo;t owe anything unless you say yes in writing, it&rsquo;s one reply and not a mailing list, and we never ask for a password here.</p>
+        <h2 id="fk-help-h">Nobody to do the website part? We can do it.</h2>
+        <p class="fk-take">Tell us what you want done and what you&rsquo;d pay. We&rsquo;ll reply by email to say if we can do it.</p>
+        <p class="fk-small">Asking is free and you don&rsquo;t owe anything unless you say yes in writing. One reply, not a mailing list, and we never ask for a password here.</p>
         <div data-help-form>
           <div class="fk-field" data-field="helpContact">
             <label for="fk-help-email">Your email</label>
@@ -346,13 +418,18 @@
             <label class="fk-confirm"><input type="checkbox" data-want value="reviews"> Getting more Google reviews</label>
             <p class="fk-err"></p>
           </div>
+          <div class="fk-field" data-field="helpPrice">
+            <label for="fk-help-price">What would you pay for this?</label>
+            <input id="fk-help-price" type="text" inputmode="text" maxlength="80" placeholder="e.g. $150" autocomplete="off" required>
+            <p class="fk-err"></p>
+          </div>
           <div class="fk-field" data-field="helpNote">
             <label for="fk-help-note">Anything we should know? (optional)</label>
             <textarea id="fk-help-note" rows="3" maxlength="600"></textarea>
             <p class="fk-err"></p>
           </div>
           <div class="fk-actions">
-            <button class="btn" type="button" data-help-send>Do it for me</button>
+            <button class="btn" type="button" data-help-send>Send my request</button>
             <p class="fk-status" data-help-status role="status" aria-live="polite"></p>
           </div>
         </div>
@@ -416,6 +493,6 @@
   </div>
 </footer>
 
-<script src="/js/fix-kit.js"></script>
+<script src="/js/fix-kit.js?v=5"></script>
 </body>
 </html>
