@@ -15,8 +15,18 @@ function supa(env) {
   };
 }
 
+// PostgREST answers 401 PGRST303 "JWT issued at future" when the key's iat is a moment ahead of the
+// clock of whichever Supabase node served the call. The key is fine and the next call passes: retry.
+const isClockSkew = (status, text) => status === 401 && /PGRST303|issued at future/i.test(text);
+
 async function get(env, s, path) {
-  const res = await fetch(`${s.base}/${path}`, { headers: s.headers });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(`${s.base}/${path}`, { headers: s.headers });
+    if (res.ok || res.status !== 401 || attempt >= 2) break;
+    if (!isClockSkew(res.status, await res.clone().text().catch(() => ''))) break;
+    await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+  }
   if (!res.ok) {
     const text = (await res.text().catch(() => '')).slice(0, 300);
     // PostgREST's "relation does not exist" → the SQL hasn't been applied yet.
