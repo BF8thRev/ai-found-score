@@ -606,6 +606,10 @@ Add new entries at the top of this section. Format:
 When a decision changes, add a new entry and mark the old one `**Superseded by …**`. Don't delete it.
 The history is the point.
 
+### 2026-10-05 · Ops · /admin retries Supabase "JWT issued at future" (PGRST303)
+**Decision:** `get()` in `src/admin/data.js` retries a 401 PGRST303 up to 2 more times (400 ms, 800 ms) before showing it. Other errors and persistent failures still show.
+**Why:** Supabase answered one dashboard query (`v_kpis`) with "JWT issued at future" while the same service key passed on the others: a clock difference between Supabase nodes, not a bad key. Rotating the key would not help.
+
 ### 2026-10-02 · Design · Short first, more on click, more space (PR #64)
 **Decision:** The paid report, the Fix Kit and the landing pages lead each section with a heading, one line and the action. The why, the how, the evidence and long lists sit behind labelled folds (one circled +/− style everywhere). There's more white space, a softer body ink (#2B3A52, AA-checked) and bold only on key phrases. Report steps say what's needed ("Needs: website access · Upload one file · under 30 min · No cost") instead of who does it. Times are only reformatted, never shortened. Prices, what you get, refund and no-subscription lines, honesty caveats and buttons stay visible. Nothing is deleted, only moved one click away, and print opens everything.
 **Why:** A buyer said the report "felt like too much information to start". Bryan wants it quick, easy and short, with the how and where one click away. The meaning stays the same, verified by an independent before/after text review and a design/function review.
