@@ -298,7 +298,9 @@ const SCAN_COLUMNS = ['id', 'business_id', 'business_name', 'report_token', 'sta
   'started_at', 'finished_at', 'calls_total', 'calls_ok', 'engine_cost_usd', 'extract_cost_usd', 'total_cost_usd',
   'named_you', 'first_you', 'answers', 'report_valid', 'errors', 'trigger', 'notes',
   // supabase/v4_ladder.sql: free-report requests (src/lib/auto-scan.js)
-  'request_key', 'business', 'est_cost_usd'];
+  'request_key', 'business', 'est_cost_usd',
+  // supabase/v14_scan_batch.sql: the batch tag (scanner/batch.js)
+  'batch_id', 'batch_item'];
 
 function scanPatch(patch) {
   const out = {};
@@ -344,6 +346,15 @@ export async function getScan(env, id, { fetchImpl = fetch } = {}) {
   if (!res.ok) throw new Error(`scans read failed: ${res.status} ${await failText(res)}`);
   const [row] = await res.json();
   return row || null;
+}
+
+/** Every `scans` row tagged with this batch + prospect, newest first (scanner/batch.js). */
+export async function listBatchScans(env, batchId, batchItem, { fetchImpl = fetch } = {}) {
+  const { base, headers } = supa(env);
+  const q = `batch_id=eq.${encodeURIComponent(batchId)}&batch_item=eq.${encodeURIComponent(batchItem)}`;
+  const res = await fetchImpl(`${base}/scans?${q}&select=*&order=created_at.desc`, { headers });
+  if (!res.ok) throw new Error(`scans read failed: ${res.status} ${await failText(res)}`);
+  return res.json();
 }
 
 /** Per-call progress for a scan from scan_raw + scan_usage: counts, cost so far, recent errors. */

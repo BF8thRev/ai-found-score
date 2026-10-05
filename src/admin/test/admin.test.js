@@ -498,6 +498,42 @@ test('routes: login sets a __Host- cookie; CSRF refused cross-origin; same-origi
   assert.equal(r.status, 503, 'no service key and not a localhost URL → refused, not a dry run');
 });
 
+test('routes: POST /api/admin/scan writes the batch tag on the scans row only for a batch scan', async () => {
+  const { env, created } = mockEnv();
+  const dbEnv = { ...env, SUPABASE_URL: 'https://db.supabase.co', SUPABASE_SERVICE_KEY: 'svc-test' };
+  const upserts = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).startsWith('https://db.supabase.co/rest/v1/scans')) {
+      upserts.push(JSON.parse(init.body));
+      return new Response(null, { status: 201 });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  const post = (body) => call(dbEnv, '/api/admin/scan', {
+    method: 'POST', headers: { Authorization: `Bearer ${SECRET}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const business = { name: 'Acme', trade: 'plumber', town: 'Massapequa' };
+  try {
+    const tagged = await post({ business, engines: ['chatgpt'], questions: 1, batchId: 'exp002-2026-10-04', batchItem: 'p07' });
+    assert.equal(tagged.status, 202, await tagged.clone().text());
+    assert.equal(upserts.at(-1).batch_id, 'exp002-2026-10-04');
+    assert.equal(upserts.at(-1).batch_item, 'p07');
+    assert.equal(created.at(-1).batchId, 'exp002-2026-10-04', 'the workflow params carry it too');
+
+    const plain = await post({ business, engines: ['chatgpt'], questions: 1 });
+    assert.equal(plain.status, 202);
+    assert.equal('batch_id' in upserts.at(-1), false, 'an ordinary scan never writes the v14 columns');
+    assert.equal('batch_item' in upserts.at(-1), false);
+
+    const half = await post({ business, engines: ['chatgpt'], batchId: 'exp002' });
+    assert.equal(half.status, 422);
+    assert.equal(upserts.length, 2, 'a half tag starts nothing');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 test('routes: /admin/scan/paid re-runs a paid audit by token; gated, CSRF-checked, validated', async () => {
   const bearer = { Authorization: `Bearer ${SECRET}` };
   const post = (env, token, headers = bearer) => call(env, '/admin/scan/paid', {

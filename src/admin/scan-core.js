@@ -52,7 +52,7 @@ export function cleanQuestionList(list) {
  * Validate a scan request (admin API JSON body or the dashboard form, already mapped).
  * body: { business: { id?, name, trade, town, state?, zip?, phone?, website?, address?, facts?, aliases? },
  *         engines?: string[], runs?: number, questions?: number (limit, 1..5), reportToken?,
- *         trigger?: 'admin'|'request'|'recheck', notes? }
+ *         trigger?: 'admin'|'request'|'recheck', notes?, batchId?, batchItem? }
  * → { ok: true, params } | { ok: false, error }
  * `knownEngines` is the engine registry's ids (so a new adapter needs no change here).
  */
@@ -100,10 +100,41 @@ export function parseScanRequest(body, { knownEngines = ENGINE_IDS } = {}) {
   }
   const trigger = TRIGGERS.includes(body.trigger) ? body.trigger : 'admin';
   const reportToken = body.reportToken ? String(body.reportToken).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || null : null;
+  // Batch tag (scanner/batch.js): both or neither, so a tagged scan can always be found again.
+  const batchId = body.batchId == null || body.batchId === '' ? null : String(body.batchId).trim();
+  const batchItem = body.batchItem == null || body.batchItem === '' ? null : String(body.batchItem).trim();
+  if (!!batchId !== !!batchItem) return { ok: false, error: 'batchId and batchItem go together' };
+  if (batchId && !BATCH_ID_RE.test(batchId)) return { ok: false, error: 'batchId: letters, digits, . _ - (max 64)' };
+  if (batchItem && !BATCH_ID_RE.test(batchItem)) return { ok: false, error: 'batchItem: letters, digits, . _ - (max 64)' };
   return {
     ok: true,
-    params: { business, engines, runs: runsRaw, questionLimit, trigger, reportToken, notes: clean(body.notes, 500) || null },
+    params: {
+      business, engines, runs: runsRaw, questionLimit, trigger, reportToken, notes: clean(body.notes, 500) || null,
+      ...(batchId ? { batchId, batchItem } : {}),
+    },
   };
+}
+
+/** Batch ids and items: 'exp002-2026-10-04', a uuid, 'p07'. */
+export const BATCH_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/**
+ * Strictly finished: the only kind of scan a batch may skip. `status: 'done'` alone is not enough,
+ * because scanTotals marks a scan done when ANY call answered; a scan with a failed engine call
+ * inside is "done" there but not finished here, so a re-run scans it again instead of keeping it.
+ * → { finished: boolean, reason: string }
+ */
+export function scanFinished(row) {
+  if (!row || typeof row !== 'object') return { finished: false, reason: 'no scan' };
+  if (row.status !== 'done') return { finished: false, reason: `status ${row.status || 'unknown'}` };
+  if (!row.report_token) return { finished: false, reason: 'no report link' };
+  if (row.report_valid !== true) return { finished: false, reason: 'report not valid' };
+  const total = Number(row.calls_total) || 0;
+  const ok = Number(row.calls_ok) || 0;
+  if (total < 1 || ok !== total) return { finished: false, reason: `${ok} of ${total} engine calls answered` };
+  const errors = Array.isArray(row.errors) ? row.errors : [];
+  if (errors.length) return { finished: false, reason: `${errors.length} error(s): ${errors.map((e) => e?.kind || 'error').join(', ')}` };
+  return { finished: true, reason: 'finished' };
 }
 
 /** Report token for a new scan (same alphabet as scanner/extract/build.js). */

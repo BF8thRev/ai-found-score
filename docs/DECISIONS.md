@@ -552,6 +552,8 @@ file (Oct 2).
 | Oct 2 | Merge-when-green merged before CI ran (no required checks) | Watch the checks yourself; turn on branch protection. |
 | Oct 2 | Two merges seconds apart: the older build finished last and overwrote the newer | Merge one at a time; check the live page for the newest change. |
 | Oct 2 | Real reports return 500 on PR previews | Click through `sample-001` on previews; never commit real customer data (the repo is public). |
+| Oct 2 | PR #48 (Find my report) was merged into its stacked base branch after that base had already merged, so the feature never reached `master` or the site | Before merging a stacked PR, retarget it to `master`. After merging, check that the commit is on `master`. |
+| Oct 5 | A scan is marked `done` when any engine call answered, so "done" can hide a failed call | Anything that skips or reuses a scan uses the strict `scanFinished` check, not `status`. |
 | Recurring | sed, heredoc and quoting mangled edits | Use the Edit tool for multi-line changes; write scripts to files. |
 
 ---
@@ -600,6 +602,12 @@ Add new entries at the top of this section. Format:
 `### YYYY-MM-DD · Area · Short title (PR #n)`, then **Decision**, **Why**, **Replaces** (if any).
 When a decision changes, add a new entry and mark the old one `**Superseded by …**`. Don't delete it.
 The history is the point.
+
+### 2026-10-05 · Process/Cost · Pre-scan batches resume from the database, not KV (PR #PRNUM)
+**Decision:** A batch of pre-scans runs through `scanner/batch.js`. Every scan is tagged with `scans.batch_id` + `scans.batch_item` (`supabase/v14_scan_batch.sql`), and before each prospect the runner reads those rows back. A strictly finished scan is skipped (nothing is paid again), a live one is waited for, and anything else is scanned again. "Strictly finished" (`scanFinished` in `src/admin/scan-core.js`) means status `done` **and** a report link **and** a valid report **and** every engine call answered **and** no errors. Scans still start through `POST /api/admin/scan`, so scan behaviour, scoring and reports are unchanged.
+**Why:** A batch that crashed halfway restarted from prospect #1 and paid again (about $0.095) for every completed scan. The 26 EXP-002 pre-scans were queued one at a time from /admin, so there was no batch runner to resume. `status = 'done'` alone can't be trusted: `scanTotals` marks a scan done when *any* call answered, so a skip based on it would keep half-failed scans for good.
+**Rejected:** A KV checkpoint per prospect (`prescan:{batch}:{prospect}`). It would be a second record that can disagree with `scans`. Inferring the batch from timestamps was rejected too: the tag is explicit.
+**Held:** Built 2026-10-05, not merged until Tue 2026-10-06, after the Oct 5 EXP-002 wave. Apply `v14_scan_batch.sql` before the first tagged scan; until then a tagged start is refused (untagged scans are unaffected).
 
 ### 2026-10-02 · Strategy · The bar: exceptional value, incredibly easy (Hormozi value equation)
 **Decision:** Every offer is built and scored on Hormozi's value equation. Raise the dream outcome and the buyer's belief it will work; drive time and effort toward zero. Every lever must score 8 or more before an offer ships. Enhancers (urgency, scarcity, bonuses, value stacks) are used only when they're real.
