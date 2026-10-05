@@ -603,7 +603,7 @@ Add new entries at the top of this section. Format:
 When a decision changes, add a new entry and mark the old one `**Superseded by …**`. Don't delete it.
 The history is the point.
 
-### 2026-10-05 · Process/Cost · Pre-scan batches resume from the database, not KV (PR #PRNUM)
+### 2026-10-05 · Process/Cost · Pre-scan batches resume from the database, not KV (PR #65)
 **Decision:** A batch of pre-scans runs through `scanner/batch.js`. Every scan is tagged with `scans.batch_id` + `scans.batch_item` (`supabase/v14_scan_batch.sql`), and before each prospect the runner reads those rows back. A strictly finished scan is skipped (nothing is paid again), a live one is waited for, and anything else is scanned again. "Strictly finished" (`scanFinished` in `src/admin/scan-core.js`) means status `done` **and** a report link **and** a valid report **and** every engine call answered **and** no errors. Scans still start through `POST /api/admin/scan`, so scan behaviour, scoring and reports are unchanged.
 **Why:** A batch that crashed halfway restarted from prospect #1 and paid again (about $0.095) for every completed scan. The 26 EXP-002 pre-scans were queued one at a time from /admin, so there was no batch runner to resume. `status = 'done'` alone can't be trusted: `scanTotals` marks a scan done when *any* call answered, so a skip based on it would keep half-failed scans for good.
 **Rejected:** A KV checkpoint per prospect (`prescan:{batch}:{prospect}`). It would be a second record that can disagree with `scans`. Inferring the batch from timestamps was rejected too: the tag is explicit.
