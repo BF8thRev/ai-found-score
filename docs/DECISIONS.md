@@ -601,6 +601,10 @@ Add new entries at the top of this section. Format:
 When a decision changes, add a new entry and mark the old one `**Superseded by …**`. Don't delete it.
 The history is the point.
 
+### 2026-10-05 · Ops · /admin retries Supabase "JWT issued at future" (PGRST303)
+**Decision:** `get()` in `src/admin/data.js` retries a 401 PGRST303 up to 2 more times (400 ms, 800 ms) before showing it. Other errors and persistent failures still show.
+**Why:** Supabase answered one dashboard query (`v_kpis`) with "JWT issued at future" while the same service key passed on the others: a clock difference between Supabase nodes, not a bad key. Rotating the key would not help.
+
 ### 2026-10-02 · Strategy · The bar: exceptional value, incredibly easy (Hormozi value equation)
 **Decision:** Every offer is built and scored on Hormozi's value equation. Raise the dream outcome and the buyer's belief it will work; drive time and effort toward zero. Every lever must score 8 or more before an offer ships. Enhancers (urgency, scarcity, bonuses, value stacks) are used only when they're real.
 **Why:** Bryan wants offers with exceptional value that are incredibly easy to achieve, Hormozi style. Our biggest past wins already came from cutting time and effort: the website-only form, the pre-built kit, builder-specific steps, "Do it for me". The weakest levers now are likelihood (no proof stories yet) and effort (the website part still needs a person).
