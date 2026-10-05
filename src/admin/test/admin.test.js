@@ -534,6 +534,32 @@ test('routes: POST /api/admin/scan writes the batch tag on the scans row only fo
   }
 });
 
+test('routes: GET /admin retries a Supabase "JWT issued at future" (PGRST303) instead of showing it', async () => {
+  const env = { ADMIN_TOKEN: SECRET, SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_KEY: 'svc' };
+  const real = globalThis.fetch;
+  const skew = { code: 'PGRST303', details: null, hint: null, message: 'JWT issued at future' };
+  const run = async (failures) => {
+    let kpiCalls = 0;
+    globalThis.fetch = async (input) => {
+      const u = String(input?.url || input);
+      if (!u.startsWith('https://db.example/rest/v1/')) return new Response('[]', { status: 200 });
+      if (u.includes('v_kpis') && kpiCalls++ < failures) return new Response(JSON.stringify(skew), { status: 401 });
+      return new Response('[]', { status: 200 });
+    };
+    try {
+      const r = await call(env, '/admin', { headers: { Authorization: `Bearer ${SECRET}` } });
+      assert.equal(r.status, 200);
+      return { html: await r.text(), kpiCalls };
+    } finally { globalThis.fetch = real; }
+  };
+  const once = await run(1);
+  assert.equal(once.kpiCalls, 2, 'retried once');
+  assert.ok(!/JWT issued at future|PGRST303/.test(once.html), 'the skew error is not shown');
+  const always = await run(99);
+  assert.equal(always.kpiCalls, 3, 'gives up after 3 tries');
+  assert.match(always.html, /v_kpis: HTTP 401/, 'a persistent failure is still reported');
+});
+
 test('routes: /admin/scan/paid re-runs a paid audit by token; gated, CSRF-checked, validated', async () => {
   const bearer = { Authorization: `Bearer ${SECRET}` };
   const post = (env, token, headers = bearer) => call(env, '/admin/scan/paid', {
