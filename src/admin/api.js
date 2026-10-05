@@ -119,6 +119,8 @@ export async function startScan(env, url, body) {
         id: scanId, business_id: params.business.id, business_name: params.business.name, report_token: params.reportToken,
         status: 'queued', engines: params.engines, runs: params.runs, questions,
         calls_total: questions * params.engines.length * params.runs, trigger: params.trigger, notes: params.notes,
+        // Only a batch scan carries the tag, so other scans never touch the v14 columns.
+        ...(params.batchId ? { batch_id: params.batchId, batch_item: params.batchItem } : {}),
       });
     } catch (e) {
       return { ok: false, status: 503, error: `could not create the scans row (apply supabase/admin_v3.sql?): ${redact(env, e?.message || e)}` };

@@ -557,6 +557,8 @@ file (Oct 2).
 | Oct 2 | Merge-when-green merged before CI ran (no required checks) | Watch the checks yourself; turn on branch protection. |
 | Oct 2 | Two merges seconds apart: the older build finished last and overwrote the newer | Merge one at a time; check the live page for the newest change. |
 | Oct 2 | Real reports return 500 on PR previews | Click through `sample-001` on previews; never commit real customer data (the repo is public). |
+| Oct 2 | PR #48 (Find my report) was merged into its stacked base branch after that base had already merged, so the feature never reached `master` or the site | Before merging a stacked PR, retarget it to `master`. After merging, check that the commit is on `master`. |
+| Oct 5 | A scan is marked `done` when any engine call answered, so "done" can hide a failed call | Anything that skips or reuses a scan uses the strict `scanFinished` check, not `status`. |
 | Recurring | sed, heredoc and quoting mangled edits | Use the Edit tool for multi-line changes; write scripts to files. |
 
 ---
@@ -609,6 +611,12 @@ The history is the point.
 ### 2026-10-05 · Ops · /admin retries Supabase "JWT issued at future" (PGRST303)
 **Decision:** `get()` in `src/admin/data.js` retries a 401 PGRST303 up to 2 more times (400 ms, 800 ms) before showing it. Other errors and persistent failures still show.
 **Why:** Supabase answered one dashboard query (`v_kpis`) with "JWT issued at future" while the same service key passed on the others: a clock difference between Supabase nodes, not a bad key. Rotating the key would not help.
+
+### 2026-10-05 · Process/Cost · Pre-scan batches resume from the database, not KV (PR #65)
+**Decision:** A batch of pre-scans runs through `scanner/batch.js`. Every scan is tagged with `scans.batch_id` + `scans.batch_item` (`supabase/v14_scan_batch.sql`), and before each prospect the runner reads those rows back. A strictly finished scan is skipped (nothing is paid again), a live one is waited for, and anything else is scanned again. "Strictly finished" (`scanFinished` in `src/admin/scan-core.js`) means status `done` **and** a report link **and** a valid report **and** every engine call answered **and** no errors. Scans still start through `POST /api/admin/scan`, so scan behaviour, scoring and reports are unchanged.
+**Why:** A batch that crashed halfway restarted from prospect #1 and paid again (about $0.095) for every completed scan. The 26 EXP-002 pre-scans were queued one at a time from /admin, so there was no batch runner to resume. `status = 'done'` alone can't be trusted: `scanTotals` marks a scan done when *any* call answered, so a skip based on it would keep half-failed scans for good.
+**Rejected:** A KV checkpoint per prospect (`prescan:{batch}:{prospect}`). It would be a second record that can disagree with `scans`. Inferring the batch from timestamps was rejected too: the tag is explicit.
+**Held, then released:** Built 2026-10-05 with a hold until Tue 2026-10-06, after the Oct 5 EXP-002 wave. The owner lifted the hold the same evening, after the wave's emails were logged as sent. `v14_scan_batch.sql` was applied to production first (a tagged start is refused without it; untagged scans never needed it).
 
 ### 2026-10-02 · Design · Short first, more on click, more space (PR #64)
 **Decision:** The paid report, the Fix Kit and the landing pages lead each section with a heading, one line and the action. The why, the how, the evidence and long lists sit behind labelled folds (one circled +/− style everywhere). There's more white space, a softer body ink (#2B3A52, AA-checked) and bold only on key phrases. Report steps say what's needed ("Needs: website access · Upload one file · under 30 min · No cost") instead of who does it. Times are only reformatted, never shortened. Prices, what you get, refund and no-subscription lines, honesty caveats and buttons stay visible. Nothing is deleted, only moved one click away, and print opens everything.
