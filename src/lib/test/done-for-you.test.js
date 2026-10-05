@@ -16,7 +16,7 @@ register('data:text/javascript,' + encodeURIComponent(`
 
 const TOKEN = 'dFyT0kenAbCdEfGh12Ij34';
 const reply = (b, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } });
-const ASK = { help: true, contact: 'Pat@HarborLanePR.example.com', phone: '(212) 555-0100', wants: ['website', 'google'], note: 'My nephew built the site and is gone.' };
+const ASK = { help: true, contact: 'Pat@HarborLanePR.example.com', phone: '(212) 555-0100', wants: ['website', 'google'], price: '$150', note: 'My nephew built the site and is gone.' };
 
 async function withWorker(fn, { tiers = ['xray'], resendStatus = 200 } = {}) {
   const sent = [];
@@ -85,9 +85,12 @@ test('router: the button emails us the request with everything we need to answer
     // The owner: a short, no-promise confirmation, to the address they typed.
     const toOwner = sent.find((m) => m.to[0] === 'pat@harborlanepr.example.com');
     assert.equal(toOwner.subject, 'We got your request');
-    assert.match(toOwner.text, /will reply to this address by email with what we would do and what it would cost/);
+    assert.match(toOwner.text, /will reply to this address by email to say if we can do it\.\nYou said you’d pay: \$150\./);
+    assert.doesNotMatch(toOwner.text + text, /would cost/);
     assert.match(toOwner.text, /never ask for a password/);
-    assert.doesNotMatch(toOwner.text, /\$|within \d|hours|guarantee/i, 'no price, no deadline, no promise');
+    // Their own price is repeated back; our words carry no price, deadline or promise.
+    assert.doesNotMatch(toOwner.text.replace(/^You said you’d pay: .*$/m, ''), /\$|within \d|hours|guarantee/i, 'no price, no deadline, no promise');
+    assert.match(text, /^Harbor Lane PR asked us to do their Fix Kit for them\.\n\nThey would pay: \$150\n/, 'their price near the top');
     assert.equal(sent.length, 3);
   });
 });
@@ -133,8 +136,8 @@ test('the kit page: three sections, the website jobs on their own, and the box t
   const js = readFileSync(new URL('../../../public/js/fix-kit.js', import.meta.url), 'utf8');
   const at = (s) => { const i = html.indexOf(s); assert.ok(i >= 0, s); return i; };
   assert.ok(at('Do these yourself, today') < at('For whoever runs your website'));
-  assert.ok(at('For whoever runs your website') < at('Nobody to do the website part? We can help.'));
-  assert.ok(at('Nobody to do the website part? We can help.') < at('After it&rsquo;s live'));
+  assert.ok(at('For whoever runs your website') < at('Nobody to do the website part? We can do it.'));
+  assert.ok(at('Nobody to do the website part? We can do it.') < at('After it&rsquo;s live'));
   for (const hook of ['data-jobs-you', 'data-jobs-web', 'data-jobs-after', 'data-help-send', 'data-help-form']) assert.ok(html.includes(hook), hook);
   assert.match(html, /you don&rsquo;t owe anything unless you say yes in writing[^]*we never ask for a password here/);
   assert.match(js, /post\(\{ help: true, details: current, contact:/);
@@ -173,4 +176,55 @@ test('not paid: the Fix Kit answer names only the audit (Be the Answer is off sa
   const html = readFileSync(new URL('../../../public/fix-kit.html', import.meta.url), 'utf8');
   const unpaid = html.slice(html.indexOf('data-state="unpaid"'), html.indexOf('data-state="error"'));
   assert.doesNotMatch(unpaid, /Be the Answer/);
+});
+
+// ---- owner, Oct 2 2026: "I don't want to publish a price. Have it be that they submit their prices and tell us
+// what they want us to do and we will see." The owner names what they'd pay; we reply to say if we can do it.
+test('router: no price → 422 on the price field (paid and sample); with one, the email to us says what they would pay', async () => {
+  await withWorker(async ({ call, help, sent }) => {
+    for (const price of [undefined, '', '   ']) {
+      const res = await help({ price });
+      assert.equal(res.status, 422);
+      const { errors } = await res.json();
+      assert.deepEqual(errors.map((e) => e.field), ['helpPrice']);
+      assert.equal(errors[0].message, 'Tell us what you’d pay, even a rough number.');
+    }
+    const long = await help({ price: 'x'.repeat(81) });
+    assert.equal(long.status, 422);
+    assert.equal(sent.length, 0, 'nothing is sent without a price');
+    // The sample checks the same rule, then sends nothing.
+    const { details } = await (await call('/api/fix-kit/sample-001')).json();
+    const post = (body) => call('/api/fix-kit/sample-001', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ASK, details, ...body }) });
+    const noPrice = await post({ price: '' });
+    assert.equal(noPrice.status, 422);
+    assert.deepEqual((await noPrice.json()).errors.map((e) => e.field), ['helpPrice']);
+    const ok = await post({ price: 'around 200' });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(await ok.json(), { ok: true, sample: true });
+    // A paid request: "$150" or "around 200" both go through, as typed.
+    const res = await help({ price: '  around   200 ' });
+    assert.equal(res.status, 200);
+    const toUs = sent.find((m) => /^Done-for-you request/.test(m.subject));
+    assert.match(toUs.text, /\nThey would pay: around 200\n/);
+    const toOwner = sent.find((m) => m.to[0] === 'pat@harborlanepr.example.com');
+    assert.match(toOwner.text, /You said you’d pay: around 200\./);
+  });
+  assert.equal(validateHelp({ ...ASK, price: '$150' }).help.price, '$150');
+});
+
+test('no page, email or kit file promises to tell them a price; each asks what they would pay', () => {
+  const src = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+  const html = src('../../../public/fix-kit.html');
+  const js = src('../../../public/js/fix-kit.js');
+  for (const [name, text] of [['fix-kit.html', html], ['fix-kit.js', js], ['done-for-you.js', src('../done-for-you.js')], ['email.js', src('../email.js')], ['fix-kit.js (zip)', src('../fix-kit.js')]]) {
+    assert.doesNotMatch(text, /would cost|what we would do/, name);
+  }
+  const box = html.slice(html.indexOf('id="fk-help"'), html.indexOf('data-help-done'));
+  assert.match(box, /Nobody to do the website part\? We can do it\./);
+  assert.match(box, /Tell us what you want done and what you&rsquo;d pay\. We&rsquo;ll reply by email to say if we can do it\./);
+  assert.match(box, /<div class="fk-field" data-field="helpPrice">\s*<label for="fk-help-price">What would you pay for this\?<\/label>\s*<input id="fk-help-price" type="text" inputmode="text" maxlength="80" placeholder="e\.g\. \$150"[^>]*required>/);
+  assert.match(box, /<button class="btn" type="button" data-help-send>Send my request<\/button>/);
+  assert.match(js, /price: \$\('#fk-help-price'\)\.value/);
+  assert.match(src('../email.js'), /Reply to this email with what you want done and what you’d pay, and we’ll tell you if we can do it\./);
+  assert.match(src('../fix-kit.js'), /tell us what you want done and what you’d pay, and we will write back to say if we can do it\. Asking is free\./);
 });
