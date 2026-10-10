@@ -1,7 +1,7 @@
 {
   "description": "AI Found Score — free automated report on AI-assistant visibility and listing consistency for local businesses.",
   "devDependencies": {
-    "wrangler": "^4.137.0"
+    "wrangler": "^4.147.0"
   },
   "name": "ai-found-score",
   "private": true,
